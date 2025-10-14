@@ -1,0 +1,6 @@
+streamlit>=1.37
+python-pptx>=0.6.23
+fpdf2>=2.7
+deepl>=1.18
+pymupdf>=1.24
+requests>=2.32
