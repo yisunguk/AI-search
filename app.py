@@ -148,6 +148,7 @@ def translate_pptx_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_
             target_lang=target_lang,
             preserve_formatting=True,
             split_sentences="nonewlines",
+            enable_beta_languages=True,
         )
         if isinstance(res, list):
             return [r.text for r in res]
@@ -266,7 +267,7 @@ def translate_pdf_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_l
     for page in doc:
         src_text = page.get_text("text") or ""
         try:
-            tr_text = translator.translate_text(src_text, target_lang=target_lang).text if src_text.strip() else "[빈 페이지]"
+            tr_text = translator.translate_text(src_text, target_lang=target_lang, enable_beta_languages=True).text if src_text.strip() else "[빈 페이지]"
         except Exception as e:
             tr_text = f"[번역 실패] {e}"
 
