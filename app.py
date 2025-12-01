@@ -127,6 +127,7 @@ def fetch_target_languages(auth_key: str):
         ("TH", "Thai (next-gen only)"),
         ("VI", "Vietnamese (next-gen only)"),
         ("ES-419", "Spanish (Latin American, next-gen only)"),
+        ("MY", "Burmese"),
     ]
     for code, name in NEXT_GEN_ONLY:
         pairs.setdefault(code, build_label(name, code))
