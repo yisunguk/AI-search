@@ -148,7 +148,7 @@ def translate_pptx_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_
             target_lang=target_lang,
             preserve_formatting=True,
             split_sentences="nonewlines",
-            enable_beta_languages=True,  # Beta 언어(미얀마어 등) 지원 - deepl>=1.19.1 필요
+            extra_body_parameters={"enable_beta_languages": "true"},  # Beta 언어 지원
         )
         if isinstance(res, list):
             return [r.text for r in res]
@@ -270,7 +270,7 @@ def translate_pdf_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_l
             tr_text = translator.translate_text(
                 src_text, 
                 target_lang=target_lang, 
-                enable_beta_languages=True  # Beta 언어(미얀마어 등) 지원
+                extra_body_parameters={"enable_beta_languages": "true"}  # Beta 언어 지원
             ).text if src_text.strip() else "[빈 페이지]"
         except Exception as e:
             tr_text = f"[번역 실패] {e}"
