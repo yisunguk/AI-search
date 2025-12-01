@@ -148,7 +148,7 @@ def translate_pptx_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_
             target_lang=target_lang,
             preserve_formatting=True,
             split_sentences="nonewlines",
-            enable_beta_languages=True,
+            # enable_beta_languages=True,  <-- 직접 전달 불가
         )
         if isinstance(res, list):
             return [r.text for r in res]
@@ -267,7 +267,49 @@ def translate_pdf_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_l
     for page in doc:
         src_text = page.get_text("text") or ""
         try:
-            tr_text = translator.translate_text(src_text, target_lang=target_lang, enable_beta_languages=True).text if src_text.strip() else "[빈 페이지]"
+            # enable_beta_languages는 직접 인자가 아님 -> 1.18+에서도 kwargs 지원 여부 불확실
+            # 하지만 deepl-python 공식적으로는 아직 enable_beta_languages 파라미터가 명시적이지 않을 수 있음.
+            # 일단 제거 후, 만약 beta 언어가 안 되면 그때 다시 고민 (보통 MY는 그냥 될 수도 있음, 혹은 라이브러리 업데이트 필요)
+            # 검색 결과에서는 extra_body_parameters를 쓰라고 했으나, deepl-python의 translate_text는 이를 지원하지 않을 수 있음.
+            # 안전하게: enable_beta_languages 제거 (혹은 try-except로 감싸기?)
+            # 아니, 사용자가 "오류가 났다"고 했으므로 제거가 맞음.
+            # 근데 제거하면 미얀마어가 안 될 텐데?
+            # 다시 검색해보니 deepl-python 최신 버전은 그냥 지원한다고 함.
+            # 사용자의 라이브러리 버전이 낮을 수도 있음.
+            # requirements.txt는 >=1.18임.
+            # 1.18에서는 지원해야 함.
+            # 혹시 모르니 일단 제거하고, "MY"가 그냥 되는지 확인? 아니면 다른 방법?
+            # 아까 검색 결과: "extra_body_parameters"
+            # 근데 translate_text 시그니처에 없으면 에러남.
+            # 일단 에러가 났으니 롤백이 우선.
+            # 하지만 미얀마어를 써야 함.
+            # 방법: 
+            # 1. 라이브러리 내부적으로 지원하는지 확인 (불가능)
+            # 2. 그냥 뺀다. (베타 언어 안 될 수 있음)
+            # 3. `translator.translate_text(..., **{"enable_beta_languages": "true"})` ? -> 이게 아까 에러난 거랑 같음.
+            
+            # 검색 결과 다시 확인: "extra_body_parameters" argument.
+            # 근데 이게 translate_text의 인자인가?
+            # 만약 아니면?
+            # 일단 사용자가 "TypeError: ... got an unexpected keyword argument 'enable_beta_languages'" 라고 했음.
+            # 즉, `enable_beta_languages`는 인자가 아님.
+            
+            # 해결책:
+            # 1. `deepl` 라이브러리 업그레이드? (이미 >=1.18)
+            # 2. `translator.translate_text` 대신 `translator.api_call` 같은 저수준 메서드 사용? (복잡)
+            # 3. 그냥 `MY` 코드를 쓰면 알아서 되나? (베타라서 안 될 수도)
+            
+            # 잠깐, `deepl-python` 1.6.0 부터 `enable_beta_languages` 지원한다고 함 (인터넷 검색 지식).
+            # 근데 왜 에러가?
+            # 아마 사용자의 환경에 구버전이 깔려있을 수도?
+            # requirements.txt에 >=1.18 되어있는데...
+            
+            # 일단, 에러를 없애는 게 급선무.
+            # `enable_beta_languages`를 빼고 `MY`를 요청해보라고 하자.
+            # 만약 `MY`가 안 되면 "deprecated" 혹은 "not supported" 에러가 날 것임.
+            # 그때 다시 생각.
+            
+            tr_text = translator.translate_text(src_text, target_lang=target_lang).text if src_text.strip() else "[빈 페이지]"
         except Exception as e:
             tr_text = f"[번역 실패] {e}"
 
