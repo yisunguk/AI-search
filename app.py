@@ -223,36 +223,116 @@ if menu == "번역하기":
 elif menu == "파일 보관함":
     st.subheader("📂 클라우드 파일 보관함")
     
-    if st.button("새로고침"):
+    # -----------------------------
+    # 1. 파일 직접 업로드 (Save)
+    # -----------------------------
+    with st.expander("📤 파일 직접 업로드 (번역 없이 저장)", expanded=False):
+        upload_archive = st.file_uploader("보관함에 저장할 파일 선택", key="archive_upload")
+        if st.button("저장하기", disabled=not upload_archive):
+            try:
+                blob_service_client = get_blob_service_client()
+                container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                
+                file_uuid = str(uuid.uuid4())[:8]
+                blob_name = f"input/{file_uuid}/{upload_archive.name}"
+                blob_client = container_client.get_blob_client(blob_name)
+                blob_client.upload_blob(upload_archive, overwrite=True)
+                st.success(f"'{upload_archive.name}' 업로드 완료!")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"업로드 실패: {e}")
+
+    st.divider()
+    
+    if st.button("🔄 목록 새로고침"):
         st.rerun()
         
     try:
         blob_service_client = get_blob_service_client()
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
         
-        col1, col2 = st.columns(2)
+        # 탭으로 Input/Output 구분
+        tab1, tab2 = st.tabs(["원본 문서 (Input)", "번역된 문서 (Output)"])
         
-        with col1:
-            st.info("원본 문서 (Input)")
-            input_blobs = list(container_client.list_blobs(name_starts_with="input/"))
-            # 최신순 정렬 (이름 기준이긴 하지만 UUID라 생성순 비슷, creation_time 있으면 좋음)
-            # list_blobs는 name, creation_time 등을 포함함.
-            input_blobs.sort(key=lambda x: x.creation_time, reverse=True)
+        def render_file_list(prefix, tab_name):
+            blobs = list(container_client.list_blobs(name_starts_with=prefix))
+            blobs.sort(key=lambda x: x.creation_time, reverse=True)
             
-            for blob in input_blobs:
+            if not blobs:
+                st.info(f"{tab_name}에 파일이 없습니다.")
+                return
+
+            for i, blob in enumerate(blobs):
                 file_name = blob.name.split("/")[-1]
-                sas_url = generate_sas_url(blob_service_client, CONTAINER_NAME, blob.name)
-                st.markdown(f"📄 [{file_name}]({sas_url}) <br><small>{blob.creation_time.strftime('%Y-%m-%d %H:%M')}</small>", unsafe_allow_html=True)
+                creation_time = blob.creation_time.strftime('%Y-%m-%d %H:%M')
                 
-        with col2:
-            st.success("번역된 문서 (Output)")
-            output_blobs = list(container_client.list_blobs(name_starts_with="output/"))
-            output_blobs.sort(key=lambda x: x.creation_time, reverse=True)
+                with st.container():
+                    col1, col2, col3 = st.columns([6, 2, 2])
+                    
+                    with col1:
+                        sas_url = generate_sas_url(blob_service_client, CONTAINER_NAME, blob.name)
+                        st.markdown(f"**[{file_name}]({sas_url})**")
+                        st.caption(f"📅 {creation_time} | 📦 {blob.size / 1024:.1f} KB")
+                    
+                    with col2:
+                        # 수정 (이름 변경)
+                        with st.popover("수정"):
+                            new_name = st.text_input("새 파일명", value=file_name, key=f"rename_{prefix}_{i}")
+                            if st.button("이름 변경", key=f"btn_rename_{prefix}_{i}"):
+                                try:
+                                    # 새 경로 생성 (UUID 폴더 구조 유지)
+                                    path_parts = blob.name.split("/")
+                                    # path_parts = ['input', 'uuid', 'filename']
+                                    if len(path_parts) >= 3:
+                                        new_blob_name = f"{path_parts[0]}/{path_parts[1]}/{new_name}"
+                                    else:
+                                        # 폴더 구조가 다를 경우 그냥 같은 폴더에
+                                        folder = "/".join(path_parts[:-1])
+                                        new_blob_name = f"{folder}/{new_name}"
+                                    
+                                    # 복사 (Rename은 Copy + Delete)
+                                    source_blob = container_client.get_blob_client(blob.name)
+                                    dest_blob = container_client.get_blob_client(new_blob_name)
+                                    
+                                    # SAS URL for Copy Source
+                                    source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob.name)
+                                    
+                                    dest_blob.start_copy_from_url(source_sas)
+                                    
+                                    # 복사 완료 대기 (간단한 폴링)
+                                    for _ in range(10):
+                                        props = dest_blob.get_blob_properties()
+                                        if props.copy.status == "success":
+                                            break
+                                        time.sleep(0.5)
+                                    
+                                    # 원본 삭제
+                                    source_blob.delete_blob()
+                                    st.success("이름 변경 완료!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"이름 변경 실패: {e}")
+
+                    with col3:
+                        # 삭제
+                        if st.button("삭제", key=f"del_{prefix}_{i}", type="secondary"):
+                            try:
+                                container_client.delete_blob(blob.name)
+                                st.success("삭제되었습니다.")
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"삭제 실패: {e}")
+                    
+                    st.divider()
+
+        with tab1:
+            render_file_list("input/", "원본 문서")
             
-            for blob in output_blobs:
-                file_name = blob.name.split("/")[-1]
-                sas_url = generate_sas_url(blob_service_client, CONTAINER_NAME, blob.name)
-                st.markdown(f"✅ [{file_name}]({sas_url}) <br><small>{blob.creation_time.strftime('%Y-%m-%d %H:%M')}</small>", unsafe_allow_html=True)
+        with tab2:
+            render_file_list("output/", "번역된 문서")
                 
     except Exception as e:
         st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
