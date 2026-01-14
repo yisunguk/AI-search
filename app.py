@@ -43,6 +43,8 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
     Blob 또는 Container에 대한 SAS URL 생성
     blob_name이 있으면 Blob SAS, 없으면 Container SAS (Write용)
     """
+    import urllib.parse
+    
     account_name = blob_service_client.account_name
     
     # Connection String으로 생성된 경우 credential은 dict일 수 있음
@@ -51,6 +53,8 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
     else:
         account_key = blob_service_client.credential['account_key']
     
+    # 시계 오차(Clock Skew) 방지를 위해 시작 시간을 15분 전으로 설정
+    start = datetime.utcnow() - timedelta(minutes=15)
     expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
     
     if blob_name:
@@ -61,9 +65,12 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
             blob_name=blob_name,
             account_key=account_key,
             permission=BlobSasPermissions(read=True),
+            start=start,
             expiry=expiry
         )
-        return f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
+        # URL 인코딩 (경로의 /는 유지)
+        encoded_blob_name = urllib.parse.quote(blob_name, safe='/')
+        return f"https://{account_name}.blob.core.windows.net/{container_name}/{encoded_blob_name}?{sas_token}"
     else:
         # Container Write/List SAS (Target)
         sas_token = generate_container_sas(
@@ -71,6 +78,7 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
             container_name=container_name,
             account_key=account_key,
             permission=ContainerSasPermissions(write=True, list=True, read=True),
+            start=start,
             expiry=expiry
         )
         return f"https://{account_name}.blob.core.windows.net/{container_name}?{sas_token}"
