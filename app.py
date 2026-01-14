@@ -107,6 +107,22 @@ LANGUAGES = {
     "러시아어": "ru"
 }
 
+# 언어 코드별 파일 접미사 매핑
+LANG_SUFFIX = {
+    "ko": "KO",
+    "en": "EN",
+    "ja": "JP",
+    "zh-Hans": "CN",
+    "zh-Hant": "TW",
+    "fr": "FR",
+    "de": "DE",
+    "es": "ES",
+    "vi": "VI",
+    "th": "TH",
+    "id": "ID",
+    "ru": "RU"
+}
+
 with st.sidebar:
     st.header("메뉴")
     menu = st.radio("이동", ["번역하기", "파일 보관함"])
@@ -163,7 +179,6 @@ if menu == "번역하기":
                     source_url = generate_sas_url(blob_service_client, CONTAINER_NAME, input_blob_name)
                     
                     # Target URL 설정
-                    # Target URL 설정
                     target_base_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}"
                     # Target URL은 컨테이너 또는 폴더 경로여야 함 (파일 경로 불가)
                     # 파일명 보존을 위해 폴더 경로 끝에 '/'를 반드시 붙여야 함
@@ -215,8 +230,43 @@ if menu == "번역하기":
                         st.subheader("다운로드")
                         for blob in output_blobs:
                             blob_name = blob.name
-                            download_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
                             file_name = blob_name.split("/")[-1]
+                            
+                            # 파일명에 언어 접미사 추가 (Rename)
+                            suffix = LANG_SUFFIX.get(target_lang_code, target_lang_code.upper())
+                            name_part, ext_part = os.path.splitext(file_name)
+                            
+                            # 이미 접미사가 있는지 확인 (혹시 모를 중복 방지)
+                            if not name_part.endswith(f"_{suffix}"):
+                                new_file_name = f"{name_part}_{suffix}{ext_part}"
+                                new_blob_name = f"output/{file_uuid}/{new_file_name}"
+                                
+                                try:
+                                    # Rename: Copy to new name -> Delete old
+                                    source_blob = container_client.get_blob_client(blob_name)
+                                    dest_blob = container_client.get_blob_client(new_blob_name)
+                                    
+                                    source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
+                                    dest_blob.start_copy_from_url(source_sas)
+                                    
+                                    # Wait for copy
+                                    for _ in range(10):
+                                        props = dest_blob.get_blob_properties()
+                                        if props.copy.status == "success":
+                                            break
+                                        time.sleep(0.2)
+                                        
+                                    source_blob.delete_blob()
+                                    
+                                    # Update variables for download link
+                                    blob_name = new_blob_name
+                                    file_name = new_file_name
+                                    st.toast(f"파일명 변경됨: {file_name}")
+                                    
+                                except Exception as e:
+                                    st.warning(f"파일명 변경 실패 (기본 이름으로 유지): {e}")
+
+                            download_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
                             st.markdown(f"[{file_name} 다운로드]({download_sas})", unsafe_allow_html=True)
                             
                 except Exception as e:
