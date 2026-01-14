@@ -8,6 +8,8 @@ from azure.ai.translation.document import DocumentTranslationClient, DocumentTra
 from azure.core.credentials import AzureKeyCredential
 import urllib.parse
 
+import requests
+
 # -----------------------------
 # 설정 및 비밀 관리
 # -----------------------------
@@ -85,42 +87,37 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
 # -----------------------------
 # UI 구성
 # -----------------------------
-# -----------------------------
-# UI 구성
-# -----------------------------
 st.title("🌏 Azure 문서 번역기")
 st.caption("Azure Document Translation & Blob Storage 기반")
 
-# 지원 언어 목록
-LANGUAGES = {
-    "한국어": "ko",
-    "영어": "en",
-    "일본어": "ja",
-    "중국어(간체)": "zh-Hans",
-    "중국어(번체)": "zh-Hant",
-    "프랑스어": "fr",
-    "독일어": "de",
-    "스페인어": "es",
-    "베트남어": "vi",
-    "태국어": "th",
-    "인도네시아어": "id",
-    "러시아어": "ru"
-}
+# 지원 언어 목록 가져오기 (API)
+@st.cache_data
+def get_supported_languages():
+    try:
+        url = "https://api.cognitive.microsofttranslator.com/languages?api-version=3.0&scope=translation"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        languages = {}
+        for code, info in data['translation'].items():
+            # 보기 좋게 "한국어 (Korean)" 형식으로 표시
+            label = f"{info['nativeName']} ({info['name']})"
+            languages[label] = code
+        return languages
+    except Exception as e:
+        st.error(f"언어 목록을 가져오는데 실패했습니다: {e}")
+        # 실패 시 기본 언어 제공
+        return {"한국어": "ko", "영어": "en"}
 
-# 언어 코드별 파일 접미사 매핑
-LANG_SUFFIX = {
-    "ko": "KO",
-    "en": "EN",
-    "ja": "JP",
+LANGUAGES = get_supported_languages()
+
+# 언어 코드별 파일 접미사 매핑 (기본적으로 대문자 코드를 사용하되, 일부 커스텀 가능)
+# 여기서는 자동 생성 로직을 사용하므로 별도 딕셔너리 불필요, 
+# 다만 중국어 등 특수 케이스를 위해 남겨둘 수 있음.
+LANG_SUFFIX_OVERRIDE = {
     "zh-Hans": "CN",
     "zh-Hant": "TW",
-    "fr": "FR",
-    "de": "DE",
-    "es": "ES",
-    "vi": "VI",
-    "th": "TH",
-    "id": "ID",
-    "ru": "RU"
 }
 
 with st.sidebar:
@@ -131,7 +128,15 @@ with st.sidebar:
     
     if menu == "번역하기":
         st.header("설정")
-        target_lang_label = st.selectbox("목표 언어 선택", list(LANGUAGES.keys()))
+        # 한국어를 기본값으로 찾기
+        default_index = 0
+        lang_labels = list(LANGUAGES.keys())
+        for i, label in enumerate(lang_labels):
+            if "Korean" in label or "한국어" in label:
+                default_index = i
+                break
+                
+        target_lang_label = st.selectbox("목표 언어 선택", lang_labels, index=default_index)
         target_lang_code = LANGUAGES[target_lang_label]
         st.info(f"선택된 목표 언어: {target_lang_code}")
 
@@ -233,7 +238,7 @@ if menu == "번역하기":
                             file_name = blob_name.split("/")[-1]
                             
                             # 파일명에 언어 접미사 추가 (Rename)
-                            suffix = LANG_SUFFIX.get(target_lang_code, target_lang_code.upper())
+                            suffix = LANG_SUFFIX_OVERRIDE.get(target_lang_code, target_lang_code.upper())
                             name_part, ext_part = os.path.splitext(file_name)
                             
                             # 이미 접미사가 있는지 확인 (혹시 모를 중복 방지)
