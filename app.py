@@ -279,14 +279,17 @@ if st.button("번역 시작", type="primary", disabled=not uploaded_file):
                             st.error(f"에러 코드: {doc.error.code}, 메시지: {doc.error.message}")
                 
                 # 결과 파일 찾기 및 다운로드 링크 생성
-                # output/{uuid}/ 폴더 내의 파일을 찾아야 함.
-                # 결과 파일명은 원본 파일명과 같거나 언어 코드가 붙을 수 있음.
+                # 잠시 대기 (Eventual Consistency)
+                time.sleep(2)
                 
-                output_prefix_search = f"output/{file_uuid}/"
+                output_prefix_search = f"output/{file_uuid}"
                 output_blobs = list(container_client.list_blobs(name_starts_with=output_prefix_search))
                 
                 if not output_blobs:
-                    st.error("결과 파일을 찾을 수 없습니다.")
+                    # 디버깅: output 폴더의 모든 파일 확인
+                    all_output = list(container_client.list_blobs(name_starts_with="output/"))
+                    debug_msg = "\n".join([b.name for b in all_output[:10]])
+                    st.error(f"결과 파일을 찾을 수 없습니다. (검색 경로: {output_prefix_search})\n현재 output 폴더 파일 목록:\n{debug_msg}")
                 else:
                     st.subheader("다운로드")
                     for blob in output_blobs:
