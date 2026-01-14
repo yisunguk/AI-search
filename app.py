@@ -257,6 +257,7 @@ if st.button("번역 시작", type="primary", disabled=not uploaded_file):
                     inputs=[
                         DocumentTranslationInput(
                             source_url=source_url,
+                            storage_type="File",
                             targets=[
                                 TranslationTarget(
                                     target_url=target_output_url,
