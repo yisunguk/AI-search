@@ -266,6 +266,55 @@ if menu == "번역하기":
                                 except Exception as e:
                                     st.warning(f"파일명 변경 실패 (기본 이름으로 유지): {e}")
 
+                            # PPTX 폰트 변경 (Times New Roman)
+                            if file_name.lower().endswith(".pptx"):
+                                try:
+                                    from pptx import Presentation
+                                    
+                                    # 임시 파일로 다운로드
+                                    temp_pptx = f"temp_{file_uuid}.pptx"
+                                    blob_client_temp = container_client.get_blob_client(blob_name)
+                                    with open(temp_pptx, "wb") as f:
+                                        data = blob_client_temp.download_blob().readall()
+                                        f.write(data)
+                                    
+                                    # 폰트 변경 로직
+                                    prs = Presentation(temp_pptx)
+                                    font_name = "Times New Roman"
+                                    
+                                    def change_font(shapes):
+                                        for shape in shapes:
+                                            if shape.has_text_frame:
+                                                for paragraph in shape.text_frame.paragraphs:
+                                                    for run in paragraph.runs:
+                                                        run.font.name = font_name
+                                            
+                                            if shape.has_table:
+                                                for row in shape.table.rows:
+                                                    for cell in row.cells:
+                                                        if cell.text_frame:
+                                                            for paragraph in cell.text_frame.paragraphs:
+                                                                for run in paragraph.runs:
+                                                                    run.font.name = font_name
+                                            
+                                            if shape.shape_type == 6: # Group
+                                                change_font(shape.shapes)
+
+                                    for slide in prs.slides:
+                                        change_font(slide.shapes)
+                                    
+                                    prs.save(temp_pptx)
+                                    
+                                    # 다시 업로드 (덮어쓰기)
+                                    with open(temp_pptx, "rb") as f:
+                                        blob_client_temp.upload_blob(f, overwrite=True)
+                                    
+                                    os.remove(temp_pptx)
+                                    st.toast("PPTX 폰트 변경 완료 (Times New Roman)")
+                                    
+                                except Exception as e:
+                                    st.warning(f"PPTX 폰트 변경 실패: {e}")
+
                             download_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
                             st.markdown(f"[{file_name} 다운로드]({download_sas})", unsafe_allow_html=True)
                             
