@@ -95,20 +95,22 @@ st.caption("Azure Document Translation & Blob Storage 기반")
 def get_supported_languages():
     try:
         url = "https://api.cognitive.microsofttranslator.com/languages?api-version=3.0&scope=translation"
-        response = requests.get(url)
+        # Accept-Language 헤더를 'ko'로 설정하여 언어 이름을 한국어로 받음
+        headers = {"Accept-Language": "ko"}
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
         
         languages = {}
         for code, info in data['translation'].items():
-            # 보기 좋게 "한국어 (Korean)" 형식으로 표시
-            label = f"{info['nativeName']} ({info['name']})"
+            # "한국어 이름 (원어 이름)" 형식으로 표시 (예: 영어 (English))
+            label = f"{info['name']} ({info['nativeName']})"
             languages[label] = code
         return languages
     except Exception as e:
         st.error(f"언어 목록을 가져오는데 실패했습니다: {e}")
         # 실패 시 기본 언어 제공
-        return {"한국어": "ko", "영어": "en"}
+        return {"한국어 (Korean)": "ko", "영어 (English)": "en"}
 
 LANGUAGES = get_supported_languages()
 
