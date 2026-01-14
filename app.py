@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions, generate_container_sas, ContainerSasPermissions
 from azure.ai.translation.document import DocumentTranslationClient
 from azure.core.credentials import AzureKeyCredential
+import urllib.parse
 
 # -----------------------------
 # 설정 및 비밀 관리
