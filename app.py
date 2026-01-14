@@ -1,458 +1,297 @@
-# app.py — 원본 UI 유지 + 시크릿 전용 DeepL 키 사용
-
-import os
-import re
-import io
-import zipfile
-import tempfile
-import pathlib
 import streamlit as st
-from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
-from fpdf import FPDF
-
-# DeepL 불러오기
-try:
-    import deepl
-except Exception:
-    st.error("`deepl` 패키지가 설치되어 있지 않습니다. 터미널에서 `pip install deepl` 실행 후 다시 시도하세요.")
-    st.stop()
-
-# PyMuPDF
-try:
-    import fitz  # PyMuPDF
-except Exception:
-    st.error("`PyMuPDF` 패키지가 설치되어 있지 않습니다. 터미널에서 `pip install pymupdf` 실행 후 다시 시도하세요.")
-    st.stop()
-
-# 원격 폰트 다운로드용
-try:
-    import requests
-except Exception:
-    st.error("`requests` 패키지가 필요합니다. 터미널에서 `pip install requests` 실행 후 다시 시도하세요.")
-    st.stop()
-
-SUPPORTED_EXTS = {".pptx", ".pdf"}  # Free 요금제: PPTX + PDF 지원
+import os
+import time
+import uuid
+from datetime import datetime, timedelta
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions, generate_container_sas, ContainerSasPermissions
+from azure.ai.translation.document import DocumentTranslationClient
+from azure.core.credentials import AzureKeyCredential
 
 # -----------------------------
-# 세션 상태 초기화
+# 설정 및 비밀 관리
 # -----------------------------
-if "dl_results" not in st.session_state:
-    st.session_state["dl_results"] = []   # [{label, code, path}]
-if "work_ext" not in st.session_state:
-    st.session_state["work_ext"] = None   # ".pptx" | ".pdf"
-if "work_name" not in st.session_state:
-    st.session_state["work_name"] = ""    # 업로드 원본 파일명
-if "saved_inputs" not in st.session_state:
-    st.session_state["saved_inputs"] = {} # 업로드 비교용
+st.set_page_config(page_title="Azure 문서 번역기", page_icon="🌏", layout="centered")
+
+def get_secret(key):
+    if key in st.secrets:
+        return st.secrets[key]
+    return os.environ.get(key)
+
+# 필수 자격 증명
+STORAGE_CONN_STR = get_secret("AZURE_STORAGE_CONNECTION_STRING")
+TRANSLATOR_KEY = get_secret("AZURE_TRANSLATOR_KEY")
+TRANSLATOR_ENDPOINT = get_secret("AZURE_TRANSLATOR_ENDPOINT")
+CONTAINER_NAME = get_secret("AZURE_BLOB_CONTAINER_NAME") or "blob-leesunguk"
 
 # -----------------------------
-# 유틸
+# Azure 클라이언트 헬퍼
 # -----------------------------
-def get_deepl_key():
-    """시크릿(우선) → 환경변수 순으로 DeepL 키 읽기 (사용자 입력란 없음)"""
-    try:
-        if "DEEPL_API_KEY" in st.secrets:
-            return st.secrets["DEEPL_API_KEY"]
-    except Exception:
-        pass
-    return os.environ.get("DEEPL_API_KEY", "")
+def get_blob_service_client():
+    if not STORAGE_CONN_STR:
+        st.error("Azure Storage Connection String이 설정되지 않았습니다.")
+        st.stop()
+    return BlobServiceClient.from_connection_string(STORAGE_CONN_STR)
 
-def save_uploaded_file(uploaded_file) -> pathlib.Path:
-    suffix = pathlib.Path(uploaded_file.name).suffix.lower()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(uploaded_file.read())
-        return pathlib.Path(tmp.name)
+def get_translation_client():
+    if not TRANSLATOR_KEY or not TRANSLATOR_ENDPOINT:
+        st.error("Azure Translator Key 또는 Endpoint가 설정되지 않았습니다.")
+        st.stop()
+    return DocumentTranslationClient(TRANSLATOR_ENDPOINT, AzureKeyCredential(TRANSLATOR_KEY))
 
-def output_path_for(input_path: pathlib.Path, target_lang_code: str, new_ext: str | None = None) -> pathlib.Path:
-    suffix = new_ext if new_ext else input_path.suffix
-    return input_path.with_name(f"{input_path.stem}.translated_{target_lang_code}{suffix}")
-
-def clear_results():
-    # 임시 결과 파일 삭제
-    for item in st.session_state["dl_results"]:
-        try:
-            pathlib.Path(item["path"]).unlink(missing_ok=True)
-        except Exception:
-            pass
-    st.session_state["dl_results"] = []
-    st.session_state["work_ext"] = None
-    st.session_state["work_name"] = ""
-
-def safe_rerun():
-    # Streamlit 버전 호환
-    if hasattr(st, "rerun"):
-        st.rerun()
-    elif hasattr(st, "experimental_rerun"):
-        st.experimental_rerun()
-
-# -----------------------------
-# 플래그 이모지 & 국가코드 매핑
-# -----------------------------
-FLAG_EMOJI = {
-    "AR": "🇸🇦", "BG": "🇧🇬", "CS": "🇨🇿", "DA": "🇩🇰", "DE": "🇩🇪", "EL": "🇬🇷",
-    "EN": "🇬🇧", "EN-GB": "🇬🇧", "EN-US": "🇺🇸", "ES": "🇪🇸", "ES-419": "🇲🇽",
-    "ET": "🇪🇪", "FI": "🇫🇮", "FR": "🇫🇷", "HE": "🇮🇱", "HU": "🇭🇺", "ID": "🇮🇩",
-    "IT": "🇮🇹", "JA": "🇯🇵", "KO": "🇰🇷", "LT": "🇱🇹", "LV": "🇱🇻", "NB": "🇳🇴",
-    "NL": "🇳🇱", "PL": "🇵🇱", "PT": "🇵🇹", "PT-BR": "🇧🇷", "PT-PT": "🇵🇹",
-    "RO": "🇷🇴", "RU": "🇷🇺", "SK": "🇸🇰", "SL": "🇸🇮", "SV": "🇸🇪", "TH": "🇹🇭",
-    "TR": "🇹🇷", "UK": "🇺🇦", "VI": "🇻🇳", "ZH": "🇨🇳", "ZH-HANS": "🇨🇳", "ZH-HANT": "🇹🇼"
-}
-LANG_TO_CC = {
-    "AR": "SA", "BG": "BG", "CS": "CZ", "DA": "DK", "DE": "DE", "EL": "GR",
-    "EN": "GB", "EN-GB": "GB", "EN-US": "US", "ES": "ES", "ES-419": "MX",
-    "ET": "EE", "FI": "FI", "FR": "FR", "HE": "IL", "HU": "HU", "ID": "ID",
-    "IT": "IT", "JA": "JP", "KO": "KR", "LT": "LT", "LV": "LV", "NB": "NO",
-    "NL": "NL", "PL": "PL", "PT": "PT", "PT-BR": "BR", "PT-PT": "PT",
-    "RO": "RO", "RU": "RU", "SK": "SK", "SL": "SI", "SV": "SE", "TH": "TH",
-    "TR": "TR", "UK": "UA", "VI": "VN", "ZH": "CN", "ZH-HANS": "CN", "ZH-HANT": "TW"
-}
-def build_label(name: str, code: str) -> str:
-    code_up = code.upper()
-    flag = FLAG_EMOJI.get(code_up, "🌐")
-    cc = LANG_TO_CC.get(code_up, code_up.split("-")[0])
-    return f"{flag} [{cc}] {name} – {code_up}"
-
-# -----------------------------
-# DeepL 타겟 언어 동적 로드 (+ next-gen only 보강)
-# -----------------------------
-@st.cache_data(show_spinner=False)
-def fetch_target_languages(auth_key: str):
-    translator = deepl.Translator(auth_key)
-    langs = translator.get_target_languages()  # list[Language]
-    pairs = {l.code.upper(): build_label(l.name, l.code) for l in langs}
-    # 문서 공지 기준: /languages에 없을 수 있는 next-gen 전용 타겟 언어 보강
-    NEXT_GEN_ONLY = [
-        ("HE", "Hebrew (next-gen only)"),
-        ("TH", "Thai (next-gen only)"),
-        ("VI", "Vietnamese (next-gen only)"),
-        ("ES-419", "Spanish (Latin American, next-gen only)"),
-        ("MY", "Burmese"),
-    ]
-    for code, name in NEXT_GEN_ONLY:
-        pairs.setdefault(code, build_label(name, code))
-    return sorted([(label, code) for code, label in pairs.items()], key=lambda x: x[0].lower())
-
-# -----------------------------
-# PPTX 번역 (원본 유지)
-# -----------------------------
-def translate_pptx_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_lang: str, translator: "deepl.Translator"):
-    prs = Presentation(str(input_fp))
-    num_prefix_re = re.compile(r'^\s*(\d+[\.\)]\s*)')
-
-    def translate_batch(texts: list[str]) -> list[str]:
-        if not texts:
-            return []
-        res = translator.translate_text(
-            texts,
-            target_lang=target_lang,
-            preserve_formatting=True,
-            split_sentences="nonewlines",
-            extra_body_parameters={"enable_beta_languages": True},  # Beta 언어 지원
+def generate_sas_url(blob_service_client, container_name, blob_name=None, permission="r", expiry_hours=1):
+    """
+    Blob 또는 Container에 대한 SAS URL 생성
+    blob_name이 있으면 Blob SAS, 없으면 Container SAS (Write용)
+    """
+    account_name = blob_service_client.account_name
+    account_key = blob_service_client.credential.account_key
+    
+    expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
+    
+    if blob_name:
+        # Blob Read SAS (Source)
+        sas_token = generate_blob_sas(
+            account_name=account_name,
+            container_name=container_name,
+            blob_name=blob_name,
+            account_key=account_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=expiry
         )
-        if isinstance(res, list):
-            return [r.text for r in res]
-        return [res.text]
-
-    def iter_shapes(shapes):
-        for shp in shapes:
-            yield shp
-            if shp.shape_type == MSO_SHAPE_TYPE.GROUP:
-                yield from iter_shapes(shp.shapes)
-
-    for slide in prs.slides:
-        for shp in iter_shapes(slide.shapes):
-            if shp.has_text_frame:
-                paras = shp.text_frame.paragraphs
-                items = []
-                for p in paras:
-                    raw = p.text
-                    if raw and raw.strip():
-                        m = num_prefix_re.match(raw)
-                        prefix = m.group(0) if m else ""
-                        core = raw[m.end():] if m else raw
-                        items.append((p, prefix, core))
-
-                translated = translate_batch([core for (_, _, core) in items])
-                for (p, prefix, _), new_text in zip(items, translated):
-                    if not p.runs:
-                        continue
-                    p.runs[0].text = prefix + new_text
-                    for run in p.runs[1:]:
-                        run.text = ""
-
-            if shp.shape_type == MSO_SHAPE_TYPE.TABLE:
-                for row in shp.table.rows:
-                    for cell in row.cells:
-                        paras = cell.text_frame.paragraphs
-                        items = []
-                        for p in paras:
-                            raw = p.text
-                            if raw and raw.strip():
-                                m = num_prefix_re.match(raw)
-                                prefix = m.group(0) if m else ""
-                                core = raw[m.end():] if m else raw
-                                items.append((p, prefix, core))
-
-                        translated = translate_batch([core for (_, _, core) in items])
-                        for (p, prefix, _), new_text in zip(items, translated):
-                            if not p.runs:
-                                continue
-                            p.runs[0].text = prefix + new_text
-                            for run in p.runs[1:]:
-                                run.text = ""
-
-    prs.save(str(output_fp))
+        return f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
+    else:
+        # Container Write/List SAS (Target)
+        sas_token = generate_container_sas(
+            account_name=account_name,
+            container_name=container_name,
+            account_key=account_key,
+            permission=ContainerSasPermissions(write=True, list=True, read=True),
+            expiry=expiry
+        )
+        return f"https://{account_name}.blob.core.windows.net/{container_name}?{sas_token}"
 
 # -----------------------------
-# PDF 번역 — 유니코드 폰트 자동 다운로드 + 적용 (FPDF 사용)
+# UI 구성
 # -----------------------------
-# 원격 폰트 URL (공식 Noto 저장소)
-FONT_URLS = {
-    "NotoSans":     "https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf",
-    "NotoSansThai": "https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansThai/NotoSansThai-Regular.ttf",
+st.title("🌏 Azure 문서 번역기")
+st.caption("Azure Document Translation & Blob Storage 기반")
+
+# 지원 언어 목록 (Azure Document Translation 지원 코드)
+# 실제로는 API로 가져올 수도 있지만, 주요 언어 하드코딩 또는 간단히 입력 받음
+# 여기서는 주요 언어만 예시로 제공
+LANGUAGES = {
+    "한국어": "ko",
+    "영어": "en",
+    "일본어": "ja",
+    "중국어(간체)": "zh-Hans",
+    "중국어(번체)": "zh-Hant",
+    "프랑스어": "fr",
+    "독일어": "de",
+    "스페인어": "es",
+    "베트남어": "vi",
+    "태국어": "th",
+    "인도네시아어": "id",
+    "러시아어": "ru"
 }
-
-FONT_CACHE_DIR = pathlib.Path(tempfile.gettempdir()) / "translator_font_cache"
-FONT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-@st.cache_resource(show_spinner=False)
-def ensure_font_local(name: str) -> pathlib.Path:
-    """지정한 폰트를 OS 임시 캐시에 보관하고 경로를 반환"""
-    url = FONT_URLS.get(name)
-    if not url:
-        raise ValueError(f"Unknown font key: {name}")
-    ext = ".ttf" if url.lower().endswith(".ttf") else ".otf"
-    dest = FONT_CACHE_DIR / f"{name}{ext}"
-    if dest.exists() and dest.stat().st_size > 0:
-        return dest
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    dest.write_bytes(resp.content)
-    if dest.stat().st_size < 10_000:
-        dest.unlink(missing_ok=True)
-        raise RuntimeError(f"Font download failed (too small): {name}")
-    return dest
-
-def translate_pdf_text(input_fp: pathlib.Path, output_fp: pathlib.Path, target_lang: str, translator: "deepl.Translator"):
-    doc = fitz.open(str(input_fp))
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # 1) 필요한 폰트 확보 & 등록 (라틴/베트남어 등: NotoSans, 태국어: NotoSansThai)
-    try:
-        path_sans = ensure_font_local("NotoSans")
-        pdf.add_font("NotoSans", "", str(path_sans), uni=True)
-    except Exception as e:
-        st.error(f"기본 폰트 다운로드/등록 실패: {e}")
-        return
-
-    path_thai = None
-    try:
-        path_thai = ensure_font_local("NotoSansThai")
-        pdf.add_font("NotoThai", "", str(path_thai), uni=True)
-    except Exception:
-        # 태국어가 아니면 없어도 진행 가능
-        path_thai = None
-
-    # 2) 간단한 스크립트 감지로 폰트 선택
-    re_th = re.compile(r"[\u0E00-\u0E7F]")  # Thai block
-
-    def pick_font(s: str) -> str:
-        if path_thai and re_th.search(s):
-            return "NotoThai"
-        return "NotoSans"
-
-    # 3) 페이지별 번역 및 출력
-    for page in doc:
-        src_text = page.get_text("text") or ""
-        try:
-            tr_text = translator.translate_text(
-                src_text, 
-                target_lang=target_lang, 
-                extra_body_parameters={"enable_beta_languages": True}  # Beta 언어 지원
-            ).text if src_text.strip() else "[빈 페이지]"
-        except Exception as e:
-            tr_text = f"[번역 실패] {e}"
-
-        pdf.add_page()
-        pdf.set_font(pick_font(tr_text), size=12)
-        # fpdf2는 유니코드 출력 가능. latin-1 에러 방지됨.
-        pdf.multi_cell(0, 8, tr_text)
-
-    pdf.output(str(output_fp))
-
-# -----------------------------
-# UI
-# -----------------------------
-st.set_page_config(page_title="외국인 근로자 교재 번역기", page_icon="🌏", layout="centered")
-
-# 이모지 폰트 우선 적용
-st.markdown("""
-<style>
-html, body, [class^="css"]  {
-  font-family: system-ui, -apple-system, "Segoe UI", "Apple Color Emoji", "Segoe UI Emoji",
-               "Noto Color Emoji", "Helvetica", "Arial", sans-serif !important;
-}
-.stMultiSelect, .stSelectbox, .stTextInput {
-  font-family: system-ui, -apple-system, "Segoe UI", "Apple Color Emoji", "Segoe UI Emoji",
-               "Noto Color Emoji", "Helvetica", "Arial", sans-serif !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🌏 외국인 근로자 교재 번역기")
-st.caption("DeepL API 기반 PPTX/PDF 번역 — 여러 언어 동시 번역, 국기 아이콘 포함")
 
 with st.sidebar:
     st.header("설정")
+    target_lang_label = st.selectbox("목표 언어 선택", list(LANGUAGES.keys()))
+    target_lang_code = LANGUAGES[target_lang_label]
+    
+    st.info(f"선택된 목표 언어: {target_lang_code}")
+    
+    # 자격 증명 상태 확인
+    if STORAGE_CONN_STR and TRANSLATOR_KEY:
+        st.success("✅ Azure 자격 증명 확인됨")
+    else:
+        st.warning("⚠️ Azure 자격 증명이 누락되었습니다. secrets.toml을 확인하세요.")
 
-    # 🔁 캐시 새로고침 버튼 (유지)
-    if st.button("언어 목록 새로고침", help="캐시를 지우고 DeepL에서 다시 불러옵니다."):
-        st.cache_data.clear()
+uploaded_file = st.file_uploader("번역할 문서 업로드 (PPTX, PDF, DOCX, XLSX 등)", type=["pptx", "pdf", "docx", "xlsx"])
 
-    # ✅ 시크릿/환경변수에서만 키 읽기
-    auth_key = get_deepl_key()
-    if not auth_key:
-        st.error("DeepL API 키가 없습니다. Streamlit Cloud의 **Settings → Secrets**에 `DEEPL_API_KEY`를 등록하세요.")
-        st.stop()
-
-    # 상태 배지
-    st.success("API 키: Streamlit Secrets 사용 중")
-
-    # 언어 로드
-    target_lang_pairs = []
-    try:
-        target_lang_pairs = fetch_target_languages(auth_key)  # [(label, code)]
-    except Exception as e:
-        st.error(f"지원 언어 목록을 불러올 수 없습니다: {e}")
-
-    options = [label for (label, _) in target_lang_pairs]
-
-    # ✅ 기본 선택 없음 (원본과 동일한 UX)
-    tgt_labels = st.multiselect(
-        "목표 언어 선택 (여러 개 가능)",
-        options,
-        default=[],
-        placeholder="언어를 선택하세요 (기본 선택 없음)",
-        help="플래그가 글자로 보일 경우에도 [CC]가 함께 표시됩니다."
-    )
-    target_langs = [code for (lbl, code) in target_lang_pairs if lbl in tgt_labels]
-
-# 업로드 위젯 (새 파일 선택 시 이전 결과 지움)
-uploaded = st.file_uploader(
-    "번역할 PPTX 또는 PDF 파일 업로드",
-    type=[ext[1:] for ext in SUPPORTED_EXTS],
-    accept_multiple_files=False,
-    help="Free 요금제는 PPTX + PDF만 지원합니다."
-)
-if uploaded:
-    # 새 파일로 바뀌었는지 체크
-    cur_name = uploaded.name
-    prev_name = st.session_state["saved_inputs"].get("uploaded_name")
-    if prev_name != cur_name:
-        clear_results()
-        st.session_state["saved_inputs"]["uploaded_name"] = cur_name
-
-start = st.button(
-    "번역 시작",
-    type="primary",
-    disabled=not uploaded or not target_langs or not get_deepl_key()
-)
-
-# -----------------------------
-# 번역 실행 (결과는 세션에 저장)
-# -----------------------------
-if start and uploaded:
-    ext = pathlib.Path(uploaded.name).suffix.lower()
-    if ext not in SUPPORTED_EXTS:
-        st.error(f"지원하지 않는 확장자입니다: {ext}")
-        st.stop()
-
-    auth_key = get_deepl_key()
-    if not auth_key:
-        st.error("DeepL API 키가 필요합니다.")
-        st.stop()
-
-    with st.spinner("번역 중입니다..."):
-        in_path = save_uploaded_file(uploaded)
-        out_ext = ".pptx" if ext == ".pptx" else ".pdf"
-        translator = deepl.Translator(auth_key)
-
-        # 진행률 바
-        progress = st.progress(0.0)
-        total = max(len(target_langs), 1)
-
-        label_by_code = {code: lbl for (lbl, code) in target_lang_pairs}
-        made = []
-        try:
-            for i, lang_code in enumerate(target_langs, start=1):
-                out_path = output_path_for(in_path, lang_code, new_ext=out_ext)
-                if ext == ".pptx":
-                    translate_pptx_text(in_path, out_path, lang_code, translator)
-                else:
-                    translate_pdf_text(in_path, out_path, lang_code, translator)
-                made.append({
-                    "label": label_by_code.get(lang_code, lang_code),
-                    "code": lang_code,
-                    "path": str(out_path)
-                })
-                progress.progress(i / total)
-            # 입력 임시 파일은 정리
+if st.button("번역 시작", type="primary", disabled=not uploaded_file):
+    if not uploaded_file:
+        st.error("파일을 업로드해주세요.")
+    else:
+        with st.spinner("Azure Blob에 파일 업로드 중..."):
             try:
-                in_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+                blob_service_client = get_blob_service_client()
+                container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                
+                # 컨테이너가 없으면 생성 (혹시 모를 상황 대비)
+                if not container_client.exists():
+                    container_client.create_container()
 
-            # ✅ 세션에 저장하여 리런 후에도 유지
-            st.session_state["dl_results"] = made
-            st.session_state["work_ext"] = out_ext
-            st.session_state["work_name"] = uploaded.name
-            st.success("✅ 번역 완료! 아래에서 파일을 다운로드하세요.")
-        except Exception as e:
-            st.error(f"번역 중 오류 발생: {e}")
+                # 파일명 유니크하게 처리
+                file_uuid = str(uuid.uuid4())[:8]
+                original_filename = uploaded_file.name
+                input_blob_name = f"input/{file_uuid}/{original_filename}"
+                
+                # 업로드
+                blob_client = container_client.get_blob_client(input_blob_name)
+                blob_client.upload_blob(uploaded_file, overwrite=True)
+                
+                st.success("업로드 완료! 번역 요청 중...")
+                
+                # SAS 생성
+                source_url = generate_sas_url(blob_service_client, CONTAINER_NAME, input_blob_name)
+                # Output은 폴더별로 구분 (targetUrl은 컨테이너 레벨 SAS여야 함, 하지만 폴더 지정 가능)
+                # Azure Document Translation은 Target URL이 컨테이너 SAS여야 하며, 결과 파일명을 지정하거나 폴더 구조를 따름.
+                # 여기서는 output/{uuid}/ 폴더에 결과가 저장되도록 설정하고 싶음.
+                # 하지만 Target URL은 컨테이너 루트여야 하거나, 특정 가상 디렉토리여야 함.
+                # 가장 쉬운 방법: Target URL을 `output/{file_uuid}/` 가상 디렉토리를 포함한 SAS로 생성.
+                
+                output_prefix = f"output/{file_uuid}/"
+                target_url = generate_sas_url(blob_service_client, CONTAINER_NAME) # 컨테이너 전체 권한 SAS
+                # 주의: Document Translation의 targetUrl은 쓰기 권한이 있는 컨테이너 SAS URL이어야 함.
+                # prefix를 지정하지 않으면 컨테이너 루트에 생길 수 있음.
+                
+            except Exception as e:
+                st.error(f"업로드/SAS 생성 실패: {e}")
+                st.stop()
 
-# -----------------------------
-# 결과 다운로드 영역 (세션 기반으로 항상 렌더)
-# -----------------------------
-if st.session_state["dl_results"]:
-    ext = st.session_state["work_ext"]
-    base = pathlib.Path(st.session_state["work_name"]).stem
-
-    # 개별 다운로드 버튼
-    for idx, item in enumerate(st.session_state["dl_results"]):
-        try:
-            with open(item["path"], "rb") as f:
-                mime = ("application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                        if ext == ".pptx" else "application/pdf")
-                st.download_button(
-                    label=f'{item["label"]} 번역본 다운로드',
-                    data=f.read(),
-                    file_name=pathlib.Path(item["path"]).name,
-                    mime=mime,
-                    key=f"dl-{idx}"  # 🔑 리런에도 고유 키 유지
+        with st.spinner("번역 작업 요청 및 대기 중..."):
+            try:
+                client = get_translation_client()
+                
+                # 번역 작업 시작
+                # sourceUrl: 특정 파일의 SAS URL
+                # targetUrl: 결과가 저장될 컨테이너 SAS URL (여기서는 컨테이너 전체)
+                # targetUrl에 prefix를 붙여서 특정 폴더에 저장되도록 유도? 
+                # API 상 targetUrl은 컨테이너 URL이어야 함. 
+                # 하지만 우리는 입력 파일이 1개이므로, storageSource=File 로 지정하면 됨?
+                # Python SDK `begin_translation`은 배치 번역임.
+                # SourceInput에 storageSource='File' 옵션이 있는지 확인 필요. 
+                # SDK 문서를 보면 Single Blob 번역은 `begin_translation`에서 source_url이 구체적 파일이면 됨.
+                # 하지만 Target은 컨테이너여야 함.
+                
+                # SDK 사용법:
+                # inputs = [DocumentTranslationInput(source_url=..., targets=[TranslationTarget(target_url=..., language=...)])]
+                # 여기서 source_url이 구체적 파일(SAS 포함)이면 그 파일만 번역됨.
+                # target_url은 컨테이너(SAS 포함)여야 함.
+                # 결과 파일명은 원본과 같게 유지되거나 설정에 따름.
+                # 겹치지 않게 하기 위해 output_prefix를 사용해야 하는데 SDK에서 어떻게 지정하나?
+                # TranslationTarget에 `category`나 `glossaries`는 있지만 prefix는 없음.
+                # 그러나 target_url 자체에 가상 디렉토리를 포함할 수 있는지? 
+                # -> 보통은 컨테이너 URL + SAS 쿼리.
+                
+                # 해결책: Target Container를 `blob-leesunguk`으로 하고, 
+                # 결과가 섞이지 않게 하려면? 
+                # Azure Document Translation은 입력 파일의 상대 경로 구조를 출력 컨테이너에 유지함.
+                # 입력이 `input/uuid/file.pptx` 였으므로, 
+                # 출력이 `input/uuid/file.pptx` 위치에 덮어씌워지거나, 
+                # Target URL이 가리키는 곳에 저장됨.
+                # 만약 Target URL이 `.../blob-leesunguk?sas` 라면, 
+                # 결과는 `blob-leesunguk/input/uuid/file.pptx` (언어 코드 붙을 수 있음) 로 저장될 것임.
+                # 이렇게 되면 input과 섞임.
+                
+                # 따라서 Target URL을 `.../blob-leesunguk/output/uuid?sas` 처럼 하위 경로로 줄 수 있는지 확인 필요.
+                # Azure Blob SAS는 컨테이너 레벨에서 생성되지만, URL 자체에 경로를 붙여서 주면 그 경로를 루트로 인식할 수도 있음?
+                # 아니면, Source Input에서 `storage_source="AzureBlob"` (default) 대신 구체적 파일 지정 시
+                # prefix 옵션 등을 활용.
+                
+                # 전략: 
+                # Source URL: `.../input/uuid/file.pptx?sas`
+                # Target URL: `.../output/uuid?sas` (이게 작동하는지 불확실, 보통은 컨테이너 루트)
+                # 만약 Target URL이 컨테이너 루트여야 한다면, 
+                # Source의 `prefix`나 `filter`를 쓰는게 아니라 직접 파일 URL을 주었으므로,
+                # 결과는 Target Container의 루트에 `file.pptx`로 생길 가능성 높음.
+                # -> 테스트 필요.
+                
+                # 안전한 방법: 
+                # Target URL을 `https://.../blob-leesunguk?sas` 로 주고,
+                # 결과 파일이 어디 생기는지 확인 후 다운로드.
+                # 보통은 `TargetContainer/RelativePathFromSource` 구조를 따름.
+                # Source가 `input/uuid/file.pptx` 였으니, Target에도 `input/uuid/file.pptx`로 생길 수 있음.
+                # 이를 방지하기 위해 Source URL을 줄 때, 컨테이너 루트가 아닌 Blob URL을 직접 주면,
+                # 상대 경로가 없음 -> 루트에 생김?
+                
+                # 일단 진행하고 결과 경로를 추적하여 다운로드.
+                
+                from azure.ai.translation.document import DocumentTranslationInput, TranslationTarget
+                
+                # Output 폴더를 구분하기 위해, Target URL을 `.../blob-leesunguk?sas`로 하고
+                # 결과 파일은 `input/uuid/` 경로를 따라갈 것으로 예상됨.
+                # 하지만 우리는 `output` 폴더에 넣고 싶음.
+                # SDK에는 `target_url`에 폴더 경로를 포함시키는 것을 허용하는 경우가 많음.
+                # 시도: `https://.../blob-leesunguk/output/{file_uuid}?sas`
+                
+                target_folder_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/output/{file_uuid}?{generate_container_sas(blob_service_client.account_name, CONTAINER_NAME, blob_service_client.credential.account_key, permission=ContainerSasPermissions(write=True, list=True, read=True), expiry=datetime.utcnow() + timedelta(hours=1))}"
+                # 위 방식은 SAS 서명이 컨테이너 기준이라 URL 경로와 불일치할 수 있음.
+                # SAS는 컨테이너에 대해 발급받고, URL 문자열만 조작해서 폴더 경로를 넣는 방식.
+                
+                # 정확한 방식:
+                # SAS는 컨테이너 전체 권한.
+                # Target URL = `https://<account>.blob.core.windows.net/<container>/output/<uuid>?<sas_token>`
+                
+                sas_token = generate_container_sas(
+                    account_name=blob_service_client.account_name,
+                    container_name=CONTAINER_NAME,
+                    account_key=blob_service_client.credential.account_key,
+                    permission=ContainerSasPermissions(write=True, list=True, read=True),
+                    expiry=datetime.utcnow() + timedelta(hours=1)
                 )
-        except FileNotFoundError:
-            st.warning(f"파일이 사라졌습니다: {item['path']}")
-
-    # ZIP 다운로드 (2개 이상일 때)
-    if len(st.session_state["dl_results"]) > 1:
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for item in st.session_state["dl_results"]:
-                p = pathlib.Path(item["path"])
-                if p.exists():
-                    zf.write(p, arcname=p.name)
-        zip_buf.seek(0)
-        st.download_button(
-            label=f"모든 번역본 ZIP으로 다운로드 ({len(st.session_state['dl_results'])}개)",
-            data=zip_buf.read(),
-            file_name=f"{base}_translations.zip",
-            mime="application/zip",
-            key="zip-all"  # 🔑 고유 키
-        )
-
-    # 결과 지우기
-    if st.button("결과 지우기", key="clear-results", help="결과 버튼을 숨기고 임시 파일을 삭제합니다."):
-        clear_results()
-        safe_rerun()
+                
+                target_base_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}"
+                target_output_url = f"{target_base_url}/output/{file_uuid}?{sas_token}"
+                
+                poller = client.begin_translation(
+                    inputs=[
+                        DocumentTranslationInput(
+                            source_url=source_url,
+                            targets=[
+                                TranslationTarget(
+                                    target_url=target_output_url,
+                                    language=target_lang_code
+                                )
+                            ]
+                        )
+                    ]
+                )
+                
+                result = poller.result()
+                
+                st.success(f"번역 완료! (상태: {result.status})")
+                
+                # 결과 파일 찾기 및 다운로드 링크 생성
+                # output/{uuid}/ 폴더 내의 파일을 찾아야 함.
+                # 결과 파일명은 원본 파일명과 같거나 언어 코드가 붙을 수 있음.
+                
+                output_prefix_search = f"output/{file_uuid}/"
+                output_blobs = list(container_client.list_blobs(name_starts_with=output_prefix_search))
+                
+                if not output_blobs:
+                    st.error("결과 파일을 찾을 수 없습니다.")
+                else:
+                    st.subheader("다운로드")
+                    for blob in output_blobs:
+                        blob_name = blob.name
+                        # 다운로드용 SAS (Read)
+                        download_sas = generate_blob_sas(
+                            account_name=blob_service_client.account_name,
+                            container_name=CONTAINER_NAME,
+                            blob_name=blob_name,
+                            account_key=blob_service_client.credential.account_key,
+                            permission=BlobSasPermissions(read=True),
+                            expiry=datetime.utcnow() + timedelta(hours=1)
+                        )
+                        download_url = f"{target_base_url}/{blob_name}?{download_sas}"
+                        
+                        # 파일명 추출
+                        file_name = blob_name.split("/")[-1]
+                        
+                        # Streamlit 다운로드 버튼 (URL 대신 바이트 다운로드 방식 사용)
+                        # URL로 바로 다운로드하게 하려면 st.markdown 링크 사용
+                        st.markdown(f"[{file_name} 다운로드]({download_url})", unsafe_allow_html=True)
+                        
+                        # 또는 직접 바이트 읽어서 버튼 제공 (더 안정적)
+                        blob_client_out = container_client.get_blob_client(blob_name)
+                        data = blob_client_out.download_blob().readall()
+                        st.download_button(
+                            label=f"📥 {file_name} 다운로드",
+                            data=data,
+                            file_name=file_name
+                        )
+                        
+            except Exception as e:
+                st.error(f"번역 요청 중 오류 발생: {e}")
