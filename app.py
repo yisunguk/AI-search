@@ -44,7 +44,12 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
     blob_name이 있으면 Blob SAS, 없으면 Container SAS (Write용)
     """
     account_name = blob_service_client.account_name
-    account_key = blob_service_client.credential.account_key
+    
+    # Connection String으로 생성된 경우 credential은 dict일 수 있음
+    if hasattr(blob_service_client.credential, 'account_key'):
+        account_key = blob_service_client.credential.account_key
+    else:
+        account_key = blob_service_client.credential['account_key']
     
     expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
     
@@ -118,9 +123,16 @@ if st.button("번역 시작", type="primary", disabled=not uploaded_file):
                 blob_service_client = get_blob_service_client()
                 container_client = blob_service_client.get_container_client(CONTAINER_NAME)
                 
-                # 컨테이너가 없으면 생성 (혹시 모를 상황 대비)
-                if not container_client.exists():
-                    container_client.create_container()
+                # 컨테이너 접근 권한 확인 (AuthenticationFailed 방지)
+                try:
+                    if not container_client.exists():
+                        container_client.create_container()
+                except Exception as e:
+                    if "AuthenticationFailed" in str(e):
+                        st.error("🚨 인증 실패: Azure Storage Key가 올바르지 않습니다. Secrets 설정을 확인해주세요.")
+                        st.stop()
+                    else:
+                        raise e
 
                 # 파일명 유니크하게 처리
                 file_uuid = str(uuid.uuid4())[:8]
