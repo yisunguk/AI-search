@@ -251,7 +251,10 @@ if st.button("번역 시작", type="primary", disabled=not uploaded_file):
                 )
                 
                 target_base_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}"
-                target_output_url = f"{target_base_url}/output/{file_uuid}?{sas_token}"
+                
+                # 결과 파일명에 원본 파일명 포함 (확장자 유지)
+                encoded_original_filename = urllib.parse.quote(original_filename, safe='')
+                target_output_url = f"{target_base_url}/output/{file_uuid}/{encoded_original_filename}?{sas_token}"
                 
                 poller = client.begin_translation(
                     inputs=[
