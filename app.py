@@ -163,9 +163,11 @@ if menu == "번역하기":
                     source_url = generate_sas_url(blob_service_client, CONTAINER_NAME, input_blob_name)
                     
                     # Target URL 설정
+                    # Target URL 설정
                     target_base_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}"
-                    encoded_original_filename = urllib.parse.quote(original_filename, safe='')
-                    target_output_url = f"{target_base_url}/output/{file_uuid}/{encoded_original_filename}?{generate_sas_url(blob_service_client, CONTAINER_NAME)}"
+                    # Target URL은 컨테이너 또는 폴더 경로여야 함 (파일 경로 불가)
+                    # 파일명 보존을 위해 폴더 경로 끝에 '/'를 반드시 붙여야 함
+                    target_output_url = f"{target_base_url}/output/{file_uuid}/?{generate_sas_url(blob_service_client, CONTAINER_NAME).split('?')[1]}"
                     
                 except Exception as e:
                     st.error(f"업로드/SAS 생성 실패: {e}")
