@@ -270,7 +270,13 @@ if st.button("번역 시작", type="primary", disabled=not uploaded_file):
                 
                 result = poller.result()
                 
-                st.success(f"번역 완료! (상태: {result.status})")
+                for doc in result:
+                    if doc.status == "Succeeded":
+                        st.success(f"번역 완료! (상태: {doc.status})")
+                    else:
+                        st.error(f"문서 번역 실패! (상태: {doc.status})")
+                        if doc.error:
+                            st.error(f"에러 코드: {doc.error.code}, 메시지: {doc.error.message}")
                 
                 # 결과 파일 찾기 및 다운로드 링크 생성
                 # output/{uuid}/ 폴더 내의 파일을 찾아야 함.
