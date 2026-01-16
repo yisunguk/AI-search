@@ -104,6 +104,16 @@ class AzureSearchManager:
             # 인덱스가 없으면 성공으로 간주
             return True, "Index did not exist or deleted."
 
+    def delete_indexer(self, indexer_name):
+        """
+        인덱서 삭제 (상태 초기화용)
+        """
+        try:
+            self.indexer_client.delete_indexer(indexer_name)
+            return True, f"Indexer '{indexer_name}' deleted."
+        except Exception as e:
+            return True, "Indexer did not exist or deleted."
+
     def create_indexer(self, indexer_name, data_source_name):
         """
         인덱서 생성 (Blob -> Index 매핑)

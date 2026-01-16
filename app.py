@@ -554,6 +554,8 @@ elif menu == "관리자 설정":
                 
             # 3. Indexer
             st.write("3. Indexer 생성 중...")
+            # 상태 초기화를 위해 기존 인덱서 삭제
+            manager.delete_indexer(SEARCH_INDEXER_NAME)
             success, msg = manager.create_indexer(SEARCH_INDEXER_NAME, SEARCH_DATASOURCE_NAME)
             if success:
                 st.success(msg)
@@ -572,6 +574,9 @@ elif menu == "관리자 설정":
             
     if st.button("📊 인덱서 상태 및 문서 개수 확인"):
         manager = get_search_manager()
+        
+        # 컨테이너 정보 표시
+        st.info(f"Target Container: {CONTAINER_NAME}")
         
         # 1. 문서 개수 확인
         count = manager.get_document_count()
