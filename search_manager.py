@@ -93,6 +93,17 @@ class AzureSearchManager:
         except Exception as e:
             return False, str(e)
 
+    def delete_index(self):
+        """
+        인덱스 삭제 (Analyzer 변경 시 필수)
+        """
+        try:
+            self.index_client.delete_index(self.index_name)
+            return True, f"Index '{self.index_name}' deleted."
+        except Exception as e:
+            # 인덱스가 없으면 성공으로 간주
+            return True, "Index did not exist or deleted."
+
     def create_indexer(self, indexer_name, data_source_name):
         """
         인덱서 생성 (Blob -> Index 매핑)

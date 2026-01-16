@@ -541,6 +541,8 @@ elif menu == "관리자 설정":
                 
             # 2. Index
             st.write("2. Index 생성 중...")
+            # Analyzer 변경을 위해 기존 인덱스 삭제
+            manager.delete_index()
             success, msg = manager.create_index()
             if success:
                 st.success(msg)
