@@ -13,7 +13,21 @@ from azure.search.documents.indexes.models import (
     SearchableField,
     CorsOptions,
     IndexingSchedule
+    SearchIndexerDataSourceConnection,
+    SimpleField,
+    SearchFieldDataType,
+    SearchableField,
+    CorsOptions,
+    IndexingSchedule,
+    SemanticSearch,
+    SemanticConfiguration,
+    SemanticPrioritizedFields,
+    SemanticField,
+    VectorSearch,
+    HnswAlgorithmConfiguration,
+    VectorSearchProfile
 )
+from azure.search.documents.models import VectorizedQuery
 import streamlit as st
 
 class AzureSearchManager:
@@ -51,7 +65,7 @@ class AzureSearchManager:
         try:
             fields = [
                 SimpleField(name="id", type=SearchFieldDataType.String, key=True),
-                SearchableField(name="content", type=SearchFieldDataType.String, analyzer_name="ko.lucene"),
+                SearchableField(name="content", type=SearchFieldDataType.String, analyzer_name="ko.microsoft"),
                 SimpleField(name="metadata_storage_name", type=SearchFieldDataType.String, filterable=True, sortable=True),
                 SimpleField(name="metadata_storage_path", type=SearchFieldDataType.String),
                 SimpleField(name="metadata_storage_last_modified", type=SearchFieldDataType.DateTimeOffset, filterable=True, sortable=True),
@@ -66,7 +80,18 @@ class AzureSearchManager:
             index = SearchIndex(
                 name=self.index_name,
                 fields=fields,
-                cors_options=cors_options
+                cors_options=cors_options,
+                semantic_search=SemanticSearch(
+                    configurations=[
+                        SemanticConfiguration(
+                            name="my-semantic-config",
+                            prioritized_fields=SemanticPrioritizedFields(
+                                content_fields=[SemanticField(field_name="content")],
+                                keywords_fields=[SemanticField(field_name="metadata_storage_name")]
+                            )
+                        )
+                    ]
+                )
             )
             
             result = self.index_client.create_or_update_index(index)
@@ -112,21 +137,35 @@ class AzureSearchManager:
         except Exception as e:
             return "Unknown", str(e)
 
-    def search(self, query, filter_expr=None):
+    def search(self, query, filter_expr=None, use_semantic_ranker=False, search_mode="all"):
         """
         문서 검색
         """
         try:
-            results = self.search_client.search(
-                search_text=query,
-                filter=filter_expr,
-                include_total_count=True,
-                select=["metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
-                highlight_fields="content",
-                highlight_pre_tag="**",
-                highlight_post_tag="**",
-                top=10
-            )
+            # 기본 검색 파라미터
+            search_params = {
+                "search_text": query,
+                "filter": filter_expr,
+                "include_total_count": True,
+                "select": ["metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
+                "highlight_fields": "content",
+                "highlight_pre_tag": "**",
+                "highlight_post_tag": "**",
+                "top": 10,
+                "search_mode": search_mode  # 'all' (AND) or 'any' (OR)
+            }
+
+            # 시맨틱 랭커 적용
+            if use_semantic_ranker:
+                search_params.update({
+                    "query_type": "semantic",
+                    "semantic_configuration_name": "my-semantic-config",
+                    "query_answer": "extractive",
+                    "query_caption": "extractive",
+                    "query_language": "ko-kr"
+                })
+
+            results = self.search_client.search(**search_params)
             return list(results)
         except Exception as e:
             print(f"Search error: {e}")

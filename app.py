@@ -466,12 +466,17 @@ elif menu == "파일 보관함":
 elif menu == "문서 검색":
     st.subheader("🔍 PDF 문서 검색")
     
-    query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
+    with col2:
+        use_semantic = st.checkbox("시맨틱 랭커 사용", value=False, help="의미 기반 검색으로 정확도를 높입니다. (Standard Tier 이상 필요)")
+    
     
     if query:
         with st.spinner("검색 중..."):
             search_manager = get_search_manager()
-            results = search_manager.search(query)
+            results = search_manager.search(query, use_semantic_ranker=use_semantic)
             
             if not results:
                 st.info("검색 결과가 없습니다.")
@@ -482,19 +487,6 @@ elif menu == "문서 검색":
                         file_name = result.get('metadata_storage_name', 'Unknown File')
                         path = result.get('metadata_storage_path', '')
                         content_snippet = result.get('content', '')[:300] + "..." # Snippet length
-                        
-                        # Blob SAS URL 생성 (다운로드/보기용)
-                        # path는 base64 디코딩이 필요할 수 있으나, metadata_storage_path는 보통 원본 URL임.
-                        # 하지만 SAS 토큰이 없으면 접근 불가할 수 있음.
-                        # 따라서 파일명으로 다시 SAS를 생성하거나, path가 이미 SAS를 포함하는지 확인해야 함.
-                        # 보통 Indexer는 SAS를 포함하지 않은 URL을 저장함.
-                        
-                        # 파일명으로 Blob Client 찾아서 SAS 생성
-                        # metadata_storage_name이 정확하다면 이를 사용
-                        # 하지만 경로가 필요함. metadata_storage_path에서 컨테이너 이후 경로 추출 필요
-                        
-                        # 예: https://account.blob.core.windows.net/container/input/uuid/file.pdf
-                        # 여기서 'input/uuid/file.pdf'를 추출해야 함.
                         
                         blob_path = ""
                         try:
@@ -510,8 +502,22 @@ elif menu == "문서 검색":
                         if blob_path:
                             try:
                                 blob_service_client = get_blob_service_client()
-                                sas_url = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_path)
-                                st.markdown(f"[문서 열기]({sas_url})")
+                                
+                                # Blob SAS 생성 (Content-Disposition: inline 설정)
+                                sas_token = generate_blob_sas(
+                                    account_name=blob_service_client.account_name,
+                                    container_name=CONTAINER_NAME,
+                                    blob_name=blob_path,
+                                    account_key=blob_service_client.credential.account_key,
+                                    permission=BlobSasPermissions(read=True),
+                                    expiry=datetime.utcnow() + timedelta(hours=1),
+                                    content_disposition="inline" # 브라우저에서 열기 강제
+                                )
+                                
+                                sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
+                                
+                                # 새 탭에서 열기 (target="_blank")
+                                st.markdown(f'<a href="{sas_url}" target="_blank">📄 문서 열기 (새 탭)</a>', unsafe_allow_html=True)
                             except Exception as e:
                                 st.caption(f"문서 링크 생성 실패: {e}")
                         

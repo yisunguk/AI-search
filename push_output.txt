@@ -1,0 +1,44 @@
+remote: error: GH013: Repository rule violations found for refs/heads/main.        
+remote: 
+remote: - GITHUB PUSH PROTECTION        
+remote:   ?붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴?       
+remote:     Resolve the following violations before pushing again        
+remote: 
+remote:     - Push cannot contain secrets        
+remote: 
+remote:             
+remote:      (?) Learn how to resolve a blocked push        
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push        
+remote:             
+remote:             
+remote:       ?붴?Azure Storage Account Access Key ?붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴?       
+remote:        locations:        
+remote:          - commit: 67b3574f4ac7fc223c554ddfde55d7473eae8fde        
+remote:            path: app.py:27        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/yisunguk/AI-search/security/secret-scanning/unblock-secret/38K4jxQuny2dKGIPBHxP4CVFQIV        
+remote:             
+remote:             
+remote:       ?붴?Azure Text Translation Key ?붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴?       
+remote:        locations:        
+remote:          - commit: 67b3574f4ac7fc223c554ddfde55d7473eae8fde        
+remote:            path: app.py:31        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/yisunguk/AI-search/security/secret-scanning/unblock-secret/38K4k1K2nBfsAH1yjM7r4y8B3iH        
+remote:             
+remote:             
+remote:       ?붴?Azure Search Admin Key ?붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴붴?       
+remote:        locations:        
+remote:          - commit: 67b3574f4ac7fc223c554ddfde55d7473eae8fde        
+remote:            path: app.py:36        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/yisunguk/AI-search/security/secret-scanning/unblock-secret/38K4jxutEZlVd4rs2iu0q6umqQi        
+remote:             
+remote: 
+remote: 
+To https://github.com/yisunguk/AI-search.git
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/yisunguk/AI-search.git'
