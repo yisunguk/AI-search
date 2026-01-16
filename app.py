@@ -531,7 +531,33 @@ elif menu == "관리자 설정":
     st.info("Azure AI Search 리소스를 초기화하거나 상태를 확인합니다.")
     
     # 인덱싱 대상 폴더 설정
-    target_folder = st.text_input("인덱싱 대상 폴더 (옵션)", value="GULFLNG", help="특정 폴더만 인덱싱하려면 폴더명을 입력하세요. (비워두면 전체 인덱싱)")
+    # 폴더 목록 가져오기
+    folder_options = ["(전체)"]
+    try:
+        blob_service_client = get_blob_service_client()
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        # walk_blobs를 사용하여 최상위 폴더만 조회
+        for blob in container_client.walk_blobs(delimiter='/'):
+            if blob.name.endswith('/'):
+                folder_options.append(blob.name.strip('/'))
+    except Exception as e:
+        st.warning(f"폴더 목록을 가져오지 못했습니다: {e}")
+        folder_options.append("GULFLNG") # Fallback
+
+    # 기본값 설정 (GULFLNG가 있으면 그걸로, 없으면 전체)
+    default_idx = 0
+    if "GULFLNG" in folder_options:
+        default_idx = folder_options.index("GULFLNG")
+
+    selected_folder = st.selectbox(
+        "인덱싱 대상 폴더 선택", 
+        folder_options, 
+        index=default_idx,
+        help="인덱싱할 프로젝트 폴더를 선택하세요."
+    )
+    
+    # '(전체)' 선택 시 None으로 처리
+    target_folder = None if selected_folder == "(전체)" else selected_folder
     
     if st.button("🚀 검색 리소스 초기화 (Data Source, Index, Indexer)"):
         with st.spinner("리소스 생성 중..."):
