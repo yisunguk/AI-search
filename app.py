@@ -466,17 +466,20 @@ elif menu == "파일 보관함":
 elif menu == "문서 검색":
     st.subheader("🔍 PDF 문서 검색")
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
         query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
     with col2:
-        use_semantic = st.checkbox("시맨틱 랭커 사용", value=False, help="의미 기반 검색으로 정확도를 높입니다. (Standard Tier 이상 필요)")
+        use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)")
+    with col3:
+        search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함")
+        search_mode = "all" if "all" in search_mode_opt else "any"
     
     
     if query:
         with st.spinner("검색 중..."):
             search_manager = get_search_manager()
-            results = search_manager.search(query, use_semantic_ranker=use_semantic)
+            results = search_manager.search(query, use_semantic_ranker=use_semantic, search_mode=search_mode)
             
             if not results:
                 st.info("검색 결과가 없습니다.")
