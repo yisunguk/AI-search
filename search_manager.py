@@ -138,9 +138,23 @@ class AzureSearchManager:
     def get_indexer_status(self, indexer_name):
         try:
             status = self.indexer_client.get_indexer_status(indexer_name)
-            return status.last_result.status, status.last_result.error_message
+            last_result = status.last_result
+            if last_result:
+                return last_result.status, last_result.error_message, last_result.item_count
+            else:
+                return "Never Run", "No execution history found.", 0
         except Exception as e:
-            return "Unknown", str(e)
+            return "Unknown", str(e), 0
+
+    def get_document_count(self):
+        """
+        인덱스에 저장된 문서 개수 확인
+        """
+        try:
+            return self.search_client.get_document_count()
+        except Exception as e:
+            print(f"Error getting doc count: {e}")
+            return -1
 
     def search(self, query, filter_expr=None, use_semantic_ranker=False, search_mode="all"):
         """

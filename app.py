@@ -570,10 +570,26 @@ elif menu == "관리자 설정":
         else:
             st.error(msg)
             
-    if st.button("📊 인덱서 상태 확인"):
+    if st.button("📊 인덱서 상태 및 문서 개수 확인"):
         manager = get_search_manager()
-        status, error = manager.get_indexer_status(SEARCH_INDEXER_NAME)
-        st.write(f"**Status:** {status}")
+        
+        # 1. 문서 개수 확인
+        count = manager.get_document_count()
+        st.metric("현재 인덱싱된 문서 수", f"{count}개")
+        
+        if count == 0:
+            st.warning("⚠️ 인덱스에 문서가 하나도 없습니다! 인덱서가 실패했거나, 문서 내용을 읽지 못했을 수 있습니다.")
+        
+        # 2. 인덱서 상태 확인
+        status, error, item_count = manager.get_indexer_status(SEARCH_INDEXER_NAME)
+        st.write(f"**Indexer Status:** {status}")
+        st.write(f"**Last Processed Items:** {item_count}")
+        
         if error:
-            st.error(f"Error: {error}")
+            st.error(f"❌ Indexer Error: {error}")
+        elif status == "success":
+            st.success("✅ 인덱서가 성공적으로 실행되었습니다.")
+        elif status == "inProgress":
+            st.info("⏳ 인덱서가 현재 실행 중입니다...")
+
 
