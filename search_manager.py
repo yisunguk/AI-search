@@ -12,12 +12,6 @@ from azure.search.documents.indexes.models import (
     SearchFieldDataType,
     SearchableField,
     CorsOptions,
-    IndexingSchedule
-    SearchIndexerDataSourceConnection,
-    SimpleField,
-    SearchFieldDataType,
-    SearchableField,
-    CorsOptions,
     IndexingSchedule,
     SemanticSearch,
     SemanticConfiguration,
