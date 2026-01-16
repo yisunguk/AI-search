@@ -530,13 +530,16 @@ elif menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
     st.info("Azure AI Search 리소스를 초기화하거나 상태를 확인합니다.")
     
+    # 인덱싱 대상 폴더 설정
+    target_folder = st.text_input("인덱싱 대상 폴더 (옵션)", value="GULFLNG", help="특정 폴더만 인덱싱하려면 폴더명을 입력하세요. (비워두면 전체 인덱싱)")
+    
     if st.button("🚀 검색 리소스 초기화 (Data Source, Index, Indexer)"):
         with st.spinner("리소스 생성 중..."):
             manager = get_search_manager()
             
             # 1. Data Source
             st.write("1. Data Source 생성 중...")
-            success, msg = manager.create_data_source(SEARCH_DATASOURCE_NAME, STORAGE_CONN_STR, CONTAINER_NAME)
+            success, msg = manager.create_data_source(SEARCH_DATASOURCE_NAME, STORAGE_CONN_STR, CONTAINER_NAME, query=target_folder)
             if success:
                 st.success(msg)
             else:
@@ -576,7 +579,7 @@ elif menu == "관리자 설정":
         manager = get_search_manager()
         
         # 컨테이너 정보 표시
-        st.info(f"Target Container: {CONTAINER_NAME}")
+        st.info(f"Target Container: {CONTAINER_NAME} | Folder: {target_folder if target_folder else 'All'}")
         
         # 1. 문서 개수 확인
         count = manager.get_document_count()

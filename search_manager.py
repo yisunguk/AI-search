@@ -35,12 +35,13 @@ class AzureSearchManager:
         self.indexer_client = SearchIndexerClient(endpoint=service_endpoint, credential=self.credential)
         self.search_client = SearchClient(endpoint=service_endpoint, index_name=index_name, credential=self.credential)
 
-    def create_data_source(self, name, connection_string, container_name):
+    def create_data_source(self, name, connection_string, container_name, query=None):
         """
         Azure Blob Storage를 데이터 소스로 등록
+        query: 특정 폴더만 인덱싱할 경우 폴더명 (예: 'GULFLNG')
         """
         try:
-            container = SearchIndexerDataContainer(name=container_name)
+            container = SearchIndexerDataContainer(name=container_name, query=query)
             data_source_connection = SearchIndexerDataSourceConnection(
                 name=name,
                 type="azureblob",
