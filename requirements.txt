@@ -4,3 +4,5 @@ azure-ai-translation-document>=1.0.0b1
 python-dotenv>=1.0.0
 requests>=2.32
 python-pptx>=0.6.21
+azure-search-documents>=11.4.0
+azure-identity>=1.15.0

@@ -7,13 +7,15 @@ from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPerm
 from azure.ai.translation.document import DocumentTranslationClient, DocumentTranslationInput, TranslationTarget
 from azure.core.credentials import AzureKeyCredential
 import urllib.parse
-
 import requests
+
+# Search Manager Import
+from search_manager import AzureSearchManager
 
 # -----------------------------
 # 설정 및 비밀 관리
 # -----------------------------
-st.set_page_config(page_title="Azure 문서 번역기", page_icon="🌏", layout="centered")
+st.set_page_config(page_title="Azure 문서 번역기 & 검색", page_icon="🌏", layout="centered")
 
 def get_secret(key):
     if key in st.secrets:
@@ -21,10 +23,20 @@ def get_secret(key):
     return os.environ.get(key)
 
 # 필수 자격 증명
+# 1. Storage
 STORAGE_CONN_STR = get_secret("AZURE_STORAGE_CONNECTION_STRING")
+CONTAINER_NAME = get_secret("AZURE_BLOB_CONTAINER_NAME") or "blob-leesunguk"
+
+# 2. Translator
 TRANSLATOR_KEY = get_secret("AZURE_TRANSLATOR_KEY")
 TRANSLATOR_ENDPOINT = get_secret("AZURE_TRANSLATOR_ENDPOINT")
-CONTAINER_NAME = get_secret("AZURE_BLOB_CONTAINER_NAME") or "blob-leesunguk"
+
+# 3. Search
+SEARCH_ENDPOINT = get_secret("AZURE_SEARCH_ENDPOINT")
+SEARCH_KEY = get_secret("AZURE_SEARCH_KEY")
+SEARCH_INDEX_NAME = "pdf-search-index"
+SEARCH_INDEXER_NAME = "pdf-indexer"
+SEARCH_DATASOURCE_NAME = "blob-datasource"
 
 # -----------------------------
 # Azure 클라이언트 헬퍼
@@ -40,6 +52,12 @@ def get_translation_client():
         st.error("Azure Translator Key 또는 Endpoint가 설정되지 않았습니다.")
         st.stop()
     return DocumentTranslationClient(TRANSLATOR_ENDPOINT, AzureKeyCredential(TRANSLATOR_KEY))
+
+def get_search_manager():
+    if not SEARCH_ENDPOINT or not SEARCH_KEY:
+        st.error("Azure Search Endpoint 또는 Key가 설정되지 않았습니다.")
+        st.stop()
+    return AzureSearchManager(SEARCH_ENDPOINT, SEARCH_KEY, SEARCH_INDEX_NAME)
 
 def generate_sas_url(blob_service_client, container_name, blob_name=None, permission="r", expiry_hours=1):
     """
@@ -87,8 +105,8 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
 # -----------------------------
 # UI 구성
 # -----------------------------
-st.title("🌏 Azure 문서 번역기")
-st.caption("Azure Document Translation & Blob Storage 기반")
+st.title("🌏 Azure 문서 번역기 & 검색")
+st.caption("Azure Document Translation & Blob Storage & AI Search 기반")
 
 # 지원 언어 목록 가져오기 (API)
 @st.cache_data
@@ -124,7 +142,7 @@ LANG_SUFFIX_OVERRIDE = {
 
 with st.sidebar:
     st.header("메뉴")
-    menu = st.radio("이동", ["번역하기", "파일 보관함"])
+    menu = st.radio("이동", ["번역하기", "파일 보관함", "문서 검색", "관리자 설정"])
     
     st.divider()
     
@@ -143,10 +161,10 @@ with st.sidebar:
         st.info(f"선택된 목표 언어: {target_lang_code}")
 
     # 자격 증명 상태 확인
-    if STORAGE_CONN_STR and TRANSLATOR_KEY:
+    if STORAGE_CONN_STR and TRANSLATOR_KEY and SEARCH_KEY:
         st.success("✅ Azure 자격 증명 확인됨")
     else:
-        st.warning("⚠️ Azure 자격 증명이 누락되었습니다. secrets.toml을 확인하세요.")
+        st.warning("⚠️ 일부 Azure 자격 증명이 누락되었습니다.")
 
 if menu == "번역하기":
     uploaded_file = st.file_uploader("번역할 문서 업로드 (PPTX, PDF, DOCX, XLSX 등)", type=["pptx", "pdf", "docx", "xlsx"])
@@ -444,3 +462,107 @@ elif menu == "파일 보관함":
                 
     except Exception as e:
         st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
+
+elif menu == "문서 검색":
+    st.subheader("🔍 PDF 문서 검색")
+    
+    query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
+    
+    if query:
+        with st.spinner("검색 중..."):
+            search_manager = get_search_manager()
+            results = search_manager.search(query)
+            
+            if not results:
+                st.info("검색 결과가 없습니다.")
+            else:
+                st.success(f"총 {len(results)}개의 문서를 찾았습니다.")
+                for result in results:
+                    with st.container():
+                        file_name = result.get('metadata_storage_name', 'Unknown File')
+                        path = result.get('metadata_storage_path', '')
+                        content_snippet = result.get('content', '')[:300] + "..." # Snippet length
+                        
+                        # Blob SAS URL 생성 (다운로드/보기용)
+                        # path는 base64 디코딩이 필요할 수 있으나, metadata_storage_path는 보통 원본 URL임.
+                        # 하지만 SAS 토큰이 없으면 접근 불가할 수 있음.
+                        # 따라서 파일명으로 다시 SAS를 생성하거나, path가 이미 SAS를 포함하는지 확인해야 함.
+                        # 보통 Indexer는 SAS를 포함하지 않은 URL을 저장함.
+                        
+                        # 파일명으로 Blob Client 찾아서 SAS 생성
+                        # metadata_storage_name이 정확하다면 이를 사용
+                        # 하지만 경로가 필요함. metadata_storage_path에서 컨테이너 이후 경로 추출 필요
+                        
+                        # 예: https://account.blob.core.windows.net/container/input/uuid/file.pdf
+                        # 여기서 'input/uuid/file.pdf'를 추출해야 함.
+                        
+                        blob_path = ""
+                        try:
+                            if CONTAINER_NAME in path:
+                                blob_path = path.split(f"/{CONTAINER_NAME}/")[-1]
+                                blob_path = urllib.parse.unquote(blob_path)
+                        except:
+                            pass
+                            
+                        st.markdown(f"### 📄 {file_name}")
+                        st.markdown(f"> {content_snippet}")
+                        
+                        if blob_path:
+                            try:
+                                blob_service_client = get_blob_service_client()
+                                sas_url = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_path)
+                                st.markdown(f"[문서 열기]({sas_url})")
+                            except Exception as e:
+                                st.caption(f"문서 링크 생성 실패: {e}")
+                        
+                        st.divider()
+
+elif menu == "관리자 설정":
+    st.subheader("⚙️ 관리자 설정")
+    st.info("Azure AI Search 리소스를 초기화하거나 상태를 확인합니다.")
+    
+    if st.button("🚀 검색 리소스 초기화 (Data Source, Index, Indexer)"):
+        with st.spinner("리소스 생성 중..."):
+            manager = get_search_manager()
+            
+            # 1. Data Source
+            st.write("1. Data Source 생성 중...")
+            success, msg = manager.create_data_source(SEARCH_DATASOURCE_NAME, STORAGE_CONN_STR, CONTAINER_NAME)
+            if success:
+                st.success(msg)
+            else:
+                st.error(msg)
+                
+            # 2. Index
+            st.write("2. Index 생성 중...")
+            success, msg = manager.create_index()
+            if success:
+                st.success(msg)
+            else:
+                st.error(msg)
+                
+            # 3. Indexer
+            st.write("3. Indexer 생성 중...")
+            success, msg = manager.create_indexer(SEARCH_INDEXER_NAME, SEARCH_DATASOURCE_NAME)
+            if success:
+                st.success(msg)
+            else:
+                st.error(msg)
+                
+    st.divider()
+    
+    if st.button("▶️ 인덱서 수동 실행"):
+        manager = get_search_manager()
+        success, msg = manager.run_indexer(SEARCH_INDEXER_NAME)
+        if success:
+            st.success(msg)
+        else:
+            st.error(msg)
+            
+    if st.button("📊 인덱서 상태 확인"):
+        manager = get_search_manager()
+        status, error = manager.get_indexer_status(SEARCH_INDEXER_NAME)
+        st.write(f"**Status:** {status}")
+        if error:
+            st.error(f"Error: {error}")
+
