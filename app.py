@@ -37,7 +37,7 @@ TRANSLATOR_ENDPOINT = get_secret("AZURE_TRANSLATOR_ENDPOINT")
 # 3. Search
 SEARCH_ENDPOINT = get_secret("AZURE_SEARCH_ENDPOINT")
 SEARCH_KEY = get_secret("AZURE_SEARCH_KEY")
-SEARCH_INDEX_NAME = "pdf-search-index"
+SEARCH_INDEX_NAME = get_secret("AZURE_SEARCH_INDEX_NAME") or "pdf-search-index"
 SEARCH_INDEXER_NAME = "pdf-indexer"
 SEARCH_DATASOURCE_NAME = "blob-datasource"
 
