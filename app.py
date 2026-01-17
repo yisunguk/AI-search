@@ -584,10 +584,15 @@ elif menu == "관리자 설정":
         help="인덱싱할 프로젝트 폴더를 선택하세요."
     )
     
+    
     # '(전체)' 선택 시 None으로 처리
     target_folder = None if selected_folder == "(전체)" else selected_folder
     
-    if st.button("🚀 검색 리소스 초기화 (Data Source, Index, Indexer)"):
+    st.warning("⚠️ **경고**: 검색 리소스 초기화는 기존 인덱스를 삭제하고 다시 만듭니다. 모든 인덱싱된 데이터가 삭제됩니다.")
+    
+    confirm_reset = st.checkbox("위 내용을 이해했으며, 초기화를 진행하고 싶습니다.", key="confirm_reset")
+    
+    if st.button("🚀 검색 리소스 초기화 (Data Source, Index, Indexer)", disabled=not confirm_reset):
         with st.spinner("리소스 생성 중..."):
             manager = get_search_manager()
             
