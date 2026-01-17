@@ -56,7 +56,6 @@ CRITICAL RULES:
             # 1. Search for relevant documents using Azure AI Search
             search_results = self.search_manager.search(
                 user_message, 
-                top=5, 
                 use_semantic_ranker=True
             )
             
