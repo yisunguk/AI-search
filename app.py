@@ -749,12 +749,31 @@ elif menu == "관리자 설정":
                 st.error(msg)
                 st.stop()  # Stop execution if datasource creation fails
                 
+            # 2.5 Skillset (OCR) - Optional
+            skillset_name = None
+            enable_ocr = st.checkbox("📸 OCR(이미지 텍스트 추출) 활성화", value=False, help="PDF 도면이나 이미지 파일에서 텍스트를 추출합니다. Azure AI Services 키가 필요하며 비용이 발생할 수 있습니다.")
+            
+            if enable_ocr:
+                st.write(f"2.5. Skillset (OCR) 생성 중...")
+                # Use Translator Key as Cognitive Services Key (assuming it's a multi-service key)
+                cog_key = st.secrets.get("AZURE_TRANSLATOR_KEY", os.environ.get("AZURE_TRANSLATOR_KEY"))
+                
+                if not cog_key:
+                    st.warning("⚠️ Azure AI Services 키(AZURE_TRANSLATOR_KEY)가 설정되지 않아 OCR을 건너뜁니다.")
+                else:
+                    skillset_name = f"skillset-{target_folder}" if target_folder else "skillset-all"
+                    success, msg = manager.create_skillset(skillset_name, cog_key)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(f"Skillset 생성 실패: {msg}")
+                        skillset_name = None # Fallback to no skillset
                 
             # 3. Indexer (폴더별)
             st.write(f"3. Indexer 생성 중... (폴더: {selected_folder})")
             # 기존 인덱서 삭제 (같은 폴더의 이전 설정 제거)
             manager.delete_indexer(target_folder)
-            success, msg, indexer_name = manager.create_indexer(target_folder, datasource_name)
+            success, msg, indexer_name = manager.create_indexer(target_folder, datasource_name, skillset_name=skillset_name)
             if success:
                 st.success(msg)
                 st.info(f"✅ '{selected_folder}' 폴더에 대한 인덱싱 설정이 완료되었습니다. 아래 '인덱서 수동 실행'을 눌러 인덱싱을 시작하세요.")
