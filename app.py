@@ -781,6 +781,26 @@ elif menu == "관리자 설정":
                 st.error(msg)
                 
                 
+            else:
+                st.error(msg)
+    
+    st.divider()
+    
+    # ------------------------------------------------------------------
+    # 4. 인덱스 내용 조회 (디버깅용)
+    # ------------------------------------------------------------------
+    st.subheader("🔍 인덱스 내용 조회 (OCR 확인용)")
+    with st.expander("특정 파일의 인덱싱된 내용 확인하기"):
+        target_filename = st.text_input("확인할 파일명 (예: drawing.pdf)", help="정확한 파일명을 입력하세요.")
+        if st.button("내용 조회"):
+            if target_filename:
+                manager = get_search_manager()
+                with st.spinner("조회 중..."):
+                    content = manager.get_document_content(target_filename)
+                    st.text_area("인덱싱된 내용 (앞부분 2000자)", content[:2000], height=300)
+            else:
+                st.warning("파일명을 입력하세요.")
+
     st.divider()
     
     # 수동 실행 안내 및 확인
