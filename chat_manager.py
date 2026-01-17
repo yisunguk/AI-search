@@ -54,9 +54,11 @@ CRITICAL RULES:
         """
         try:
             # 1. Search for relevant documents using Azure AI Search
+            # Use search_mode='any' to find documents matching ANY of the keywords
             search_results = self.search_manager.search(
                 user_message, 
-                use_semantic_ranker=True
+                use_semantic_ranker=True,
+                search_mode="any"
             )
             
             # 2. Construct context from search results
