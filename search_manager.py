@@ -346,6 +346,26 @@ class AzureSearchManager:
             print(f"Error counting blobs: {e}")
             return 0
 
+    def get_document_content(self, filename):
+        """
+        특정 파일의 인덱싱된 내용 조회 (디버깅용)
+        """
+        try:
+            # 파일명으로 검색 (metadata_storage_name 필드)
+            # URL 인코딩된 파일명일 수 있으므로 처리 필요할 수도 있음
+            results = self.search_client.search(
+                search_text=f"metadata_storage_name:'{filename}'",
+                search_mode="all",
+                select=["metadata_storage_name", "content"]
+            )
+            
+            for result in results:
+                return result.get("content", "내용 없음")
+            
+            return "문서를 찾을 수 없습니다."
+        except Exception as e:
+            return f"조회 실패: {str(e)}"
+
     def get_document_count(self):
         """
         인덱스에 저장된 문서 개수 확인
