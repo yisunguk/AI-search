@@ -198,12 +198,22 @@ class AzureSearchManager:
                 FieldMapping(source_field_name="content", target_field_name="content_exact")
             ]
             
+            # 인덱서 설정: 대용량 파일 처리 (메타데이터만 인덱싱)
+            indexer_parameters = {
+                "configuration": {
+                    "indexStorageMetadataOnlyForOversizedDocuments": True,
+                    "failOnUnsupportedContentType": False,
+                    "failOnUnprocessableDocument": False
+                }
+            }
+            
             indexer = SearchIndexer(
                 name=indexer_name,
                 data_source_name=data_source_name,
                 target_index_name=self.index_name,
                 schedule=IndexingSchedule(interval="PT1H"), # 1시간마다 실행
-                field_mappings=mappings
+                field_mappings=mappings,
+                parameters=indexer_parameters
             )
             
             result = self.indexer_client.create_or_update_indexer(indexer)
