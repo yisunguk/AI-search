@@ -105,28 +105,35 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
     start = datetime.utcnow() - timedelta(minutes=15)
     expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
     
-    # 항상 Container SAS를 사용 (Source/Target 모두 더 안정적)
-    # Source의 경우 Read/List, Target의 경우 Write/List/Read 필요
-    # 편의상 모든 권한을 부여한 Container SAS 하나로 통일하거나, 구분 가능
-    # 여기서는 구분 없이 Container 수준의 강력한 SAS를 발급하여 오류 가능성 차단
-    
-    sas_token = generate_container_sas(
-        account_name=account_name,
-        container_name=container_name,
-        account_key=account_key,
-        permission=ContainerSasPermissions(write=True, list=True, read=True, delete=True),
-        start=start,
-        expiry=expiry
-    )
-    
-    base_url = f"https://{account_name}.blob.core.windows.net/{container_name}"
-    
     if blob_name:
-        # Blob 경로가 있는 경우 URL에 추가 (SAS는 컨테이너 레벨이라 서명 불일치 없음)
+        # Blob SAS 사용 (파일 직접 열기 지원을 위해 content_disposition 설정)
+        sas_token = generate_blob_sas(
+            account_name=account_name,
+            container_name=container_name,
+            blob_name=blob_name,
+            account_key=account_key,
+            permission=BlobSasPermissions(read=True),
+            start=start,
+            expiry=expiry,
+            content_disposition="inline" # 브라우저에서 바로 열기
+        )
+        
+        base_url = f"https://{account_name}.blob.core.windows.net/{container_name}"
         encoded_blob_name = urllib.parse.quote(blob_name, safe='/')
         return f"{base_url}/{encoded_blob_name}?{sas_token}"
+        
     else:
-        # 컨테이너 루트 URL
+        # Container SAS 사용 (폴더 작업용)
+        sas_token = generate_container_sas(
+            account_name=account_name,
+            container_name=container_name,
+            account_key=account_key,
+            permission=ContainerSasPermissions(write=True, list=True, read=True, delete=True),
+            start=start,
+            expiry=expiry
+        )
+        
+        base_url = f"https://{account_name}.blob.core.windows.net/{container_name}"
         return f"{base_url}?{sas_token}"
 
 # -----------------------------
