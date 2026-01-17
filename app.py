@@ -167,7 +167,7 @@ LANG_SUFFIX_OVERRIDE = {
 
 with st.sidebar:
     st.header("메뉴")
-    menu = st.radio("이동", ["번역하기", "파일 보관함", "문서 검색", "AI 채팅", "관리자 설정"])
+    menu = st.radio("이동", ["번역하기", "파일 보관함", "검색 & AI", "관리자 설정"])
     
     st.divider()
     
@@ -488,7 +488,11 @@ elif menu == "파일 보관함":
     except Exception as e:
         st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
 
-elif menu == "문서 검색":
+elif menu == "검색 & AI":
+    # Tabs for Search and Chat to preserve state
+    tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
+    
+    with tab1:
     st.subheader("🔍 PDF 문서 검색")
     
     col1, col2, col3 = st.columns([3, 1, 1])
@@ -578,6 +582,97 @@ elif menu == "문서 검색":
                                 st.caption(f"문서 링크 생성 실패: {e}")
                         
                         st.divider()
+    
+    with tab2:
+        st.subheader("🤖 AI 문서 도우미")
+        st.caption("Azure OpenAI와 문서 검색을 활용한 정확한 답변 제공")
+        
+        # Initialize chat history in session state
+        if "chat_messages" not in st.session_state:
+            st.session_state.chat_messages = []
+        
+        # Display chat messages
+        for message in st.session_state.chat_messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                
+                # Display citations if present
+                if "citations" in message and message["citations"]:
+                    st.markdown("---")
+                    st.caption("📚 **참조 문서:**")
+                    for i, citation in enumerate(message["citations"], 1):
+                        filepath = citation.get('filepath', 'Unknown')
+                        url = citation.get('url', '')
+                        
+                        # Generate SAS URL if we have blob path
+                        if url:
+                            display_url = url
+                        else:
+                            # Try to generate SAS URL from filepath
+                            blob_service_client = get_blob_service_client()
+                            display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                        
+                        st.markdown(f"{i}. [{filepath}]({display_url})")
+        
+        # Chat input
+        if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)"):
+            # Add user message to chat history
+            st.session_state.chat_messages.append({"role": "user", "content": prompt})
+            
+            # Display user message
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            
+            # Get AI response
+            with st.chat_message("assistant"):
+                with st.spinner("답변 생성 중..."):
+                    try:
+                        chat_manager = get_chat_manager()
+                        
+                        # Prepare conversation history (exclude citations from history)
+                        conversation_history = [
+                            {"role": msg["role"], "content": msg["content"]}
+                            for msg in st.session_state.chat_messages[:-1]  # Exclude the just-added user message
+                        ]
+                        
+                        response_text, citations = chat_manager.get_chat_response(prompt, conversation_history)
+                        
+                        # Display response
+                        st.markdown(response_text)
+                        
+                        # Display citations
+                        if citations:
+                            st.markdown("---")
+                            st.caption("📚 **참조 문서:**")
+                            for i, citation in enumerate(citations, 1):
+                                filepath = citation.get('filepath', 'Unknown')
+                                url = citation.get('url', '')
+                                
+                                # Generate SAS URL if we have blob path
+                                if url:
+                                    display_url = url
+                                else:
+                                    # Try to generate SAS URL from filepath
+                                    blob_service_client = get_blob_service_client()
+                                    display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                                
+                                st.markdown(f"{i}. [{filepath}]({display_url})")
+                        
+                        # Add assistant response to chat history
+                        st.session_state.chat_messages.append({
+                            "role": "assistant",
+                            "content": response_text,
+                            "citations": citations
+                        })
+                        
+                    except Exception as e:
+                        st.error(f"오류가 발생했습니다: {str(e)}")
+        
+        # Clear chat button
+        if st.session_state.chat_messages:
+            if st.button("🗑️ 대화 초기화"):
+                st.session_state.chat_messages = []
+                st.rerun()
 
 elif menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
@@ -742,95 +837,7 @@ elif menu == "관리자 설정":
                 for warn in warnings:
                     st.warning(f"- {warn}")
 
-elif menu == "AI 채팅":
-    st.header("🤖 AI 문서 도우미")
-    st.caption("Azure OpenAI와 문서 검색을 활용한 정확한 답변 제공")
-    
-    # Initialize chat history in session state
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-    
-    # Display chat messages
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            
-            # Display citations if present
-            if "citations" in message and message["citations"]:
-                st.markdown("---")
-                st.caption("📚 **참조 문서:**")
-                for i, citation in enumerate(message["citations"], 1):
-                    filepath = citation.get('filepath', 'Unknown')
-                    url = citation.get('url', '')
-                    
-                    # Generate SAS URL if we have blob path
-                    if url:
-                        display_url = url
-                    else:
-                        # Try to generate SAS URL from filepath
-                        blob_service_client = get_blob_service_client()
-                        display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
-                    
-                    st.markdown(f"{i}. [{filepath}]({display_url})")
-    
-    # Chat input
-    if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)"):
-        # Add user message to chat history
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        
-        # Display user message
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        # Get AI response
-        with st.chat_message("assistant"):
-            with st.spinner("답변 생성 중..."):
-                try:
-                    chat_manager = get_chat_manager()
-                    
-                    # Prepare conversation history (exclude citations from history)
-                    conversation_history = [
-                        {"role": msg["role"], "content": msg["content"]}
-                        for msg in st.session_state.chat_messages[:-1]  # Exclude the just-added user message
-                    ]
-                    
-                    response_text, citations = chat_manager.get_chat_response(prompt, conversation_history)
-                    
-                    # Display response
-                    st.markdown(response_text)
-                    
-                    # Display citations
-                    if citations:
-                        st.markdown("---")
-                        st.caption("📚 **참조 문서:**")
-                        for i, citation in enumerate(citations, 1):
-                            filepath = citation.get('filepath', 'Unknown')
-                            url = citation.get('url', '')
-                            
-                            # Generate SAS URL if we have blob path
-                            if url:
-                                display_url = url
-                            else:
-                                # Try to generate SAS URL from filepath
-                                blob_service_client = get_blob_service_client()
-                                display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
-                            
-                            st.markdown(f"{i}. [{filepath}]({display_url})")
-                    
-                    # Add assistant response to chat history
-                    st.session_state.chat_messages.append({
-                        "role": "assistant",
-                        "content": response_text,
-                        "citations": citations
-                    })
-                    
-                except Exception as e:
-                    st.error(f"오류가 발생했습니다: {str(e)}")
-    
-    # Clear chat button
-    if st.session_state.chat_messages:
-        if st.button("🗑️ 대화 초기화"):
-            st.session_state.chat_messages = []
-            st.rerun()
+
+
 
 
