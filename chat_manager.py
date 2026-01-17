@@ -71,6 +71,10 @@ CRITICAL RULES:
                 content = result.get('content', '')
                 path = result.get('metadata_storage_path', '') # Full URL
                 
+                # Decode filename as well
+                from urllib.parse import unquote
+                filename = unquote(filename)
+                
                 # Extract relative path from URL (handle folders)
                 # Format: https://account.blob.core.windows.net/container/folder/file.pdf
                 blob_path = filename # Default fallback
@@ -81,7 +85,6 @@ CRITICAL RULES:
                         if len(parts) > 1:
                             blob_path = parts[1]
                             # Decode URL encoding if needed (e.g. %20 -> space)
-                            from urllib.parse import unquote
                             blob_path = unquote(blob_path)
                     except:
                         pass
