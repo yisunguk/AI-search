@@ -12,6 +12,9 @@ import requests
 # Search Manager Import
 from search_manager import AzureSearchManager
 
+# Chat Manager Import  
+from chat_manager import AzureOpenAIChatManager
+
 # -----------------------------
 # 설정 및 비밀 관리
 # -----------------------------
@@ -38,6 +41,12 @@ SEARCH_INDEX_NAME = "pdf-search-index"
 SEARCH_INDEXER_NAME = "pdf-indexer"
 SEARCH_DATASOURCE_NAME = "blob-datasource"
 
+# 4. Azure OpenAI
+AZURE_OPENAI_ENDPOINT = get_secret("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_KEY = get_secret("AZURE_OPENAI_KEY")
+AZURE_OPENAI_DEPLOYMENT = get_secret("AZURE_OPENAI_DEPLOYMENT")
+AZURE_OPENAI_API_VERSION = get_secret("AZURE_OPENAI_API_VERSION")
+
 # -----------------------------
 # Azure 클라이언트 헬퍼
 # -----------------------------
@@ -58,6 +67,22 @@ def get_search_manager():
         st.error("Azure Search Endpoint 또는 Key가 설정되지 않았습니다.")
         st.stop()
     return AzureSearchManager(SEARCH_ENDPOINT, SEARCH_KEY, SEARCH_INDEX_NAME)
+
+def get_chat_manager():
+    if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
+        st.error("Azure OpenAI Endpoint 또는 Key가 설정되지 않았습니다.")
+        st.stop()
+    return AzureOpenAIChatManager(
+        endpoint=AZURE_OPENAI_ENDPOINT,
+        api_key=AZURE_OPENAI_KEY,
+        deployment_name=AZURE_OPENAI_DEPLOYMENT,
+        api_version=AZURE_OPENAI_API_VERSION,
+        search_endpoint=SEARCH_ENDPOINT,
+        search_key=SEARCH_KEY,
+        search_index_name=SEARCH_INDEX_NAME,
+        storage_connection_string=STORAGE_CONN_STR,
+        container_name=CONTAINER_NAME
+    )
 
 def generate_sas_url(blob_service_client, container_name, blob_name=None, permission="r", expiry_hours=1):
     """
@@ -142,7 +167,7 @@ LANG_SUFFIX_OVERRIDE = {
 
 with st.sidebar:
     st.header("메뉴")
-    menu = st.radio("이동", ["번역하기", "파일 보관함", "문서 검색", "관리자 설정"])
+    menu = st.radio("이동", ["번역하기", "파일 보관함", "문서 검색", "AI 채팅", "관리자 설정"])
     
     st.divider()
     
@@ -716,5 +741,96 @@ elif menu == "관리자 설정":
             with st.expander("⚠️ 경고 로그 확인"):
                 for warn in warnings:
                     st.warning(f"- {warn}")
+
+elif menu == "AI 채팅":
+    st.header("🤖 AI 문서 도우미")
+    st.caption("Azure OpenAI와 문서 검색을 활용한 정확한 답변 제공")
+    
+    # Initialize chat history in session state
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    
+    # Display chat messages
+    for message in st.session_state.chat_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            
+            # Display citations if present
+            if "citations" in message and message["citations"]:
+                st.markdown("---")
+                st.caption("📚 **참조 문서:**")
+                for i, citation in enumerate(message["citations"], 1):
+                    filepath = citation.get('filepath', 'Unknown')
+                    url = citation.get('url', '')
+                    
+                    # Generate SAS URL if we have blob path
+                    if url:
+                        display_url = url
+                    else:
+                        # Try to generate SAS URL from filepath
+                        blob_service_client = get_blob_service_client()
+                        display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                    
+                    st.markdown(f"{i}. [{filepath}]({display_url})")
+    
+    # Chat input
+    if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)"):
+        # Add user message to chat history
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Get AI response
+        with st.chat_message("assistant"):
+            with st.spinner("답변 생성 중..."):
+                try:
+                    chat_manager = get_chat_manager()
+                    
+                    # Prepare conversation history (exclude citations from history)
+                    conversation_history = [
+                        {"role": msg["role"], "content": msg["content"]}
+                        for msg in st.session_state.chat_messages[:-1]  # Exclude the just-added user message
+                    ]
+                    
+                    response_text, citations = chat_manager.get_chat_response(prompt, conversation_history)
+                    
+                    # Display response
+                    st.markdown(response_text)
+                    
+                    # Display citations
+                    if citations:
+                        st.markdown("---")
+                        st.caption("📚 **참조 문서:**")
+                        for i, citation in enumerate(citations, 1):
+                            filepath = citation.get('filepath', 'Unknown')
+                            url = citation.get('url', '')
+                            
+                            # Generate SAS URL if we have blob path
+                            if url:
+                                display_url = url
+                            else:
+                                # Try to generate SAS URL from filepath
+                                blob_service_client = get_blob_service_client()
+                                display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                            
+                            st.markdown(f"{i}. [{filepath}]({display_url})")
+                    
+                    # Add assistant response to chat history
+                    st.session_state.chat_messages.append({
+                        "role": "assistant",
+                        "content": response_text,
+                        "citations": citations
+                    })
+                    
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {str(e)}")
+    
+    # Clear chat button
+    if st.session_state.chat_messages:
+        if st.button("🗑️ 대화 초기화"):
+            st.session_state.chat_messages = []
+            st.rerun()
 
 
