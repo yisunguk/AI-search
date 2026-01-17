@@ -24,7 +24,13 @@ from azure.search.documents.indexes.models import (
     CustomAnalyzer,
     PatternTokenizer,
     TokenFilterName,
-    FieldMapping
+    FieldMapping,
+    SearchIndexerSkillset,
+    OcrSkill,
+    MergeSkill,
+    InputFieldMappingEntry,
+    OutputFieldMappingEntry,
+    CognitiveServicesAccountKey
 )
 from azure.search.documents.models import VectorizedQuery
 import streamlit as st
@@ -161,59 +167,97 @@ class AzureSearchManager:
         """
         try:
             indexer_name = f"indexer-{folder_name}" if folder_name else "indexer-all"
-            self.indexer_client.delete_indexer(indexer_name)
             return True, f"Indexer '{indexer_name}' deleted."
         except Exception as e:
             return True, "Indexer did not exist or deleted."
 
-    def create_indexer(self, folder_name, datasource_name):
+    def create_skillset(self, skillset_name, cognitive_services_key):
+        """
+        Create a Skillset for OCR (Optical Character Recognition)
+        """
+        try:
+            # 1. OCR Skill: Extract text from images
+            ocr_skill = OcrSkill(
+                name="ocr-skill",
+                description="Extract text from images",
+                context="/document/normalized_images/*",
+                default_language_code="ko", # Default to Korean/English
+                should_detect_orientation=True,
+                inputs=[
+                    InputFieldMappingEntry(name="image", source="/document/normalized_images/*")
+                ],
+                outputs=[
+                    OutputFieldMappingEntry(name="text", target_name="text")
+                ]
+            )
+            
+            # 2. Merge Skill: Merge extracted text with content
+            merge_skill = MergeSkill(
+                name="merge-skill",
+                description="Merge OCR text with content",
+                context="/document",
+                insert_pre_tag=" ",
+                insert_post_tag=" ",
+                inputs=[
+                    InputFieldMappingEntry(name="text", source="/document/content"),
+                    InputFieldMappingEntry(name="itemsToInsert", source="/document/normalized_images/*/text"),
+                    InputFieldMappingEntry(name="offsets", source="/document/normalized_images/*/contentOffset")
+                ],
+                outputs=[
+                    OutputFieldMappingEntry(name="mergedText", target_name="merged_content")
+                ]
+            )
+            
+            # Cognitive Services Key
+            cog_services = CognitiveServicesAccountKey(key=cognitive_services_key) if cognitive_services_key else None
+            
+            skillset = SearchIndexerSkillset(
+                name=skillset_name,
+                description="OCR Skillset for PDF Drawings",
+                skills=[ocr_skill, merge_skill],
+                cognitive_services_account=cog_services
+            )
+            
+            self.indexer_client.create_or_update_skillset(skillset)
+            return True, f"Skillset '{skillset_name}' created/updated."
+        except Exception as e:
+            return False, f"Failed to create skillset: {str(e)}"
+
+    def create_indexer(self, folder_name, datasource_name, skillset_name=None):
         """
         인덱서 생성 (폴더별)
         """
         try:
-            # 필드 매핑: Blob의 content를 content 필드와 content_exact 필드 모두에 매핑
-            # Azure Blob Indexer는 기본적으로 'content'라는 이름의 소스 필드를 제공하지 않을 수 있음 (문서 추출 시)
-            # 보통 '/document/content' 경로를 사용.
-            
-            field_mappings = [
-                # 메타데이터 매핑은 자동 (이름이 같으면)
-            ]
-            
-            # 출력 필드 매핑 (Skillset이 없는 경우에도 텍스트 추출 결과 매핑 가능)
-            # Blob Indexer는 텍스트 파일/PDF의 내용을 'content'라는 필드에 자동으로 넣으려 시도함.
-            # 명시적으로 매핑해주는 것이 안전.
-            # content_exact에도 동일한 내용을 넣어야 함.
-            
-            # 주의: Blob Indexer에서 소스 필드 이름은 보통 'content'임.
-            # 하나의 소스 필드를 여러 타겟 필드에 매핑하려면 FieldMapping을 여러 개 쓰면 됨.
-            
-            # 하지만 create_or_update_indexer의 field_mappings 인자는 'source_field_name' -> 'target_field_name' 1:1 매핑임.
-            # 동일한 소스를 여러 타겟으로 보내려면... 
-            # 공식적으로는 Skillset을 써서 복제하거나, Indexer의 outputFieldMappings를 써야 하는데,
-            # 간단한 방법은 FieldMapping을 두 번 정의하는 것인데, source_field_name이 중복되어도 되는지 확인 필요.
-            # 보통은 안됨.
-            
-            # 대안: Indexer 정의 시 parameters configuration에 "indexedFileNameExtensions" 등을 설정.
-            # 여기서는 content_exact를 채우기 위해 Skillset 없이 하려면...
-            # 사실 content 필드는 기본적으로 채워짐. content_exact는 비워질 수 있음.
-            # 가장 확실한 방법: Skillset을 정의하지 않고, Indexer의 fieldMappings에
-            # source_field_name="content", target_field_name="content" (기본)
-            # source_field_name="content", target_field_name="content_exact" (추가)
-            # 이렇게 리스트에 추가하면 됨.
-            
+            # 필드 매핑
             mappings = [
                 FieldMapping(source_field_name="content", target_field_name="content"),
                 FieldMapping(source_field_name="content", target_field_name="content_exact")
             ]
             
-            # 인덱서 설정: 대용량 파일 처리 (메타데이터만 인덱싱)
-            indexer_parameters = {
-                "configuration": {
-                    "indexStorageMetadataOnlyForOversizedDocuments": True,
-                    "failOnUnsupportedContentType": False,
-                    "failOnUnprocessableDocument": False
-                }
+            # If using skillset (OCR), map 'merged_content' to 'content' instead of original content
+            if skillset_name:
+                # When using MergeSkill, the output 'merged_content' contains both text and OCR text.
+                # We map this to the index 'content' field.
+                mappings = [
+                    FieldMapping(source_field_name="merged_content", target_field_name="content"),
+                    FieldMapping(source_field_name="merged_content", target_field_name="content_exact")
+                ]
+            
+            # 인덱서 설정
+            config = {
+                "indexStorageMetadataOnlyForOversizedDocuments": True,
+                "failOnUnsupportedContentType": False,
+                "failOnUnprocessableDocument": False
             }
+            
+            # If using skillset, enable image extraction
+            if skillset_name:
+                config["imageAction"] = "generateNormalizedImages"
+                config["dataToExtract"] = "contentAndMetadata"
+                config["normalizedImageMaxWidth"] = 2000
+                config["normalizedImageMaxHeight"] = 2000
+
+            indexer_parameters = {"configuration": config}
             
             # 폴더 이름 기반으로 인덱서 이름 생성
             indexer_name = f"indexer-{folder_name}" if folder_name else "indexer-all"
@@ -222,7 +266,8 @@ class AzureSearchManager:
                 name=indexer_name,
                 data_source_name=datasource_name,
                 target_index_name=self.index_name,
-                schedule=IndexingSchedule(interval="PT1H"), # 1시간마다 실행
+                skillset_name=skillset_name, # Attach Skillset
+                schedule=IndexingSchedule(interval="PT1H"),
                 field_mappings=mappings,
                 parameters=indexer_parameters
             )
