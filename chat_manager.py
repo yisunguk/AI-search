@@ -136,7 +136,8 @@ USER QUESTION:
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=messages,
-                max_completion_tokens=2000
+                max_completion_tokens=2000,
+                timeout=300  # Increase timeout for o1 models (5 minutes)
             )
             
             # Extract response
