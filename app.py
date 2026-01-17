@@ -624,9 +624,16 @@ elif menu == "관리자 설정":
             else:
                 st.error(msg)
                 
+                
     st.divider()
     
-    if st.button("▶️ 인덱서 수동 실행"):
+    # 수동 실행 안내 및 확인
+    st.info(f"📂 **현재 선택된 폴더**: {selected_folder}")
+    st.markdown("수동 인덱서 실행은 선택한 폴더의 새 파일 또는 변경된 파일을 검색 엔진에 반영합니다.")
+    
+    confirm_run = st.checkbox("위 폴더를 인덱싱하는 것을 확인했으며, 진행하고 싶습니다.", key="confirm_run")
+    
+    if st.button("▶️ 인덱서 수동 실행", disabled=not confirm_run):
         manager = get_search_manager()
         success, msg = manager.run_indexer(SEARCH_INDEXER_NAME)
         if success:
