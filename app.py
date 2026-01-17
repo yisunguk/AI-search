@@ -779,10 +779,6 @@ elif menu == "관리자 설정":
                 st.info(f"✅ '{selected_folder}' 폴더에 대한 인덱싱 설정이 완료되었습니다. 아래 '인덱서 수동 실행'을 눌러 인덱싱을 시작하세요.")
             else:
                 st.error(msg)
-                
-                
-            else:
-                st.error(msg)
     
     st.divider()
     
