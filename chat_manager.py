@@ -5,10 +5,9 @@ from datetime import datetime, timedelta
 
 class AzureOpenAIChatManager:
     def __init__(self, endpoint, api_key, deployment_name, api_version, 
-                 search_endpoint, search_key, search_index_name,
-                 storage_connection_string, container_name):
+                 search_manager, storage_connection_string, container_name):
         """
-        Azure OpenAI Chat Manager with Search Grounding
+        Azure OpenAI Chat Manager with Client-Side RAG
         """
         self.client = AzureOpenAI(
             azure_endpoint=endpoint,
@@ -16,14 +15,13 @@ class AzureOpenAIChatManager:
             api_version=api_version
         )
         self.deployment_name = deployment_name
-        self.search_endpoint = search_endpoint
-        self.search_key = search_key
-        self.search_index_name = search_index_name
+        self.search_manager = search_manager
         self.storage_connection_string = storage_connection_string
         self.container_name = container_name
         
         # System prompt optimized for technical accuracy
         self.system_prompt = """You are a technical document assistant for EPC engineering projects.
+Use the provided CONTEXT to answer the user's question.
 
 CRITICAL RULES:
 1. For machine identifiers (Tag No.) like "P-101", "10-P-101A":
@@ -38,9 +36,9 @@ CRITICAL RULES:
 
 3. Always cite your sources:
    - Reference specific document names
-   - Include page numbers when available
+   - Mention which document number provided the information
 
-4. If information is not in the documents, clearly state:
+4. If information is not in the CONTEXT, clearly state:
    "이 정보는 제공된 문서에서 찾을 수 없습니다."
 
 5. Respond in Korean unless asked otherwise.
@@ -48,89 +46,83 @@ CRITICAL RULES:
 
     def get_chat_response(self, user_message, conversation_history=None):
         """
-        Get chat response with search grounding
+        Get chat response with client-side RAG
         
-        Args:
-            user_message: User's question
-            conversation_history: List of {"role": "user"/"assistant", "content": "..."}
-            
         Returns:
             response_text: AI response
             citations: List of citation objects with file info
         """
         try:
-            # Build messages
-            messages = [{"role": "system", "content": self.system_prompt}]
+            # 1. Search for relevant documents using Azure AI Search
+            search_results = self.search_manager.search(
+                user_message, 
+                top=5, 
+                use_semantic_ranker=True
+            )
+            
+            # 2. Construct context from search results
+            context_parts = []
+            citations = []
+            
+            for i, result in enumerate(search_results, 1):
+                filename = result.get('metadata_storage_name', 'Unknown')
+                content = result.get('content', '')
+                path = result.get('metadata_storage_path', '')
+                
+                # Truncate very long content to fit context window
+                if len(content) > 2000:
+                    content = content[:2000] + "..."
+                
+                context_parts.append(f"[Document {i}: {filename}]\n{content}\n")
+                
+                # Add to citations
+                citations.append({
+                    'filepath': filename,
+                    'url': '',
+                    'path': path,
+                    'title': filename
+                })
+            
+            if not context_parts:
+                return "검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.", []
+            
+            context = "\n" + "="*50 + "\n".join(context_parts)
+            
+            # 3. Build messages with context
+            system_message = f"{self.system_prompt}\n\n{context}"
+            
+            messages = [{"role": "system", "content": system_message}]
             
             if conversation_history:
                 messages.extend(conversation_history)
             
             messages.append({"role": "user", "content": user_message})
             
-            # Call Azure OpenAI with search grounding
-            # Note: max_completion_tokens and temperature are not supported with data_sources
+            # 4. Call Azure OpenAI with standard API
+            # Now we can use max_completion_tokens for GPT-5
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=messages,
-                extra_body={
-                    "data_sources": [
-                        {
-                            "type": "azure_search",
-                            "parameters": {
-                                "endpoint": self.search_endpoint,
-                                "index_name": self.search_index_name,
-                                "authentication": {
-                                    "type": "api_key",
-                                    "key": self.search_key
-                                },
-                                "query_type": "semantic",
-                                "semantic_configuration": "my-semantic-config",
-                                "top_n_documents": 5,
-                                "in_scope": True,
-                                "strictness": 3
-                            }
-                        }
-                    ]
-                }
+                max_completion_tokens=2000,
+                temperature=0.3
             )
             
-            # Extract response text
+            # Extract response
             response_text = response.choices[0].message.content
-            
-            # Extract citations
-            citations = []
-            if hasattr(response.choices[0].message, 'context') and response.choices[0].message.context:
-                if 'citations' in response.choices[0].message.context:
-                    for citation in response.choices[0].message.context['citations']:
-                        citations.append({
-                            'filepath': citation.get('filepath', 'Unknown'),
-                            'url': citation.get('url', ''),
-                            'chunk_id': citation.get('chunk_id', ''),
-                            'title': citation.get('title', 'Document')
-                        })
-            
-            return response_text, citations
             
             return response_text, citations
             
         except Exception as e:
-            error_msg = str(e)
-            if "max_tokens" in error_msg and "max_completion_tokens" in error_msg:
-                return (f"⚠️ **모델 호환성 오류**: 현재 사용 중인 모델({self.deployment_name})은 'max_tokens' 파라미터를 지원하지 않는 것으로 보입니다 (예: o1-preview). \n\n"
-                        f"Azure OpenAI의 'On Your Data' 기능은 아직 이 모델과 완벽하게 호환되지 않을 수 있습니다. \n"
-                        f"**GPT-4o** 또는 **GPT-4 Turbo** 모델로 배포를 변경해 보시기 바랍니다."), []
-            elif "Extra inputs are not permitted" in error_msg and "max_completion_tokens" in error_msg:
-                 return (f"⚠️ **모델 호환성 오류**: 'max_completion_tokens' 파라미터가 'On Your Data' 기능과 충돌합니다. \n\n"
-                        f"현재 사용 중인 모델({self.deployment_name})이 이 파라미터를 필수적으로 요구한다면, 'On Your Data' 기능을 지원하는 **GPT-4o** 모델로 변경해주세요."), []
-            
-            return f"오류가 발생했습니다: {error_msg}", []
+            return f"오류가 발생했습니다: {str(e)}", []
     
     def generate_sas_url(self, blob_name):
         """
         Generate SAS URL for blob document
         """
         try:
-            blob_service_client = BlobServiceClient.from_connection_string(self.storage_connection_string)
+            blob_service_client = BlobServiceClient.from_connection_string(
+                self.storage_connection_string
+            )
             
             sas_token = generate_blob_sas(
                 account_name=blob_service_client.account_name,

@@ -72,14 +72,16 @@ def get_chat_manager():
     if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
         st.error("Azure OpenAI Endpoint 또는 Key가 설정되지 않았습니다.")
         st.stop()
+    
+    # Get search manager for Client-Side RAG
+    search_manager = get_search_manager()
+    
     return AzureOpenAIChatManager(
         endpoint=AZURE_OPENAI_ENDPOINT,
         api_key=AZURE_OPENAI_KEY,
         deployment_name=AZURE_OPENAI_DEPLOYMENT,
         api_version=AZURE_OPENAI_API_VERSION,
-        search_endpoint=SEARCH_ENDPOINT,
-        search_key=SEARCH_KEY,
-        search_index_name=SEARCH_INDEX_NAME,
+        search_manager=search_manager,
         storage_connection_string=STORAGE_CONN_STR,
         container_name=CONTAINER_NAME
     )
