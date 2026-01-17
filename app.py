@@ -617,7 +617,8 @@ elif menu == "관리자 설정":
                 st.success(msg)
             else:
                 st.error(msg)
-                return
+                st.stop()  # Stop execution if datasource creation fails
+                
                 
             # 3. Indexer (폴더별)
             st.write(f"3. Indexer 생성 중... (폴더: {selected_folder})")
