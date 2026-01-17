@@ -115,7 +115,8 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
             permission=BlobSasPermissions(read=True),
             start=start,
             expiry=expiry,
-            content_disposition="inline" # 브라우저에서 바로 열기
+            content_disposition="inline", # 브라우저에서 바로 열기
+            content_type="application/pdf" # PDF로 강제 인식
         )
         
         base_url = f"https://{account_name}.blob.core.windows.net/{container_name}"
