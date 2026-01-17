@@ -68,11 +68,10 @@ CRITICAL RULES:
             messages.append({"role": "user", "content": user_message})
             
             # Call Azure OpenAI with search grounding
+            # Note: max_completion_tokens and temperature are not supported with data_sources
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=messages,
-                max_completion_tokens=4000,  # Use max_completion_tokens for GPT-5
-                temperature=0.3,  # Lower temperature for more accurate responses
                 extra_body={
                     "data_sources": [
                         {
