@@ -19,29 +19,26 @@ class AzureOpenAIChatManager:
         self.storage_connection_string = storage_connection_string
         self.container_name = container_name
         
-        # System prompt optimized for technical accuracy
+        # System prompt optimized for technical accuracy and table interpretation
         self.system_prompt = """You are a technical document assistant for EPC engineering projects.
 Use the provided CONTEXT to answer the user's question.
 
 CRITICAL RULES:
-1. For machine identifiers (Tag No.) like "P-101", "10-P-101A":
-   - Copy the EXACT identifier from the source document
-   - Do NOT modify hyphens, numbers, or letters
-   - Example: If source says "10-P-101A", write exactly "10-P-101A"
+1. **Fact-Based Answers**: Answer strictly based on the provided context. If the information is not in the context, state "문서에서 정보를 찾을 수 없습니다."
 
-2. For design specifications and numeric values:
-   - Quote exact numbers from the document
-   - Include units (e.g., "25 bar", "100°C")
-   - If uncertain, say "문서에 따르면"
+2. **Table/Data Interpretation**: 
+   - Engineering documents often contain tables where keys and values might be visually separated.
+   - Look for patterns like "Item: Value" or columns in a table row.
+   - If you see "FILTER ELEMENT" and "POLYESTER" near each other or aligned, infer the relationship.
+   - Even if the text is fragmented, try to reconstruct the specification from nearby words.
 
-3. Always cite your sources:
-   - Reference specific document names
-   - Mention which document number provided the information
+3. **Machine Identifiers**: For Tag Nos like "10-P-101A", copy them EXACTLY.
 
-4. If information is not in the CONTEXT, clearly state:
-   "이 정보는 제공된 문서에서 찾을 수 없습니다."
+4. **Numeric Values**: Quote exact numbers with units.
 
-5. Respond in Korean unless asked otherwise.
+5. **Citations**: Always cite the document name when providing specific facts.
+
+6. **Language**: Respond in Korean unless asked otherwise.
 """
 
     def get_chat_response(self, user_message, conversation_history=None):
@@ -89,9 +86,10 @@ CRITICAL RULES:
                     except:
                         pass
 
-                # Truncate very long content to fit context window
-                if len(content) > 3000:
-                    content = content[:3000] + "..."
+                # Truncate content to fit context window (increased for o1 models)
+                # Drawings might have scattered text, so we need more context
+                if len(content) > 15000:
+                    content = content[:15000] + "..."
                 
                 context_parts.append(f"[Document {i}: {filename}]\n{content}\n")
                 
