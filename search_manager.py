@@ -311,8 +311,8 @@ class AzureSearchManager:
                 "select": ["metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified", "metadata_storage_content_type"],
                 # 하이라이트 요청
                 "highlight_fields": "content,content_exact",
-                "highlight_pre_tag": "**",
-                "highlight_post_tag": "**",
+                "highlight_pre_tag": "<mark style='background-color: #ffd700; color: black; font-weight: bold;'>",
+                "highlight_post_tag": "</mark>",
                 "top": 10,
                 "search_mode": search_mode  # 'all' (AND) or 'any' (OR)
             }
