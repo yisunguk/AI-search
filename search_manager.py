@@ -40,23 +40,30 @@ class AzureSearchManager:
         self.indexer_client = SearchIndexerClient(endpoint=service_endpoint, credential=self.credential)
         self.search_client = SearchClient(endpoint=service_endpoint, index_name=index_name, credential=self.credential)
 
-    def create_data_source(self, name, connection_string, container_name, query=None):
+    def create_data_source(self, name, connection_string, container_name, query=None, folder_name=None):
         """
-        Azure Blob Storage를 데이터 소스로 등록
+        Azure Blob Storage를 데이터 소스로 등록 (폴더별)
         query: 특정 폴더만 인덱싱할 경우 폴더명 (예: 'GULFLNG')
+        folder_name: 데이터소스 이름 생성용 폴더명
         """
         try:
+            # 폴더 이름 기반으로 데이터소스 이름 생성
+            if folder_name:
+                datasource_name = f"datasource-{folder_name}"
+            else:
+                datasource_name = name  # 기존 호환성 유지
+            
             container = SearchIndexerDataContainer(name=container_name, query=query)
             data_source_connection = SearchIndexerDataSourceConnection(
-                name=name,
+                name=datasource_name,
                 type="azureblob",
                 connection_string=connection_string,
                 container=container
             )
             result = self.indexer_client.create_or_update_data_source_connection(data_source_connection)
-            return True, f"Data Source '{name}' created/updated."
+            return True, f"Data Source '{datasource_name}' created/updated.", datasource_name
         except Exception as e:
-            return False, str(e)
+            return False, str(e), None
 
     def create_index(self):
         """
@@ -148,19 +155,20 @@ class AzureSearchManager:
             # 인덱스가 없으면 성공으로 간주
             return True, "Index did not exist or deleted."
 
-    def delete_indexer(self, indexer_name):
+    def delete_indexer(self, folder_name):
         """
-        인덱서 삭제 (상태 초기화용)
+        인덱서 삭제 (폴더별)
         """
         try:
+            indexer_name = f"indexer-{folder_name}" if folder_name else "indexer-all"
             self.indexer_client.delete_indexer(indexer_name)
             return True, f"Indexer '{indexer_name}' deleted."
         except Exception as e:
             return True, "Indexer did not exist or deleted."
 
-    def create_indexer(self, indexer_name, data_source_name):
+    def create_indexer(self, folder_name, datasource_name):
         """
-        인덱서 생성 (Blob -> Index 매핑)
+        인덱서 생성 (폴더별)
         """
         try:
             # 필드 매핑: Blob의 content를 content 필드와 content_exact 필드 모두에 매핑
@@ -207,9 +215,12 @@ class AzureSearchManager:
                 }
             }
             
+            # 폴더 이름 기반으로 인덱서 이름 생성
+            indexer_name = f"indexer-{folder_name}" if folder_name else "indexer-all"
+            
             indexer = SearchIndexer(
                 name=indexer_name,
-                data_source_name=data_source_name,
+                data_source_name=datasource_name,
                 target_index_name=self.index_name,
                 schedule=IndexingSchedule(interval="PT1H"), # 1시간마다 실행
                 field_mappings=mappings,
@@ -217,11 +228,11 @@ class AzureSearchManager:
             )
             
             result = self.indexer_client.create_or_update_indexer(indexer)
-            return True, f"Indexer '{indexer_name}' created/updated."
+            return True, f"Indexer '{indexer_name}' created/updated.", indexer_name
         except Exception as e:
-            return False, str(e)
+            return False, str(e), None
 
-    def run_indexer(self, indexer_name):
+    def run_indexer(self, folder_name):
         """
         인덱서 수동 실행
         """
@@ -231,8 +242,9 @@ class AzureSearchManager:
         except Exception as e:
             return False, str(e)
 
-    def get_indexer_status(self, indexer_name):
+    def get_indexer_status(self, folder_name):
         try:
+            indexer_name = f"indexer-{folder_name}" if folder_name else "indexer-all"
             status = self.indexer_client.get_indexer_status(indexer_name)
             last_result = status.last_result
             

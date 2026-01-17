@@ -588,39 +588,45 @@ elif menu == "관리자 설정":
     # '(전체)' 선택 시 None으로 처리
     target_folder = None if selected_folder == "(전체)" else selected_folder
     
-    st.warning("⚠️ **경고**: 검색 리소스 초기화는 기존 인덱스를 삭제하고 다시 만듭니다. 모든 인덱싱된 데이터가 삭제됩니다.")
+    st.info("💡 **폴더별 인덱싱**: 각 폴더는 독립적으로 인덱싱됩니다. 다른 폴더의 데이터에 영향을 주지 않습니다.")
     
-    confirm_reset = st.checkbox("위 내용을 이해했으며, 초기화를 진행하고 싶습니다.", key="confirm_reset")
+    confirm_reset = st.checkbox("위 폴더를 인덱싱 대상으로 설정하고 싶습니다.", key="confirm_reset")
     
-    if st.button("🚀 검색 리소스 초기화 (Data Source, Index, Indexer)", disabled=not confirm_reset):
+    if st.button("🚀 폴더 인덱싱 설정 (Data Source, Indexer)", disabled=not confirm_reset):
         with st.spinner("리소스 생성 중..."):
             manager = get_search_manager()
             
-            # 1. Data Source
-            st.write("1. Data Source 생성 중...")
-            success, msg = manager.create_data_source(SEARCH_DATASOURCE_NAME, STORAGE_CONN_STR, CONTAINER_NAME, query=target_folder)
-            if success:
-                st.success(msg)
-            else:
-                st.error(msg)
-                
-            # 2. Index
-            st.write("2. Index 생성 중...")
-            # Analyzer 변경을 위해 기존 인덱스 삭제
-            manager.delete_index()
+            # 1. Index 확인/생성 (한번만 필요)
+            st.write("1. Index 확인 중...")
             success, msg = manager.create_index()
             if success:
                 st.success(msg)
             else:
                 st.error(msg)
                 
-            # 3. Indexer
-            st.write("3. Indexer 생성 중...")
-            # 상태 초기화를 위해 기존 인덱서 삭제
-            manager.delete_indexer(SEARCH_INDEXER_NAME)
-            success, msg = manager.create_indexer(SEARCH_INDEXER_NAME, SEARCH_DATASOURCE_NAME)
+            # 2. Data Source (폴더별)
+            st.write(f"2. Data Source 생성 중... (폴더: {selected_folder})")
+            success, msg, datasource_name = manager.create_data_source(
+                SEARCH_DATASOURCE_NAME, 
+                STORAGE_CONN_STR, 
+                CONTAINER_NAME, 
+                query=target_folder,
+                folder_name=target_folder
+            )
             if success:
                 st.success(msg)
+            else:
+                st.error(msg)
+                return
+                
+            # 3. Indexer (폴더별)
+            st.write(f"3. Indexer 생성 중... (폴더: {selected_folder})")
+            # 기존 인덱서 삭제 (같은 폴더의 이전 설정 제거)
+            manager.delete_indexer(target_folder)
+            success, msg, indexer_name = manager.create_indexer(target_folder, datasource_name)
+            if success:
+                st.success(msg)
+                st.info(f"✅ '{selected_folder}' 폴더에 대한 인덱싱 설정이 완료되었습니다. 아래 '인덱서 수동 실행'을 눌러 인덱싱을 시작하세요.")
             else:
                 st.error(msg)
                 
@@ -635,7 +641,7 @@ elif menu == "관리자 설정":
     
     if st.button("▶️ 인덱서 수동 실행", disabled=not confirm_run):
         manager = get_search_manager()
-        success, msg = manager.run_indexer(SEARCH_INDEXER_NAME)
+        success, msg = manager.run_indexer(target_folder)
         if success:
             st.success(msg)
             st.info("인덱싱이 시작되었습니다. 아래 '상태 확인' 버튼을 눌러 진행 상황을 모니터링하세요.")
@@ -659,7 +665,7 @@ elif menu == "관리자 설정":
             total_blobs = manager.get_source_blob_count(STORAGE_CONN_STR, CONTAINER_NAME, folder_path=target_folder)
         
         # 2. 인덱서 상태 확인
-        status_info = manager.get_indexer_status(SEARCH_INDEXER_NAME)
+        status_info = manager.get_indexer_status(target_folder)
         
         # 상태 언팩
         status = status_info.get("status")
