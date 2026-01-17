@@ -66,20 +66,38 @@ CRITICAL RULES:
             context_parts = []
             citations = []
             
+            # Increase context limit to 10 documents
             for i, result in enumerate(search_results, 1):
+                if i > 10: break
+                
                 filename = result.get('metadata_storage_name', 'Unknown')
                 content = result.get('content', '')
-                path = result.get('metadata_storage_path', '')
+                path = result.get('metadata_storage_path', '') # Full URL
                 
+                # Extract relative path from URL (handle folders)
+                # Format: https://account.blob.core.windows.net/container/folder/file.pdf
+                blob_path = filename # Default fallback
+                if path and self.container_name in path:
+                    try:
+                        # Split by container name and take the part after it
+                        parts = path.split(f"/{self.container_name}/")
+                        if len(parts) > 1:
+                            blob_path = parts[1]
+                            # Decode URL encoding if needed (e.g. %20 -> space)
+                            from urllib.parse import unquote
+                            blob_path = unquote(blob_path)
+                    except:
+                        pass
+
                 # Truncate very long content to fit context window
-                if len(content) > 2000:
-                    content = content[:2000] + "..."
+                if len(content) > 3000:
+                    content = content[:3000] + "..."
                 
                 context_parts.append(f"[Document {i}: {filename}]\n{content}\n")
                 
                 # Add to citations
                 citations.append({
-                    'filepath': filename,
+                    'filepath': blob_path, # Use full blob path including folders
                     'url': '',
                     'path': path,
                     'title': filename
