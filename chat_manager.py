@@ -109,14 +109,26 @@ CRITICAL RULES:
             context = "\n" + "="*50 + "\n".join(context_parts)
             
             # 3. Build messages with context
-            system_message = f"{self.system_prompt}\n\n{context}"
+            # For o1 models, it's safer to include context in the user message
+            # rather than using 'system' role which might be restricted
             
-            messages = [{"role": "system", "content": system_message}]
+            full_prompt = f"""{self.system_prompt}
+
+CONTEXT:
+{context}
+
+USER QUESTION:
+{user_message}"""
+            
+            messages = []
             
             if conversation_history:
-                messages.extend(conversation_history)
+                # Add history but ensure we don't duplicate system messages
+                # Filter out any system messages from history if they exist
+                history = [msg for msg in conversation_history if msg['role'] != 'system']
+                messages.extend(history)
             
-            messages.append({"role": "user", "content": user_message})
+            messages.append({"role": "user", "content": full_prompt})
             
             # 4. Call Azure OpenAI with standard API
             # Now we can use max_completion_tokens for GPT-5
