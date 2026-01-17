@@ -102,11 +102,11 @@ CRITICAL RULES:
             
             # 4. Call Azure OpenAI with standard API
             # Now we can use max_completion_tokens for GPT-5
+            # Note: o1 models do not support temperature (must be 1)
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=messages,
-                max_completion_tokens=2000,
-                temperature=0.3
+                max_completion_tokens=2000
             )
             
             # Extract response
