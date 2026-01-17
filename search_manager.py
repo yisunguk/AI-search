@@ -225,12 +225,58 @@ class AzureSearchManager:
         try:
             status = self.indexer_client.get_indexer_status(indexer_name)
             last_result = status.last_result
+            
             if last_result:
-                return last_result.status, last_result.error_message, last_result.item_count
+                # 에러 및 경고 상세 정보 추출
+                errors = [e.message for e in last_result.errors] if last_result.errors else []
+                warnings = [w.message for w in last_result.warnings] if last_result.warnings else []
+                
+                return {
+                    "status": last_result.status,
+                    "item_count": last_result.item_count,
+                    "failed_item_count": last_result.failed_item_count,
+                    "error_message": last_result.error_message,
+                    "errors": errors,
+                    "warnings": warnings
+                }
             else:
-                return "Never Run", "No execution history found.", 0
+                return {
+                    "status": "Never Run",
+                    "item_count": 0,
+                    "failed_item_count": 0,
+                    "error_message": "No execution history found.",
+                    "errors": [],
+                    "warnings": []
+                }
         except Exception as e:
-            return "Unknown", str(e), 0
+            return {
+                "status": "Unknown",
+                "item_count": 0,
+                "failed_item_count": 0,
+                "error_message": str(e),
+                "errors": [],
+                "warnings": []
+            }
+
+    def get_source_blob_count(self, connection_string, container_name, folder_path=None):
+        """
+        소스 컨테이너(또는 폴더)의 총 Blob 개수 계산 (진행률 표시용)
+        """
+        try:
+            from azure.storage.blob import BlobServiceClient
+            blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+            container_client = blob_service_client.get_container_client(container_name)
+            
+            prefix = folder_path if folder_path else None
+            blobs = container_client.list_blobs(name_starts_with=prefix)
+            
+            count = 0
+            for _ in blobs:
+                count += 1
+            return count
+        except Exception as e:
+            print(f"Error counting blobs: {e}")
+            return 0
 
     def get_document_count(self):
         """

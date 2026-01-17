@@ -626,32 +626,76 @@ elif menu == "관리자 설정":
         success, msg = manager.run_indexer(SEARCH_INDEXER_NAME)
         if success:
             st.success(msg)
+            st.info("인덱싱이 시작되었습니다. 아래 '상태 확인' 버튼을 눌러 진행 상황을 모니터링하세요.")
         else:
             st.error(msg)
             
-    if st.button("📊 인덱서 상태 및 문서 개수 확인"):
+    st.divider()
+    
+    col_status, col_refresh = st.columns([3, 1])
+    with col_status:
+        st.markdown("### 📊 인덱싱 현황 모니터링")
+    with col_refresh:
+        auto_refresh = st.checkbox("자동 새로고침 (5초)", value=False)
+
+    # 상태 확인 로직 (버튼 클릭 또는 자동 새로고침)
+    if st.button("상태 및 진행률 확인") or auto_refresh:
         manager = get_search_manager()
         
-        # 컨테이너 정보 표시
-        st.info(f"Target Container: {CONTAINER_NAME} | Folder: {target_folder if target_folder else 'All'}")
-        
-        # 1. 문서 개수 확인
-        count = manager.get_document_count()
-        st.metric("현재 인덱싱된 문서 수", f"{count}개")
-        
-        if count == 0:
-            st.warning("⚠️ 인덱스에 문서가 하나도 없습니다! 인덱서가 실패했거나, 문서 내용을 읽지 못했을 수 있습니다.")
+        # 1. 소스 파일 개수 확인 (진행률 계산용)
+        with st.spinner("소스 파일 개수 계산 중..."):
+            total_blobs = manager.get_source_blob_count(STORAGE_CONN_STR, CONTAINER_NAME, folder_path=target_folder)
         
         # 2. 인덱서 상태 확인
-        status, error, item_count = manager.get_indexer_status(SEARCH_INDEXER_NAME)
-        st.write(f"**Indexer Status:** {status}")
-        st.write(f"**Last Processed Items:** {item_count}")
+        status_info = manager.get_indexer_status(SEARCH_INDEXER_NAME)
         
-        if error:
-            st.error(f"❌ Indexer Error: {error}")
+        # 상태 언팩
+        status = status_info.get("status")
+        item_count = status_info.get("item_count", 0)
+        failed_count = status_info.get("failed_item_count", 0)
+        error_msg = status_info.get("error_message")
+        errors = status_info.get("errors", [])
+        warnings = status_info.get("warnings", [])
+        
+        # 3. 인덱스 문서 개수
+        doc_count = manager.get_document_count()
+        
+        # UI 표시
+        st.metric(label="총 소스 파일 수", value=f"{total_blobs}개")
+        
+        # 진행률 계산
+        if total_blobs > 0:
+            progress = min(item_count / total_blobs, 1.0)
+        else:
+            progress = 0.0
+            
+        st.progress(progress, text=f"인덱싱 진행률: {int(progress * 100)}% ({item_count}/{total_blobs})")
+        
+        # 상태 메시지
+        if status == "inProgress":
+            st.info(f"⏳ 인덱싱 진행 중... (처리된 문서: {item_count}, 실패: {failed_count})")
+            if auto_refresh:
+                time.sleep(5)
+                st.rerun()
         elif status == "success":
-            st.success("✅ 인덱서가 성공적으로 실행되었습니다.")
-        elif status == "inProgress":
-            st.info("⏳ 인덱서가 현재 실행 중입니다...")
+            st.success(f"✅ 인덱싱 완료! (총 인덱스 문서: {doc_count}개)")
+        elif status == "error":
+            st.error(f"❌ 인덱싱 오류 발생: {error_msg}")
+        elif status == "transientFailure":
+            st.warning("⚠️ 일시적 오류 발생 (재시도 중...)")
+        else:
+            st.write(f"상태: {status}")
+
+        # 오류 상세 표시
+        if failed_count > 0 or errors:
+            st.error(f"❌ 실패한 문서: {failed_count}개")
+            with st.expander("🚨 오류 상세 로그 확인", expanded=True):
+                for err in errors:
+                    st.write(f"- {err}")
+        
+        if warnings:
+            with st.expander("⚠️ 경고 로그 확인"):
+                for warn in warnings:
+                    st.warning(f"- {warn}")
 
 
