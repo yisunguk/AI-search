@@ -234,11 +234,12 @@ class AzureSearchManager:
 
     def run_indexer(self, folder_name):
         """
-        인덱서 수동 실행
+        인덱서 수동 실행 (폴더별)
         """
         try:
+            indexer_name = f"indexer-{folder_name}" if folder_name else "indexer-all"
             self.indexer_client.run_indexer(indexer_name)
-            return True, "Indexer run triggered."
+            return True, f"Indexer '{indexer_name}' started."
         except Exception as e:
             return False, str(e)
 
