@@ -111,8 +111,19 @@ CRITICAL RULES:
             
             return response_text, citations
             
+            return response_text, citations
+            
         except Exception as e:
-            return f"오류가 발생했습니다: {str(e)}", []
+            error_msg = str(e)
+            if "max_tokens" in error_msg and "max_completion_tokens" in error_msg:
+                return (f"⚠️ **모델 호환성 오류**: 현재 사용 중인 모델({self.deployment_name})은 'max_tokens' 파라미터를 지원하지 않는 것으로 보입니다 (예: o1-preview). \n\n"
+                        f"Azure OpenAI의 'On Your Data' 기능은 아직 이 모델과 완벽하게 호환되지 않을 수 있습니다. \n"
+                        f"**GPT-4o** 또는 **GPT-4 Turbo** 모델로 배포를 변경해 보시기 바랍니다."), []
+            elif "Extra inputs are not permitted" in error_msg and "max_completion_tokens" in error_msg:
+                 return (f"⚠️ **모델 호환성 오류**: 'max_completion_tokens' 파라미터가 'On Your Data' 기능과 충돌합니다. \n\n"
+                        f"현재 사용 중인 모델({self.deployment_name})이 이 파라미터를 필수적으로 요구한다면, 'On Your Data' 기능을 지원하는 **GPT-4o** 모델로 변경해주세요."), []
+            
+            return f"오류가 발생했습니다: {error_msg}", []
     
     def generate_sas_url(self, blob_name):
         """
