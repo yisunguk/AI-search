@@ -675,13 +675,13 @@ elif menu == "관리자 설정":
         # UI 표시
         st.metric(label="총 소스 파일 수", value=f"{total_blobs}개")
         
-        # 진행률 계산
+        # 진행률 계산 (실제 인덱스된 문서 수 기준)
         if total_blobs > 0:
-            progress = min(item_count / total_blobs, 1.0)
+            progress = min(doc_count / total_blobs, 1.0)
         else:
             progress = 0.0
             
-        st.progress(progress, text=f"인덱싱 진행률: {int(progress * 100)}% ({item_count}/{total_blobs})")
+        st.progress(progress, text=f"인덱싱 진행률: {int(progress * 100)}% ({doc_count}/{total_blobs})")
         
         # 상태 메시지
         if status == "inProgress":
