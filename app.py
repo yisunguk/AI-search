@@ -493,95 +493,95 @@ elif menu == "검색 & AI":
     tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
     
     with tab1:
-    st.subheader("🔍 PDF 문서 검색")
-    
-    col1, col2, col3 = st.columns([3, 1, 1])
-    with col1:
-        query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
-    with col2:
-        use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)")
-    with col3:
-        search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함")
-        search_mode = "all" if "all" in search_mode_opt else "any"
-    
-    
-    if query:
-        with st.spinner("검색 중..."):
-            search_manager = get_search_manager()
-            results = search_manager.search(query, use_semantic_ranker=use_semantic, search_mode=search_mode)
-            
-            if not results:
-                st.info("검색 결과가 없습니다.")
-            else:
-                st.success(f"총 {len(results)}개의 문서를 찾았습니다.")
-                for result in results:
-                    with st.container():
-                        file_name = result.get('metadata_storage_name', 'Unknown File')
-                        path = result.get('metadata_storage_path', '')
-                        
-                        # 하이라이트 처리
-                        highlights = result.get('@search.highlights')
-                        if highlights:
-                            # content 또는 content_exact에서 하이라이트 추출
-                            # 여러 개의 하이라이트가 있을 수 있으므로 합쳐서 보여줌
-                            snippets = []
-                            if 'content' in highlights:
-                                snippets.extend(highlights['content'])
-                            if 'content_exact' in highlights:
-                                snippets.extend(highlights['content_exact'])
+        st.subheader("🔍 PDF 문서 검색")
+        
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
+        with col2:
+            use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)")
+        with col3:
+            search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함")
+            search_mode = "all" if "all" in search_mode_opt else "any"
+        
+        
+        if query:
+            with st.spinner("검색 중..."):
+                search_manager = get_search_manager()
+                results = search_manager.search(query, use_semantic_ranker=use_semantic, search_mode=search_mode)
+                
+                if not results:
+                    st.info("검색 결과가 없습니다.")
+                else:
+                    st.success(f"총 {len(results)}개의 문서를 찾았습니다.")
+                    for result in results:
+                        with st.container():
+                            file_name = result.get('metadata_storage_name', 'Unknown File')
+                            path = result.get('metadata_storage_path', '')
                             
-                            # 중복 제거 및 길이 제한
-                            unique_snippets = list(set(snippets))[:3]
-                            content_snippet = " ... ".join(unique_snippets)
-                        else:
-                            # 하이라이트 없으면 기본 스니펫
-                            content_snippet = result.get('content', '')[:300] + "..."
-                        
-                        blob_path = ""
-                        try:
-                            if CONTAINER_NAME in path:
-                                blob_path = path.split(f"/{CONTAINER_NAME}/")[-1]
-                                blob_path = urllib.parse.unquote(blob_path)
-                        except:
-                            pass
+                            # 하이라이트 처리
+                            highlights = result.get('@search.highlights')
+                            if highlights:
+                                # content 또는 content_exact에서 하이라이트 추출
+                                # 여러 개의 하이라이트가 있을 수 있으므로 합쳐서 보여줌
+                                snippets = []
+                                if 'content' in highlights:
+                                    snippets.extend(highlights['content'])
+                                if 'content_exact' in highlights:
+                                    snippets.extend(highlights['content_exact'])
+                                
+                                # 중복 제거 및 길이 제한
+                                unique_snippets = list(set(snippets))[:3]
+                                content_snippet = " ... ".join(unique_snippets)
+                            else:
+                                # 하이라이트 없으면 기본 스니펫
+                                content_snippet = result.get('content', '')[:300] + "..."
                             
-                        st.markdown(f"### 📄 {file_name}")
-                        st.markdown(f"> {content_snippet}", unsafe_allow_html=True) # HTML 태그(bold) 허용
-                        
-                        if blob_path:
+                            blob_path = ""
                             try:
-                                blob_service_client = get_blob_service_client()
+                                if CONTAINER_NAME in path:
+                                    blob_path = path.split(f"/{CONTAINER_NAME}/")[-1]
+                                    blob_path = urllib.parse.unquote(blob_path)
+                            except:
+                                pass
                                 
-                                # Content-Type 결정 (확장자 우선 적용)
-                                # 메타데이터가 application/octet-stream인 경우가 많아 확장자로 강제 설정
-                                if file_name.lower().endswith('.pdf'):
-                                    content_type = "application/pdf"
-                                else:
-                                    content_type = result.get('metadata_storage_content_type')
-                                    if not content_type or content_type == "application/octet-stream":
-                                        import mimetypes
-                                        content_type, _ = mimetypes.guess_type(file_name)
-                                
-                                # Blob SAS 생성 (Content-Disposition: inline 설정 + Content-Type 강제)
-                                sas_token = generate_blob_sas(
-                                    account_name=blob_service_client.account_name,
-                                    container_name=CONTAINER_NAME,
-                                    blob_name=blob_path,
-                                    account_key=blob_service_client.credential.account_key,
-                                    permission=BlobSasPermissions(read=True),
-                                    expiry=datetime.utcnow() + timedelta(hours=1),
-                                    content_disposition="inline", # 브라우저에서 열기 강제
-                                    content_type=content_type # 올바른 MIME 타입 설정
-                                )
-                                
-                                sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
-                                
-                                # 새 탭에서 열기 (target="_blank")
-                                st.markdown(f'<a href="{sas_url}" target="_blank">📄 문서 열기 (새 탭)</a>', unsafe_allow_html=True)
-                            except Exception as e:
-                                st.caption(f"문서 링크 생성 실패: {e}")
-                        
-                        st.divider()
+                            st.markdown(f"### 📄 {file_name}")
+                            st.markdown(f"> {content_snippet}", unsafe_allow_html=True) # HTML 태그(bold) 허용
+                            
+                            if blob_path:
+                                try:
+                                    blob_service_client = get_blob_service_client()
+                                    
+                                    # Content-Type 결정 (확장자 우선 적용)
+                                    # 메타데이터가 application/octet-stream인 경우가 많아 확장자로 강제 설정
+                                    if file_name.lower().endswith('.pdf'):
+                                        content_type = "application/pdf"
+                                    else:
+                                        content_type = result.get('metadata_storage_content_type')
+                                        if not content_type or content_type == "application/octet-stream":
+                                            import mimetypes
+                                            content_type, _ = mimetypes.guess_type(file_name)
+                                    
+                                    # Blob SAS 생성 (Content-Disposition: inline 설정 + Content-Type 강제)
+                                    sas_token = generate_blob_sas(
+                                        account_name=blob_service_client.account_name,
+                                        container_name=CONTAINER_NAME,
+                                        blob_name=blob_path,
+                                        account_key=blob_service_client.credential.account_key,
+                                        permission=BlobSasPermissions(read=True),
+                                        expiry=datetime.utcnow() + timedelta(hours=1),
+                                        content_disposition="inline", # 브라우저에서 열기 강제
+                                        content_type=content_type # 올바른 MIME 타입 설정
+                                    )
+                                    
+                                    sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
+                                    
+                                    # 새 탭에서 열기 (target="_blank")
+                                    st.markdown(f'<a href="{sas_url}" target="_blank">📄 문서 열기 (새 탭)</a>', unsafe_allow_html=True)
+                                except Exception as e:
+                                    st.caption(f"문서 링크 생성 실패: {e}")
+                            
+                            st.divider()
     
     with tab2:
         st.subheader("🤖 AI 문서 도우미")
