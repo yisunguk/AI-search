@@ -55,9 +55,10 @@ CRITICAL RULES:
         try:
             # 1. Search for relevant documents using Azure AI Search
             # Use search_mode='any' to find documents matching ANY of the keywords
+            # Disable semantic ranker for now as it might cause issues with Basic tier
             search_results = self.search_manager.search(
                 user_message, 
-                use_semantic_ranker=True,
+                use_semantic_ranker=False,
                 search_mode="any"
             )
             
