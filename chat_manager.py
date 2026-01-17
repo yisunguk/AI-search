@@ -89,6 +89,10 @@ CRITICAL RULES:
                     except:
                         pass
 
+                # Clean OCR noise (AutoCAD artifacts)
+                content = content.replace("AutoCAD SHX Text", "")
+                content = content.replace("%%C", "Ø") # CAD diameter symbol
+                
                 # Truncate content to fit context window (increased for o1 models)
                 # Drawings might have scattered text, so we need more context
                 if len(content) > 15000:
