@@ -489,7 +489,24 @@ elif menu == "문서 검색":
                     with st.container():
                         file_name = result.get('metadata_storage_name', 'Unknown File')
                         path = result.get('metadata_storage_path', '')
-                        content_snippet = result.get('content', '')[:300] + "..." # Snippet length
+                        
+                        # 하이라이트 처리
+                        highlights = result.get('@search.highlights')
+                        if highlights:
+                            # content 또는 content_exact에서 하이라이트 추출
+                            # 여러 개의 하이라이트가 있을 수 있으므로 합쳐서 보여줌
+                            snippets = []
+                            if 'content' in highlights:
+                                snippets.extend(highlights['content'])
+                            if 'content_exact' in highlights:
+                                snippets.extend(highlights['content_exact'])
+                            
+                            # 중복 제거 및 길이 제한
+                            unique_snippets = list(set(snippets))[:3]
+                            content_snippet = " ... ".join(unique_snippets)
+                        else:
+                            # 하이라이트 없으면 기본 스니펫
+                            content_snippet = result.get('content', '')[:300] + "..."
                         
                         blob_path = ""
                         try:
@@ -500,13 +517,23 @@ elif menu == "문서 검색":
                             pass
                             
                         st.markdown(f"### 📄 {file_name}")
-                        st.markdown(f"> {content_snippet}")
+                        st.markdown(f"> {content_snippet}", unsafe_allow_html=True) # HTML 태그(bold) 허용
                         
                         if blob_path:
                             try:
                                 blob_service_client = get_blob_service_client()
                                 
-                                # Blob SAS 생성 (Content-Disposition: inline 설정)
+                                # Content-Type 결정 (확장자 우선 적용)
+                                # 메타데이터가 application/octet-stream인 경우가 많아 확장자로 강제 설정
+                                if file_name.lower().endswith('.pdf'):
+                                    content_type = "application/pdf"
+                                else:
+                                    content_type = result.get('metadata_storage_content_type')
+                                    if not content_type or content_type == "application/octet-stream":
+                                        import mimetypes
+                                        content_type, _ = mimetypes.guess_type(file_name)
+                                
+                                # Blob SAS 생성 (Content-Disposition: inline 설정 + Content-Type 강제)
                                 sas_token = generate_blob_sas(
                                     account_name=blob_service_client.account_name,
                                     container_name=CONTAINER_NAME,
@@ -514,7 +541,8 @@ elif menu == "문서 검색":
                                     account_key=blob_service_client.credential.account_key,
                                     permission=BlobSasPermissions(read=True),
                                     expiry=datetime.utcnow() + timedelta(hours=1),
-                                    content_disposition="inline" # 브라우저에서 열기 강제
+                                    content_disposition="inline", # 브라우저에서 열기 강제
+                                    content_type=content_type # 올바른 MIME 타입 설정
                                 )
                                 
                                 sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
