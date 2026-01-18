@@ -219,9 +219,10 @@ if menu == "홈":
     st.markdown("""
     <style>
     .hero-container {
-        padding: 2rem 0;
+        padding: 0 0 2rem 0;
         text-align: center;
         margin-bottom: 2rem;
+        margin-top: -4.5rem;
     }
     .hero-title {
         font-size: 3rem;
