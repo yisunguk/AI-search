@@ -413,3 +413,13 @@ class AzureSearchManager:
         except Exception as e:
             print(f"Search error: {e}")
             return []
+    def upload_documents(self, documents):
+        """
+        문서 직접 업로드 (Push API)
+        documents: list of dict
+        """
+        try:
+            result = self.search_client.upload_documents(documents=documents)
+            return True, f"Successfully uploaded {len(documents)} documents."
+        except Exception as e:
+            return False, f"Upload failed: {str(e)}"

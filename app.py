@@ -14,6 +14,7 @@ from search_manager import AzureSearchManager
 
 # Chat Manager Import  
 from chat_manager import AzureOpenAIChatManager
+from doc_intel_manager import DocumentIntelligenceManager
 
 # -----------------------------
 # 설정 및 비밀 관리
@@ -45,7 +46,12 @@ SEARCH_DATASOURCE_NAME = "blob-datasource"
 AZURE_OPENAI_ENDPOINT = get_secret("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = get_secret("AZURE_OPENAI_KEY")
 AZURE_OPENAI_DEPLOYMENT = get_secret("AZURE_OPENAI_DEPLOYMENT")
+AZURE_OPENAI_DEPLOYMENT = get_secret("AZURE_OPENAI_DEPLOYMENT")
 AZURE_OPENAI_API_VERSION = get_secret("AZURE_OPENAI_API_VERSION")
+
+# 5. Document Intelligence
+AZURE_DOC_INTEL_ENDPOINT = get_secret("AZURE_DOC_INTEL_ENDPOINT")
+AZURE_DOC_INTEL_KEY = get_secret("AZURE_DOC_INTEL_KEY")
 
 # -----------------------------
 # Azure 클라이언트 헬퍼
@@ -85,6 +91,12 @@ def get_chat_manager():
         storage_connection_string=STORAGE_CONN_STR,
         container_name=CONTAINER_NAME
     )
+
+def get_doc_intel_manager():
+    if not AZURE_DOC_INTEL_ENDPOINT or not AZURE_DOC_INTEL_KEY:
+        st.error("Azure Document Intelligence Endpoint 또는 Key가 설정되지 않았습니다.")
+        st.stop()
+    return DocumentIntelligenceManager(AZURE_DOC_INTEL_ENDPOINT, AZURE_DOC_INTEL_KEY)
 
 def generate_sas_url(blob_service_client, container_name, blob_name=None, permission="r", expiry_hours=1):
     """
@@ -181,7 +193,7 @@ if "page" not in st.session_state:
 with st.sidebar:
     st.header("메뉴")
     # key="page" binds the radio selection to st.session_state.page
-    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "관리자 설정"], key="page")
+    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "관리자 설정"], key="page")
     
     st.divider()
     
@@ -842,10 +854,166 @@ elif menu == "검색 & AI 채팅":
                         st.error(f"오류가 발생했습니다: {str(e)}")
         
         # Clear chat button
+        # Clear chat button
         if st.session_state.chat_messages:
             if st.button("🗑️ 대화 초기화"):
                 st.session_state.chat_messages = []
                 st.rerun()
+
+elif menu == "도면/스펙 분석":
+    st.subheader("🏗️ 도면/스펙 정밀 분석 (RAG)")
+    st.caption("Azure Document Intelligence를 활용한 고정밀 문서 분석 및 질의응답")
+    
+    with st.expander("ℹ️ Document Intelligence가 왜 더 좋은가요?", expanded=False):
+        st.markdown("""
+        **건설 EPC 설계 담당자님께 이 서비스가 필요한 이유는 크게 3가지입니다.**
+
+        1. **표(Table) 추출의 정확도**: 일반 OCR은 표 안의 데이터를 읽을 때 줄이 밀리거나 텍스트가 섞이기 쉽습니다. 하지만 Document Intelligence는 행과 열의 구조를 완벽히 파악하여 엑셀처럼 정교하게 데이터를 추출합니다.
+        2. **레이아웃 분석**: 제목, 본문, 각주, 페이지 번호 등을 구분하여 텍스트의 우선순위를 정할 수 있습니다.
+        3. **체크박스 및 서명 인식**: 설계 검토서나 승인 문서에 포함된 체크 표시나 서명 여부까지 인식할 수 있습니다.
+        """)
+
+    tab1, tab2 = st.tabs(["📤 문서 업로드 및 분석", "💬 분석 문서 채팅"])
+    
+    with tab1:
+        st.markdown("### 1. 분석할 문서 업로드 (drawings 폴더)")
+        uploaded_files = st.file_uploader("PDF 도면, 스펙, 사양서 등을 업로드하세요", accept_multiple_files=True, type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'])
+        
+        if uploaded_files:
+            if st.button("업로드 및 분석 시작"):
+                blob_service_client = get_blob_service_client()
+                container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                doc_intel_manager = get_doc_intel_manager()
+                search_manager = get_search_manager()
+                
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                total_files = len(uploaded_files)
+                
+                for idx, file in enumerate(uploaded_files):
+                    try:
+                        status_text.text(f"처리 중 ({idx+1}/{total_files}): {file.name}")
+                        
+                        # 1. Upload to Blob (drawings folder)
+                        blob_path = f"drawings/{file.name}"
+                        blob_client = container_client.get_blob_client(blob_path)
+                        blob_client.upload_blob(file, overwrite=True)
+                        
+                        # 2. Generate SAS URL for Doc Intel
+                        sas_token = generate_blob_sas(
+                            account_name=blob_service_client.account_name,
+                            container_name=CONTAINER_NAME,
+                            blob_name=blob_path,
+                            account_key=blob_service_client.credential.account_key,
+                            permission=BlobSasPermissions(read=True),
+                            expiry=datetime.utcnow() + timedelta(hours=1)
+                        )
+                        blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
+                        
+                        # 3. Analyze with Document Intelligence
+                        status_text.text(f"분석 중 ({idx+1}/{total_files}): {file.name} - Document Intelligence Layout 모델 실행...")
+                        analyzed_content = doc_intel_manager.analyze_document(blob_url)
+                        
+                        # 4. Indexing (Push to Search)
+                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {file.name}")
+                        
+                        # Create document object
+                        # ID must be unique and URL safe. Base64 encode the path.
+                        import base64
+                        doc_id = base64.urlsafe_b64encode(blob_path.encode('utf-8')).decode('utf-8')
+                        
+                        document = {
+                            "id": doc_id,
+                            "content": analyzed_content,
+                            "content_exact": analyzed_content, # Use same content for exact match for now
+                            "metadata_storage_name": file.name,
+                            "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_path}",
+                            "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                            "metadata_storage_size": file.size,
+                            "metadata_storage_content_type": file.type,
+                            "project": "drawings_analysis" # Tag for filtering
+                        }
+                        
+                        success, msg = search_manager.upload_documents([document])
+                        if not success:
+                            st.error(f"인덱싱 실패 ({file.name}): {msg}")
+                        
+                        progress_bar.progress((idx + 1) / total_files)
+                        
+                    except Exception as e:
+                        st.error(f"오류 발생 ({file.name}): {str(e)}")
+                
+                status_text.text("모든 작업이 완료되었습니다!")
+                st.success("업로드, 분석 및 인덱싱이 완료되었습니다.")
+
+    with tab2:
+        st.markdown("### 💬 도면/스펙 전문 채팅")
+        
+        # Chat Interface (Similar to main chat but focused)
+        if "rag_chat_messages" not in st.session_state:
+            st.session_state.rag_chat_messages = []
+            
+        for message in st.session_state.rag_chat_messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                if "citations" in message and message["citations"]:
+                    st.markdown("---")
+                    st.caption("📚 **참조 문서:**")
+                    for i, citation in enumerate(message["citations"], 1):
+                        filepath = citation.get('filepath', 'Unknown')
+                        url = citation.get('url', '')
+                        if url: display_url = url
+                        else: display_url = "#"
+                        st.markdown(f"{i}. [{filepath}]({display_url})")
+
+        if prompt := st.chat_input("도면이나 스펙에 대해 질문하세요..."):
+            st.session_state.rag_chat_messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            
+            with st.chat_message("assistant"):
+                with st.spinner("분석 중..."):
+                    try:
+                        chat_manager = get_chat_manager()
+                        # Use the same chat manager but we might want to hint it to look at 'drawings'
+                        # For now, since we pushed to the same index, it will find them.
+                        # We could add a filter in the future if needed.
+                        
+                        conversation_history = [
+                            {"role": msg["role"], "content": msg["content"]}
+                            for msg in st.session_state.rag_chat_messages[:-1]
+                        ]
+                        
+                        # Pass search_mode='all' for better precision in specs
+                        response_text, citations = chat_manager.get_chat_response(
+                            prompt, 
+                            conversation_history,
+                            search_mode="all",
+                            use_semantic_ranker=True # Enable semantic ranker for better understanding
+                        )
+                        
+                        st.markdown(response_text)
+                        
+                        if citations:
+                            st.markdown("---")
+                            st.caption("📚 **참조 문서:**")
+                            for i, citation in enumerate(citations, 1):
+                                filepath = citation.get('filepath', 'Unknown')
+                                url = citation.get('url', '')
+                                st.markdown(f"{i}. [{filepath}]({url})")
+                        
+                        st.session_state.rag_chat_messages.append({
+                            "role": "assistant",
+                            "content": response_text,
+                            "citations": citations
+                        })
+                    except Exception as e:
+                        st.error(f"오류: {e}")
+        
+        if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
+            st.session_state.rag_chat_messages = []
+            st.rerun()
 
 elif menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
