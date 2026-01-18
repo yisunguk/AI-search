@@ -644,14 +644,17 @@ elif menu == "검색 & AI 채팅":
     with tab1:
         st.subheader("🔍 PDF 문서 검색")
         
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
-        with col2:
-            use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)")
-        with col3:
-            search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함")
-            search_mode = "all" if "all" in search_mode_opt else "any"
+        # Search Input
+        query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
+        
+        # Search Options (Expander)
+        with st.expander("⚙️ 검색 옵션 설정", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1:
+                use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)")
+            with c2:
+                search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함")
+                search_mode = "all" if "all" in search_mode_opt else "any"
         
         
         if query:
