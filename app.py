@@ -950,6 +950,42 @@ elif menu == "도면/스펙 분석":
     with tab2:
         st.markdown("### 💬 도면/스펙 전문 채팅")
         
+        # Display analyzed documents
+        st.markdown("#### 📋 분석된 문서 목록")
+        try:
+            blob_service_client = get_blob_service_client()
+            container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+            
+            # List files in drawings folder
+            blobs = container_client.list_blobs(name_starts_with="drawings/")
+            blob_list = []
+            for blob in blobs:
+                if not blob.name.endswith('/'):  # Skip folder markers
+                    blob_list.append({
+                        'name': blob.name.replace('drawings/', ''),
+                        'size': blob.size,
+                        'modified': blob.last_modified
+                    })
+            
+            # Sort by modified date (most recent first)
+            blob_list.sort(key=lambda x: x['modified'], reverse=True)
+            
+            if blob_list:
+                st.info(f"총 {len(blob_list)}개의 문서가 분석되어 있습니다.")
+                
+                # Display as expandable list
+                with st.expander("📄 문서 목록 보기", expanded=True):
+                    for idx, blob_info in enumerate(blob_list, 1):
+                        size_mb = blob_info['size'] / (1024 * 1024)
+                        modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
+                        st.markdown(f"{idx}. **{blob_info['name']}** ({size_mb:.2f} MB) - {modified_str}")
+            else:
+                st.warning("분석된 문서가 없습니다. '문서 업로드 및 분석' 탭에서 문서를 업로드하세요.")
+        except Exception as e:
+            st.error(f"문서 목록을 불러오는 중 오류 발생: {e}")
+        
+        st.divider()
+        
         # Chat Interface (Similar to main chat but focused)
         if "rag_chat_messages" not in st.session_state:
             st.session_state.rag_chat_messages = []
@@ -976,21 +1012,19 @@ elif menu == "도면/스펙 분석":
                 with st.spinner("분석 중..."):
                     try:
                         chat_manager = get_chat_manager()
-                        # Use the same chat manager but we might want to hint it to look at 'drawings'
-                        # For now, since we pushed to the same index, it will find them.
-                        # We could add a filter in the future if needed.
                         
                         conversation_history = [
                             {"role": msg["role"], "content": msg["content"]}
                             for msg in st.session_state.rag_chat_messages[:-1]
                         ]
                         
-                        # Pass search_mode='all' for better precision in specs
+                        # Use 'any' search mode for better recall (find documents even with partial keyword match)
+                        # This is important because technical drawings may have specific terms
                         response_text, citations = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history,
-                            search_mode="all",
-                            use_semantic_ranker=True # Enable semantic ranker for better understanding
+                            search_mode="any",  # Changed from 'all' to 'any' for better recall
+                            use_semantic_ranker=False  # Disable semantic ranker if using Basic tier
                         )
                         
                         st.markdown(response_text)
@@ -1010,6 +1044,8 @@ elif menu == "도면/스펙 분석":
                         })
                     except Exception as e:
                         st.error(f"오류: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
         
         if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
             st.session_state.rag_chat_messages = []
