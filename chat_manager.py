@@ -41,9 +41,12 @@ CRITICAL RULES:
 6. **Language**: Respond in Korean unless asked otherwise.
 """
 
-    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False):
+    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None):
         """
         Get chat response with client-side RAG
+        
+        Args:
+            filter_expr: OData filter expression (e.g., "project eq 'drawings_analysis'")
         
         Returns:
             response_text: AI response
@@ -54,6 +57,7 @@ CRITICAL RULES:
             # Use provided search parameters
             search_results = self.search_manager.search(
                 user_message, 
+                filter_expr=filter_expr,
                 use_semantic_ranker=use_semantic_ranker,
                 search_mode=search_mode
             )

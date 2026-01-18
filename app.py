@@ -1020,11 +1020,13 @@ elif menu == "도면/스펙 분석":
                         
                         # Use 'any' search mode for better recall (find documents even with partial keyword match)
                         # This is important because technical drawings may have specific terms
+                        # Filter to only search documents from the drawings folder
                         response_text, citations = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history,
                             search_mode="any",  # Changed from 'all' to 'any' for better recall
-                            use_semantic_ranker=False  # Disable semantic ranker if using Basic tier
+                            use_semantic_ranker=False,  # Disable semantic ranker if using Basic tier
+                            filter_expr="project eq 'drawings_analysis'"  # Only search drawings documents
                         )
                         
                         st.markdown(response_text)
