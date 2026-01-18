@@ -175,9 +175,14 @@ LANG_SUFFIX_OVERRIDE = {
     "zh-Hant": "TW",
 }
 
+# Initialize session state for page navigation
+if "page" not in st.session_state:
+    st.session_state.page = "홈"
+
 with st.sidebar:
     st.header("메뉴")
-    menu = st.radio("이동", ["번역하기", "파일 보관함", "검색 & AI", "관리자 설정"])
+    # key="page" binds the radio selection to st.session_state.page
+    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI", "관리자 설정"], key="page")
     
     st.divider()
     
@@ -200,6 +205,135 @@ with st.sidebar:
         st.success("✅ Azure 자격 증명 확인됨")
     else:
         st.warning("⚠️ 일부 Azure 자격 증명이 누락되었습니다.")
+
+if menu == "홈":
+    # -----------------------------
+    # 랜딩 페이지 (Home)
+    # -----------------------------
+    
+    # Custom CSS for Landing Page
+    st.markdown("""
+    <style>
+    .hero-container {
+        padding: 2rem 0;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+        background: -webkit-linear-gradient(45deg, #3b82f6, #8b5cf6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+        font-size: 1.5rem;
+        color: #6b7280;
+        margin-bottom: 2rem;
+    }
+    .feature-card {
+        background-color: #1e293b;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        height: 100%;
+    }
+    .feature-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+    .feature-title {
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+        color: #f8fafc;
+    }
+    .feature-desc {
+        font-size: 0.95rem;
+        color: #94a3b8;
+        line-height: 1.5;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Hero Section
+    st.markdown('<div class="hero-container">', unsafe_allow_html=True)
+    st.markdown('<h1 class="hero-title">현장똑똑 AI</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.</p>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("### 💡 솔루션 소개")
+    st.info("현장똑똑 AI는 방대한 건설 현장의 데이터를 지능형으로 관리하는 차세대 EPC 업무 지원 솔루션입니다.")
+    
+    st.markdown("---")
+    
+    # Features Section
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">🔍</div>
+            <div class="feature-title">정밀 검색</div>
+            <div class="feature-desc">
+                애저 AI 서치 기반의 RAG 기술로 기계 번호, 설계 스펙을 오차 없이 찾아냅니다.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.write("") # Spacer
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">🤖 업무 자동화</div>
+            <div class="feature-title">업무 자동화</div>
+            <div class="feature-desc">
+                검색된 데이터를 바탕으로 검측 요청서, 일일 보고서 등 반복적인 문서 작성을 자동화합니다.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">🌏</div>
+            <div class="feature-title">글로벌 협업</div>
+            <div class="feature-desc">
+                해외 벤더의 기술 문서를 즉시 번역하여 현장 소통의 장벽을 허뭅니다.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.write("") # Spacer
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <div class="feature-title">철저한 보안</div>
+            <div class="feature-desc">
+                업로드된 회사의 소중한 기술 자산은 외부 학습에 이용되지 않아 안전합니다.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    st.markdown("---")
+    
+    # Quick Navigation
+    st.markdown("### 🚀 바로가기")
+    
+    b1, b2, b3, b4 = st.columns(4)
+    if b1.button("📄 번역하기", use_container_width=True):
+        st.session_state.page = "번역하기"
+        st.rerun()
+        
+    if b2.button("📂 파일 보관함", use_container_width=True):
+        st.session_state.page = "파일 보관함"
+        st.rerun()
+        
+    if b3.button("🔍 검색 & AI", use_container_width=True):
+        st.session_state.page = "검색 & AI"
+        st.rerun()
+        
+    if b4.button("⚙️ 관리자 설정", use_container_width=True):
+        st.session_state.page = "관리자 설정"
+        st.rerun()
 
 if menu == "번역하기":
     uploaded_file = st.file_uploader("번역할 문서 업로드 (PPTX, PDF, DOCX, XLSX 등)", type=["pptx", "pdf", "docx", "xlsx"])
