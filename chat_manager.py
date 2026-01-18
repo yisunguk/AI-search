@@ -41,7 +41,7 @@ CRITICAL RULES:
 6. **Language**: Respond in Korean unless asked otherwise.
 """
 
-    def get_chat_response(self, user_message, conversation_history=None):
+    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False):
         """
         Get chat response with client-side RAG
         
@@ -51,12 +51,11 @@ CRITICAL RULES:
         """
         try:
             # 1. Search for relevant documents using Azure AI Search
-            # Use search_mode='any' to find documents matching ANY of the keywords
-            # Disable semantic ranker for now as it might cause issues with Basic tier
+            # Use provided search parameters
             search_results = self.search_manager.search(
                 user_message, 
-                use_semantic_ranker=False,
-                search_mode="any"
+                use_semantic_ranker=use_semantic_ranker,
+                search_mode=search_mode
             )
             
             # 2. Construct context from search results

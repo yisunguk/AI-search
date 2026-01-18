@@ -638,187 +638,211 @@ elif menu == "파일 보관함":
         st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
 
 elif menu == "검색 & AI 채팅":
-    st.subheader("🤖 AI 문서 도우미")
-    st.caption("Azure OpenAI와 문서 검색을 활용한 정확한 답변 제공")
+    # Tabs for Search and Chat to preserve state
+    tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
     
-    # Initialize chat history in session state
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-    
-    # Display chat messages
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            
-            # Display citations if present
-            if "citations" in message and message["citations"]:
-                st.markdown("---")
-                st.caption("� **참조 문서:**")
-                for i, citation in enumerate(message["citations"], 1):
-                    filepath = citation.get('filepath', 'Unknown')
-                    url = citation.get('url', '')
-                    
-                    # Generate SAS URL if we have blob path
-                    if url:
-                        display_url = url
-                    else:
-                        # Try to generate SAS URL from filepath
-                        try:
-                            blob_service_client = get_blob_service_client()
-                            display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
-                        except:
-                            display_url = "#"
-                    
-                    st.markdown(f"{i}. [{filepath}]({display_url})")
-    
-    # -----------------------------
-    # 검색 도구 및 옵션 (Tools below chat)
-    # -----------------------------
-    st.write("") # Spacer
-    with st.expander("�️ 검색 도구 및 옵션 (Manual Search & Options)", expanded=False):
-        st.markdown("### �🔍 PDF 문서 검색")
+    with tab1:
+        st.subheader("🔍 PDF 문서 검색")
         
         col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
-            search_query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...", key="manual_search_query")
+            query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
         with col2:
-            use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)", key="manual_use_semantic")
+            use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)")
         with col3:
-            search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함", key="manual_search_mode")
+            search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함")
             search_mode = "all" if "all" in search_mode_opt else "any"
         
-        if st.button("검색 실행", key="btn_manual_search"):
-            if search_query:
-                with st.spinner("검색 중..."):
-                    search_manager = get_search_manager()
-                    results = search_manager.search(search_query, use_semantic_ranker=use_semantic, search_mode=search_mode)
-                    
-                    if not results:
-                        st.info("검색 결과가 없습니다.")
-                    else:
-                        st.success(f"총 {len(results)}개의 문서를 찾았습니다.")
-                        for result in results:
-                            with st.container():
-                                file_name = result.get('metadata_storage_name', 'Unknown File')
-                                path = result.get('metadata_storage_path', '')
-                                
-                                # 하이라이트 처리
-                                highlights = result.get('@search.highlights')
-                                if highlights:
-                                    snippets = []
-                                    if 'content' in highlights:
-                                        snippets.extend(highlights['content'])
-                                    if 'content_exact' in highlights:
-                                        snippets.extend(highlights['content_exact'])
-                                    unique_snippets = list(set(snippets))[:3]
-                                    content_snippet = " ... ".join(unique_snippets)
-                                else:
-                                    content_snippet = result.get('content', '')[:300] + "..."
-                                
-                                blob_path = ""
-                                try:
-                                    if CONTAINER_NAME in path:
-                                        blob_path = path.split(f"/{CONTAINER_NAME}/")[-1]
-                                        blob_path = urllib.parse.unquote(blob_path)
-                                except:
-                                    pass
-                                    
-                                st.markdown(f"**📄 {file_name}**")
-                                st.caption(content_snippet, unsafe_allow_html=True)
-                                
-                                if blob_path:
-                                    try:
-                                        blob_service_client = get_blob_service_client()
-                                        if file_name.lower().endswith('.pdf'):
-                                            content_type = "application/pdf"
-                                        else:
-                                            content_type = result.get('metadata_storage_content_type')
-                                            if not content_type or content_type == "application/octet-stream":
-                                                import mimetypes
-                                                content_type, _ = mimetypes.guess_type(file_name)
-                                        
-                                        sas_token = generate_blob_sas(
-                                            account_name=blob_service_client.account_name,
-                                            container_name=CONTAINER_NAME,
-                                            blob_name=blob_path,
-                                            account_key=blob_service_client.credential.account_key,
-                                            permission=BlobSasPermissions(read=True),
-                                            expiry=datetime.utcnow() + timedelta(hours=1),
-                                            content_disposition="inline",
-                                            content_type=content_type
-                                        )
-                                        sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
-                                        st.markdown(f'<a href="{sas_url}" target="_blank">📄 문서 열기</a>', unsafe_allow_html=True)
-                                    except Exception as e:
-                                        st.caption(f"링크 생성 실패: {e}")
-                                st.divider()
-            else:
-                st.warning("검색어를 입력하세요.")
-
-    # Chat input
-    if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)"):
-        # Add user message to chat history
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        st.rerun() # Rerun to display the new user message immediately
-
-    # Handle Chat Response (Logic moved here to ensure it runs after rerun)
-    if st.session_state.chat_messages and st.session_state.chat_messages[-1]["role"] == "user":
-        # Get the last user message
-        last_user_msg = st.session_state.chat_messages[-1]["content"]
         
-        # Display spinner while generating response
-        with st.chat_message("assistant"):
-            with st.spinner("답변 생성 중..."):
-                try:
-                    chat_manager = get_chat_manager()
-                    
-                    # Prepare conversation history
-                    conversation_history = [
-                        {"role": msg["role"], "content": msg["content"]}
-                        for msg in st.session_state.chat_messages[:-1]
-                    ]
-                    
-                    response_text, citations = chat_manager.get_chat_response(last_user_msg, conversation_history)
-                    
-                    # Display response
-                    st.markdown(response_text)
-                    
-                    # Display citations
-                    if citations:
-                        st.markdown("---")
-                        st.caption("📚 **참조 문서:**")
-                        for i, citation in enumerate(citations, 1):
-                            filepath = citation.get('filepath', 'Unknown')
-                            url = citation.get('url', '')
+        if query:
+            with st.spinner("검색 중..."):
+                search_manager = get_search_manager()
+                results = search_manager.search(query, use_semantic_ranker=use_semantic, search_mode=search_mode)
+                
+                if not results:
+                    st.info("검색 결과가 없습니다.")
+                else:
+                    st.success(f"총 {len(results)}개의 문서를 찾았습니다.")
+                    for result in results:
+                        with st.container():
+                            file_name = result.get('metadata_storage_name', 'Unknown File')
+                            path = result.get('metadata_storage_path', '')
                             
-                            if url:
-                                display_url = url
+                            # 하이라이트 처리
+                            highlights = result.get('@search.highlights')
+                            if highlights:
+                                # content 또는 content_exact에서 하이라이트 추출
+                                # 여러 개의 하이라이트가 있을 수 있으므로 합쳐서 보여줌
+                                snippets = []
+                                if 'content' in highlights:
+                                    snippets.extend(highlights['content'])
+                                if 'content_exact' in highlights:
+                                    snippets.extend(highlights['content_exact'])
+                                
+                                # 중복 제거 및 길이 제한
+                                unique_snippets = list(set(snippets))[:3]
+                                content_snippet = " ... ".join(unique_snippets)
                             else:
+                                # 하이라이트 없으면 기본 스니펫
+                                content_snippet = result.get('content', '')[:300] + "..."
+                            
+                            blob_path = ""
+                            try:
+                                if CONTAINER_NAME in path:
+                                    blob_path = path.split(f"/{CONTAINER_NAME}/")[-1]
+                                    blob_path = urllib.parse.unquote(blob_path)
+                            except:
+                                pass
+                                
+                            st.markdown(f"### 📄 {file_name}")
+                            st.markdown(f"> {content_snippet}", unsafe_allow_html=True) # HTML 태그(bold) 허용
+                            
+                            if blob_path:
                                 try:
                                     blob_service_client = get_blob_service_client()
-                                    display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
-                                except:
-                                    display_url = "#"
+                                    
+                                    # Content-Type 결정 (확장자 우선 적용)
+                                    # 메타데이터가 application/octet-stream인 경우가 많아 확장자로 강제 설정
+                                    if file_name.lower().endswith('.pdf'):
+                                        content_type = "application/pdf"
+                                    else:
+                                        content_type = result.get('metadata_storage_content_type')
+                                        if not content_type or content_type == "application/octet-stream":
+                                            import mimetypes
+                                            content_type, _ = mimetypes.guess_type(file_name)
+                                    
+                                    # Blob SAS 생성 (Content-Disposition: inline 설정 + Content-Type 강제)
+                                    sas_token = generate_blob_sas(
+                                        account_name=blob_service_client.account_name,
+                                        container_name=CONTAINER_NAME,
+                                        blob_name=blob_path,
+                                        account_key=blob_service_client.credential.account_key,
+                                        permission=BlobSasPermissions(read=True),
+                                        expiry=datetime.utcnow() + timedelta(hours=1),
+                                        content_disposition="inline", # 브라우저에서 열기 강제
+                                        content_type=content_type # 올바른 MIME 타입 설정
+                                    )
+                                    
+                                    sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
+                                    
+                                    # 새 탭에서 열기 (target="_blank")
+                                    st.markdown(f'<a href="{sas_url}" target="_blank">📄 문서 열기 (새 탭)</a>', unsafe_allow_html=True)
+                                except Exception as e:
+                                    st.caption(f"문서 링크 생성 실패: {e}")
                             
-                            st.markdown(f"{i}. [{filepath}]({display_url})")
-                    
-                    # Add assistant response to chat history
-                    st.session_state.chat_messages.append({
-                        "role": "assistant",
-                        "content": response_text,
-                        "citations": citations
-                    })
-                    # Rerun to update the state properly (optional but good for consistency)
-                    # st.rerun() 
-                    
-                except Exception as e:
-                    st.error(f"오류가 발생했습니다: {str(e)}")
-
-    # Clear chat button (moved to sidebar or bottom)
-    if st.session_state.chat_messages:
-        if st.button("🗑️ 대화 초기화", key="clear_chat_bottom"):
+                            st.divider()
+    
+    with tab2:
+        st.subheader("🤖 AI 문서 도우미")
+        st.caption("Azure OpenAI와 문서 검색을 활용한 정확한 답변 제공")
+        
+        # Initialize chat history in session state
+        if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
-            st.rerun()
+        
+        # Display chat messages
+        for message in st.session_state.chat_messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                
+                # Display citations if present
+                if "citations" in message and message["citations"]:
+                    st.markdown("---")
+                    st.caption("📚 **참조 문서:**")
+                    for i, citation in enumerate(message["citations"], 1):
+                        filepath = citation.get('filepath', 'Unknown')
+                        url = citation.get('url', '')
+                        
+                        # Generate SAS URL if we have blob path
+                        if url:
+                            display_url = url
+                        else:
+                            # Try to generate SAS URL from filepath
+                            try:
+                                blob_service_client = get_blob_service_client()
+                                display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                            except:
+                                display_url = "#"
+                        
+                        st.markdown(f"{i}. [{filepath}]({display_url})")
+        
+        # -----------------------------
+        # 검색 옵션 (Chat Tab) - Bottom of chat area
+        # -----------------------------
+        st.write("")
+        with st.expander("⚙️ 고급 검색 옵션 (RAG 설정)", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1:
+                chat_use_semantic = st.checkbox("시맨틱 랭커 사용", value=False, key="chat_use_semantic", help="의미 기반 검색을 사용하여 정확도를 높입니다.")
+            with c2:
+                chat_search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=1, horizontal=True, key="chat_search_mode", help="any: 키워드 중 하나라도 포함되면 검색 (추천)")
+                chat_search_mode = "all" if "all" in chat_search_mode_opt else "any"
+
+        # Chat input
+        if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)"):
+            # Add user message to chat history
+            st.session_state.chat_messages.append({"role": "user", "content": prompt})
+            
+            # Display user message
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            
+            # Get AI response
+            with st.chat_message("assistant"):
+                with st.spinner("답변 생성 중..."):
+                    try:
+                        chat_manager = get_chat_manager()
+                        
+                        # Prepare conversation history (exclude citations from history)
+                        conversation_history = [
+                            {"role": msg["role"], "content": msg["content"]}
+                            for msg in st.session_state.chat_messages[:-1]  # Exclude the just-added user message
+                        ]
+                        
+                        # Pass the selected search options to the chat manager
+                        response_text, citations = chat_manager.get_chat_response(
+                            prompt, 
+                            conversation_history, 
+                            search_mode=chat_search_mode, 
+                            use_semantic_ranker=chat_use_semantic
+                        )
+                        
+                        # Display response
+                        st.markdown(response_text)
+                        
+                        # Display citations
+                        if citations:
+                            st.markdown("---")
+                            st.caption("📚 **참조 문서:**")
+                            for i, citation in enumerate(citations, 1):
+                                filepath = citation.get('filepath', 'Unknown')
+                                url = citation.get('url', '')
+                                
+                                # Generate SAS URL if we have blob path
+                                if url:
+                                    display_url = url
+                                else:
+                                    # Try to generate SAS URL from filepath
+                                    blob_service_client = get_blob_service_client()
+                                    display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                                
+                                st.markdown(f"{i}. [{filepath}]({display_url})")
+                        
+                        # Add assistant response to chat history
+                        st.session_state.chat_messages.append({
+                            "role": "assistant",
+                            "content": response_text,
+                            "citations": citations
+                        })
+                        
+                    except Exception as e:
+                        st.error(f"오류가 발생했습니다: {str(e)}")
+        
+        # Clear chat button
+        if st.session_state.chat_messages:
+            if st.button("🗑️ 대화 초기화"):
+                st.session_state.chat_messages = []
+                st.rerun()
 
 elif menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
