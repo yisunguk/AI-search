@@ -18,7 +18,7 @@ from chat_manager import AzureOpenAIChatManager
 # -----------------------------
 # 설정 및 비밀 관리
 # -----------------------------
-st.set_page_config(page_title="Azure 문서 번역기 & 검색", page_icon="🌏", layout="centered")
+st.set_page_config(page_title="현장똑똑 AI", page_icon="�️", layout="centered")
 
 def get_secret(key):
     if key in st.secrets:
@@ -140,8 +140,7 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
 # -----------------------------
 # UI 구성
 # -----------------------------
-st.title("🌏 Azure 문서 번역기 & 검색")
-st.caption("Azure Document Translation & Blob Storage & AI Search 기반")
+
 
 # 지원 언어 목록 가져오기 (API)
 @st.cache_data
@@ -205,6 +204,11 @@ with st.sidebar:
         st.success("✅ Azure 자격 증명 확인됨")
     else:
         st.warning("⚠️ 일부 Azure 자격 증명이 누락되었습니다.")
+
+# Common Header for non-Home pages
+if menu != "홈":
+    st.title("현장똑똑 AI")
+    st.caption("검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.")
 
 if menu == "홈":
     # -----------------------------
