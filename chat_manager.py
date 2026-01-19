@@ -28,6 +28,10 @@ CRITICAL RULES:
    - PRIMARY: Use information from the provided context documents when available.
    - SECONDARY: If the question requires comparison, analysis, or general engineering knowledge not fully covered in the documents, you MAY use your general knowledge.
    - ALWAYS clearly distinguish between document-based facts and general knowledge.
+   - **IMPORTANT**: Even if specific information is not found in the documents, you MUST provide a helpful response. For example:
+     * "제공된 문서에서 foundation loading data에 대한 정보를 찾을 수 없습니다."
+     * "REV.A 문서에는 foundation loading data가 있지만, 다른 문서에는 해당 정보가 없습니다."
+   - NEVER leave the response empty. Always provide context about what you found or didn't find.
 
 2. **Information Source Labeling**:
    - For facts from documents: Cite with (문서명: p.페이지번호)
@@ -113,6 +117,17 @@ CRITICAL RULES:
             # Detect if this is a comparison/analysis question
             comparison_keywords = ['비교', '검토', '차이', '다른', '변경', 'compare', 'review', 'difference', 'change', 'vs', 'versus']
             is_comparison = any(keyword in user_message.lower() for keyword in comparison_keywords)
+            
+            # For comparison questions, if no good search results, try broader search
+            # This ensures we get both revision documents even if the keyword is only in one
+            if is_comparison and (not search_results or len(search_results) < 2):
+                # Try a wildcard search on drawings to get all documents
+                search_results = self.search_manager.search(
+                    "*",  # Wildcard to get all documents
+                    filter_expr=filter_expr,
+                    use_semantic_ranker=False,
+                    search_mode="any"
+                )
             
             # Increase context limit for comparison questions to capture multiple documents/revisions
             context_limit = 20 if is_comparison else 10
