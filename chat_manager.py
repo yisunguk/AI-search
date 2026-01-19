@@ -83,9 +83,15 @@ CRITICAL RULES:
             context_parts = []
             citations = []
             
-            # Increase context limit to 10 documents
+            # Detect if this is a comparison/analysis question
+            comparison_keywords = ['비교', '검토', '차이', '다른', '변경', 'compare', 'review', 'difference', 'change', 'vs', 'versus']
+            is_comparison = any(keyword in user_message.lower() for keyword in comparison_keywords)
+            
+            # Increase context limit for comparison questions to capture multiple documents/revisions
+            context_limit = 20 if is_comparison else 10
+            
             for i, result in enumerate(search_results, 1):
-                if i > 10: break
+                if i > context_limit: break
                 
                 filename = result.get('metadata_storage_name', 'Unknown')
                 content = result.get('content', '')
