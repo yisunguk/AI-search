@@ -280,12 +280,13 @@ USER QUESTION:
             try:
                 print("DEBUG: Calling Azure OpenAI...")
                 # Check model name to decide parameter
-                # o1 models use max_completion_tokens, others use max_tokens
-                if "o1" in self.deployment_name.lower():
+                # o1 models and gpt-5 preview use max_completion_tokens
+                deployment_lower = self.deployment_name.lower()
+                if "o1" in deployment_lower or "gpt-5" in deployment_lower:
                     response = self.client.chat.completions.create(
                         model=self.deployment_name,
                         messages=messages,
-                        max_completion_tokens=5000, # o1 models support larger output
+                        max_completion_tokens=5000, # o1/gpt-5 models support larger output
                     )
                 else:
                     response = self.client.chat.completions.create(
