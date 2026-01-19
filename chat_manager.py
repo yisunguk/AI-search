@@ -242,8 +242,8 @@ Convert the user's natural language question into a keyword-based search query.
             sorted_keys = sorted(grouped_context.keys())
             
             # Limit total pages to avoid token limit
-            # Reduced from 10 to 5 to prevent LLM errors
-            for key in sorted_keys[:5]:
+            # Reduced to 3 to prevent LLM errors (especially for dense drawings)
+            for key in sorted_keys[:3]:
                 filename, page = key
                 chunks = grouped_context[key]
                 # Join chunks for the same page
@@ -288,11 +288,11 @@ USER QUESTION:
                 response_text = response.choices[0].message.content
             except Exception as e:
                 print(f"DEBUG: LLM call failed: {e}")
-                # Fallback to o1 or retry logic could go here
-                response_text = ""
+                # Return the actual error to the user for debugging
+                return f"LLM 호출 중 오류가 발생했습니다: {str(e)}\n\n(컨텍스트 길이: {len(context)} 자)", citations
 
             if not response_text or not response_text.strip():
-                response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. (응답 없음)\n\n질문을 조금 더 구체적으로 해주시거나, 다른 검색어를 시도해 주세요."
+                response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. (응답 없음)"
 
             return response_text, citations
 
