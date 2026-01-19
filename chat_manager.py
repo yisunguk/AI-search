@@ -128,12 +128,13 @@ CRITICAL RULES:
                         fallback_query, 
                         filter_expr=filter_expr,
                         use_semantic_ranker=use_semantic_ranker,
-                        search_mode="any" # Force 'any' for fallback to increase recall
-                    )
+            # Detect follow-up intent (e.g., "Make it a table", "Summarize")
+            follow_up_keywords = ['표', '테이블', 'table', '정리', '요약', 'summary', '가시성', '보기 편하게']
+            is_follow_up = any(keyword in user_message for keyword in follow_up_keywords)
             
-            # Fallback 2: If still no results, check conversation history for context
-            # This handles follow-up questions like "Make it a table" where the context is in the previous turn
-            if not search_results and conversation_history:
+            # Fallback 2: Contextual Search
+            # If it's a follow-up question OR no results found, try using previous conversation context
+            if (is_follow_up or not search_results) and conversation_history:
                 # Find the last user message from history
                 last_user_msg = None
                 for msg in reversed(conversation_history):
@@ -142,17 +143,16 @@ CRITICAL RULES:
                         break
                 
                 if last_user_msg:
-                    print(f"DEBUG: Contextual search fallback using previous message: '{last_user_msg[:50]}...'")
+                    print(f"DEBUG: Contextual search fallback (Follow-up={is_follow_up}): '{last_user_msg[:50]}...'")
                     # Search using the previous message
-                    # We use the same cleaning logic (simplified here)
                     prev_query = last_user_msg
-                    
-                    # Clean previous query similarly
                     for pattern in question_patterns:
                         prev_query = re.sub(pattern, '', prev_query, flags=re.IGNORECASE)
                     prev_query = ' '.join(prev_query.split()).strip()
                     if len(prev_query) < 2: prev_query = last_user_msg
 
+                    # If it's a follow-up, we prioritize the previous query's results
+                    # because "Make it a table" has no content keywords
                     search_results = self.search_manager.search(
                         prev_query, 
                         filter_expr=filter_expr,
@@ -169,17 +169,15 @@ CRITICAL RULES:
             is_comparison = any(keyword in user_message.lower() for keyword in comparison_keywords)
             
             # For comparison questions, if no good search results, try broader search
-            # This ensures we get both revision documents even if the keyword is only in one
             if is_comparison and (not search_results or len(search_results) < 2):
-                # Try a wildcard search on drawings to get all documents
                 search_results = self.search_manager.search(
-                    "*",  # Wildcard to get all documents
+                    "*", 
                     filter_expr=filter_expr,
                     use_semantic_ranker=False,
                     search_mode="any"
                 )
             
-            # Increase context limit for comparison questions to capture multiple documents/revisions
+            # Increase context limit for comparison questions
             context_limit = 20 if is_comparison else 10
             
             for i, result in enumerate(search_results, 1):
@@ -187,63 +185,48 @@ CRITICAL RULES:
                 
                 filename = result.get('metadata_storage_name', 'Unknown')
                 content = result.get('content', '')
-                path = result.get('metadata_storage_path', '') # Full URL
+                path = result.get('metadata_storage_path', '') 
                 
-                # Decode filename as well
                 from urllib.parse import unquote
                 filename = unquote(filename)
                 
-                # Extract relative path from URL (handle folders)
-                # Format: https://account.blob.core.windows.net/container/folder/file.pdf#page=N
-                blob_path = filename # Default fallback
+                blob_path = filename
                 if path and self.container_name in path:
                     try:
-                        # Split by container name and take the part after it
                         parts = path.split(f"/{self.container_name}/")
                         if len(parts) > 1:
                             blob_path = parts[1]
-                            # Remove #page fragment if present
                             if '#page=' in blob_path:
                                 blob_path = blob_path.split('#page=')[0]
-                            # Decode URL encoding if needed (e.g. %20 -> space)
                             blob_path = unquote(blob_path)
                     except:
                         pass
 
-                # Clean OCR noise (AutoCAD artifacts)
                 content = content.replace("AutoCAD SHX Text", "")
-                content = content.replace("%%C", "Ø") # CAD diameter symbol
+                content = content.replace("%%C", "Ø")
                 
-                # Skip documents with no content
                 if not content or len(content.strip()) == 0:
-                    print(f"Warning: Skipping document {filename} - no content")
                     continue
                 
-                # Truncate content to fit context window
-                # Reduced from 15000 to 3000 to prevent context overflow with 20+ documents
                 if len(content) > 3000:
                     content = content[:3000] + "..."
                 
                 context_parts.append(f"[Document {i}: {filename}]\n{content}\n")
                 
-                # Add to citations
                 citations.append({
-                    'filepath': blob_path, # Use full blob path including folders
+                    'filepath': blob_path,
                     'url': '',
                     'path': path,
                     'title': filename
                 })
             
-            # Allow empty context if we have conversation history (LLM can answer from history)
+            # Allow empty context if we have conversation history
             if not context_parts and not conversation_history:
                 return "검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.", []
             
             context = "\n" + "="*50 + "\n".join(context_parts) if context_parts else "(No new documents found. Use conversation history.)"
             
-            # 3. Build messages with context
-            # For o1 models, it's safer to include context in the user message
-            # rather than using 'system' role which might be restricted
-            
+            # 3. Build messages
             full_prompt = f"""{self.system_prompt}
 
 CONTEXT:
@@ -255,29 +238,14 @@ USER QUESTION:
             messages = []
             
             if conversation_history:
-                # Add history but ensure we don't duplicate system messages
-                # Filter out any system messages from history if they exist
                 history = [msg for msg in conversation_history if msg['role'] != 'system']
+                messages.extend(history)
             messages.append({"role": "user", "content": full_prompt})
             
             # 4. Call Azure OpenAI
-            # Try with o1-compatible parameters first (max_completion_tokens, no temperature)
+            # Use standard parameters first (more reliable for most models)
             try:
-                print("DEBUG: Calling Azure OpenAI with o1 params...")
-                response = self.client.chat.completions.create(
-                    model=self.deployment_name,
-                    messages=messages,
-                    max_completion_tokens=5000, # Increased from 2000
-                    timeout=300
-                )
-                
-                response_text = response.choices[0].message.content
-                finish_reason = response.choices[0].finish_reason
-                print(f"DEBUG: API Response - Finish Reason: {finish_reason}, Content Length: {len(response_text) if response_text else 0}")
-                
-            except Exception as e:
-                print(f"DEBUG: o1 params failed, retrying with standard params. Error: {e}")
-                # Fallback to standard GPT-4/3.5 parameters
+                print("DEBUG: Calling Azure OpenAI with standard params...")
                 response = self.client.chat.completions.create(
                     model=self.deployment_name,
                     messages=messages,
@@ -285,19 +253,29 @@ USER QUESTION:
                     temperature=0.3
                 )
                 response_text = response.choices[0].message.content
+                
+            except Exception as e:
+                print(f"DEBUG: Standard params failed, retrying with o1 params. Error: {e}")
+                # Fallback to o1 parameters (max_completion_tokens)
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.deployment_name,
+                        messages=messages,
+                        max_completion_tokens=5000,
+                        timeout=300
+                    )
+                    response_text = response.choices[0].message.content
+                except Exception as e2:
+                    print(f"DEBUG: o1 params also failed. Error: {e2}")
+                    response_text = ""
             
             # Check for empty response
             if not response_text or not response_text.strip():
                 print("Warning: LLM returned empty response")
-                # One last try with a simplified prompt if context was too heavy?
-                # But for now, just return the fallback message
                 response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. (응답 없음)\n\n질문을 조금 더 구체적으로 해주시거나, 다른 검색어를 시도해 주세요."
             
-            # Extract page numbers from metadata_storage_path (which contains #page=N)
             import re
-            
             for citation in citations:
-                # Check if the path contains #page=N
                 path = citation.get('path', '')
                 page_match = re.search(r'#page=(\d+)', path)
                 if page_match:
