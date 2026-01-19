@@ -155,17 +155,14 @@ Convert the user's natural language question into a keyword-based search query.
             # 0. Construct Scope Filter from available_files (if provided, treat as selected files)
             # This ensures we ONLY search within the files the user has selected in the UI
             scope_filter = None
-            if available_files:
-                 import unicodedata
-                 # Create OR filter for all selected files
-                 # Normalize to NFC to ensure matching
-                 # startswith(metadata_storage_name, 'FileA') or startswith(...)
+                 # Use search.ismatch for more robust matching (handles tokenization and minor differences)
+                 # We use a phrase search ("...") to ensure the filename sequence matches
+                 # search.ismatch('"{filename}"', 'metadata_storage_name')
                  conditions = []
                  for f in available_files:
-                     # Normalize to NFC
-                     f_nfc = unicodedata.normalize('NFC', f)
-                     safe_f = f_nfc.replace("'", "''")
-                     conditions.append(f"startswith(metadata_storage_name, '{safe_f}')")
+                     # Escape double quotes for the search query
+                     safe_f = f.replace('"', '\\"')
+                     conditions.append(f"search.ismatch('\"{safe_f}\"', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
