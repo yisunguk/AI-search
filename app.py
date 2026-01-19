@@ -1208,6 +1208,64 @@ elif menu == "도면/스펙 분석":
                 st.error(f"진단 중 오류 발생: {str(e)}")
                 st.code(str(e))
         
+        st.write("---")
+        st.write("### 🧪 사용자 지정 검색 테스트")
+        debug_query = st.text_input("검색어 입력 (예: filter element)", key="debug_query")
+        if st.button("검색 테스트 실행", key="run_debug_search"):
+            if debug_query:
+                try:
+                    search_manager = get_search_manager()
+                    client = search_manager.search_client
+                    
+                    st.write(f"Query: '{debug_query}'")
+                    # Use 'any' search mode to match behavior
+                    results = client.search(
+                        search_text=debug_query, 
+                        filter="project eq 'drawings_analysis'", 
+                        search_mode="any",
+                        select=["metadata_storage_name", "content"],
+                        top=10
+                    )
+                    docs = list(results)
+                    st.write(f"검색 결과: {len(docs)}개")
+                    
+                    if docs:
+                        for doc in docs:
+                            st.text(f"Match: {doc['metadata_storage_name']}")
+                            st.caption(f"Content: {doc['content'][:200]}...")
+                    else:
+                        st.warning("검색 결과가 없습니다.")
+                except Exception as e:
+                    st.error(f"검색 오류: {e}")
+
+        st.write("---")
+        st.write("### ⚠️ 인덱스 초기화")
+        if st.button("🗑️ 모든 도면 데이터 삭제 (Index & Blob)", type="primary"):
+            try:
+                # 1. Delete all blobs in drawings/
+                blob_service_client = get_blob_service_client()
+                container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                blobs = container_client.list_blobs(name_starts_with="drawings/")
+                for blob in blobs:
+                    container_client.delete_blob(blob.name)
+                
+                # 2. Delete all docs in index with project='drawings_analysis'
+                search_manager = get_search_manager()
+                results = search_manager.search_client.search(
+                    search_text="*",
+                    filter="project eq 'drawings_analysis'",
+                    select=["id"]
+                )
+                ids_to_delete = [{"id": doc['id']} for doc in results]
+                if ids_to_delete:
+                    # Delete in batches of 1000 if needed, but for now simple
+                    search_manager.search_client.delete_documents(documents=ids_to_delete)
+                
+                st.success("모든 도면 데이터가 삭제되었습니다. 이제 파일을 다시 업로드하세요.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"초기화 실패: {e}")
+        
         if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
             st.session_state.rag_chat_messages = []
             st.rerun()
