@@ -1581,18 +1581,20 @@ with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=F
     if st.button("🔍 인덱스된 파일명 확인"):
         try:
             search_manager = get_search_manager()
-            # Query all docs, select only name, filtered by project
+            # Query all docs, select only name and content, filtered by project
             results = search_manager.search_client.search(
                 search_text="*", 
                 filter="project eq 'drawings_analysis'",
-                select=["metadata_storage_name"], 
+                select=["metadata_storage_name", "content"], 
                 top=50
             )
             
             st.write("### Index Contents (Top 50)")
             for res in results:
                 name = res['metadata_storage_name']
-                st.code(f"Name: {name}\nRepr: {repr(name)}")
+                content = res.get('content', '')
+                snippet = content[:100].replace('\n', ' ') if content else "No content"
+                st.code(f"Name: {name}\nContent: {snippet}...")
                 
         except Exception as e:
             st.error(f"Error querying index: {e}")
