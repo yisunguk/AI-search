@@ -404,7 +404,7 @@ class AzureSearchManager:
                 "highlight_fields": "content,content_exact",
                 "highlight_pre_tag": "<mark style='background-color: #ffd700; color: black; font-weight: bold;'>",
                 "highlight_post_tag": "</mark>",
-                "top": 30,
+                "top": 50,
                 "search_mode": search_mode
             }
 
