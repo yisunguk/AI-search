@@ -247,7 +247,7 @@ Convert the user's natural language question into a keyword-based search query.
                 content = result.get('content', '')
                 
                 # Extract page number
-                page = 1
+                page = None
                 import re
                 from urllib.parse import unquote
                 
@@ -258,6 +258,12 @@ Convert the user's natural language question into a keyword-based search query.
                     page_match = re.search(r'#page=(\d+)', path)
                     if page_match:
                         page = int(page_match.group(1))
+                
+                # CRITICAL: If page is None, this is a "rogue" document (whole file indexed without page splitting).
+                # We MUST skip it to avoid polluting the context with non-granular data.
+                if page is None:
+                    print(f"DEBUG: Skipping rogue document (no page number): {filename}")
+                    continue
                 
                 key = (filename, page)
                 
