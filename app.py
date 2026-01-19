@@ -1559,6 +1559,26 @@ if menu == "관리자 설정":
                 for warn in warnings:
                     st.warning(f"- {warn}")
 
+# -----------------------------
+# Debug Section
+# -----------------------------
+with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=False):
+    st.warning("개발자용 디버그 도구입니다.")
+    
+    if st.button("🔍 인덱스된 파일명 확인"):
+        try:
+            search_manager = get_search_manager()
+            # Query all docs, select only name
+            results = search_manager.search_client.search(search_text="*", select=["metadata_storage_name"], top=50)
+            
+            st.write("### Index Contents (Top 50)")
+            for res in results:
+                name = res['metadata_storage_name']
+                st.code(f"Name: {name}\nRepr: {repr(name)}")
+                
+        except Exception as e:
+            st.error(f"Error querying index: {e}")
+
 
 
 
