@@ -70,10 +70,37 @@ CRITICAL RULES:
             citations: List of citation objects with file info
         """
         try:
-            # 1. Search for relevant documents using Azure AI Search
-            # Use provided search parameters
+            # 1. Extract keywords from user question for better search
+            # Remove common question words that don't help with search
+            import re
+            
+            # Remove question patterns
+            search_query = user_message
+            question_patterns = [
+                r'는\s*두\s*문서간?\s*차이점?이?\s*있나요?\?*',
+                r'를?\s*비교해?\s*주세요\.?',
+                r'를?\s*검토해?\s*주세요\.?',
+                r'이?\s*뭐?야?\?*',
+                r'이?\s*무엇인가요?\?*',
+                r'에\s*대해\s*질문하세요\.?',
+                r'에\s*대해\s*알려주세요\.?',
+                r'차이점?을?\s*알려주세요\.?'
+            ]
+            
+            for pattern in question_patterns:
+                search_query = re.sub(pattern, '', search_query, flags=re.IGNORECASE)
+            
+            # Clean up extra spaces
+            search_query = ' '.join(search_query.split()).strip()
+            
+            # If the query is too short after cleaning, use original
+            if len(search_query) < 3:
+                search_query = user_message
+            
+            # 2. Search for relevant documents using Azure AI Search
+            # Use cleaned search query
             search_results = self.search_manager.search(
-                user_message, 
+                search_query, 
                 filter_expr=filter_expr,
                 use_semantic_ranker=use_semantic_ranker,
                 search_mode=search_mode
