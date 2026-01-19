@@ -196,7 +196,7 @@ def change_page(page_name):
 with st.sidebar:
     st.header("메뉴")
     # key="page" binds the radio selection to st.session_state.page
-    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "관리자 설정"], key="page")
+    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "관리자 설정"], key="page")
     
     st.divider()
     
@@ -1311,7 +1311,20 @@ elif menu == "도면/스펙 분석":
             st.session_state.rag_chat_messages = []
             st.rerun()
 
-elif menu == "관리자 설정":
+el    st.markdown("---")
+
+if menu == "엑셀데이터 자동추출":
+    st.title("엑셀데이터 자동추출")
+    st.caption("외부 도구를 사용하여 엑셀 데이터를 자동으로 추출합니다.")
+    
+    external_url = "https://cjwzc6h3rtmsadhrwrhaz4.streamlit.app/"
+    
+    st.info(f"아래 창에서 바로 작업을 수행하거나, [새 탭에서 열기]({external_url})를 클릭하세요.")
+    
+    # Embed the external app using iframe
+    st.components.v1.iframe(external_url, height=800, scrolling=True)
+
+if menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
     st.info("Azure AI Search 리소스를 초기화하거나 상태를 확인합니다.")
     
