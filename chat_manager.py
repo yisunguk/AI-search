@@ -106,10 +106,8 @@ You must interpret the provided text as if you are looking at an engineering dia
             print(f"DEBUG: Detected filename in query: {matched_file}")
             # Escape single quotes for OData
             safe_filename = matched_file.replace("'", "''")
-            # Filter by metadata_storage_name
-            # Note: We need to handle the case where the stored name might be URL encoded or have path
-            # But usually metadata_storage_name is the filename.
-            return f"metadata_storage_name eq '{safe_filename}'"
+            # Filter by metadata_storage_name using startswith because indexed name has (p.N) suffix
+            return f"startswith(metadata_storage_name, '{safe_filename}')"
             
         return None
 
@@ -174,6 +172,9 @@ Convert the user's natural language question into a keyword-based search query.
                 use_semantic_ranker=use_semantic_ranker,
                 search_mode=search_mode
             )
+            
+            # Debug: Check search results
+            print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
             
             # Fallback: If specific file search failed, try without file filter (maybe user got name wrong)
             if not search_results and file_filter:
@@ -240,11 +241,9 @@ Convert the user's natural language question into a keyword-based search query.
             # Sort by filename and page
             sorted_keys = sorted(grouped_context.keys())
             
-            # Limit total pages to avoid token limit (e.g., top 5 pages)
-            # But since we already limited search results, we just take what we have
-            # Maybe limit to top 10 pages if search returned many small chunks
-            
-            for key in sorted_keys[:10]:
+            # Limit total pages to avoid token limit
+            # Reduced from 10 to 5 to prevent LLM errors
+            for key in sorted_keys[:5]:
                 filename, page = key
                 chunks = grouped_context[key]
                 # Join chunks for the same page
@@ -252,7 +251,7 @@ Convert the user's natural language question into a keyword-based search query.
                 
                 # Clean content
                 page_content = page_content.replace("AutoCAD SHX Text", "").replace("%%C", "Ø")
-                if len(page_content) > 4000: page_content = page_content[:4000] + "..."
+                if len(page_content) > 3000: page_content = page_content[:3000] + "..."
                 
                 context_parts.append(f"[Document: {filename}, Page: {page}]\n{page_content}\n")
                 citations.append(citations_map[key])
