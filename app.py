@@ -1102,10 +1102,60 @@ elif menu == "도면/스펙 분석":
                             "content": response_text,
                             "citations": citations
                         })
+                        st.rerun()
+
+
                     except Exception as e:
                         st.error(f"오류: {e}")
                         import traceback
                         st.code(traceback.format_exc())
+
+    # -----------------------------
+    # 디버깅 도구 (Debug Tools)
+    # -----------------------------
+    with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=False):
+        st.warning("이 도구는 검색 문제를 진단하기 위한 것입니다.")
+        
+        if st.button("🔍 인덱스 상태 및 검색 테스트 실행"):
+            try:
+                search_manager = get_search_manager()
+                client = search_manager.search_client
+                
+                st.write("### 1. 인덱스 문서 확인 (project='drawings_analysis')")
+                results = client.search(search_text="*", filter="project eq 'drawings_analysis'", select=["id", "metadata_storage_name", "project"], top=20)
+                
+                docs = list(results)
+                st.write(f"총 {len(docs)}개의 문서가 발견되었습니다.")
+                
+                if docs:
+                    for doc in docs:
+                        st.code(f"ID: {doc['id']}\nName: {doc['metadata_storage_name']}\nProject: {doc['project']}")
+                else:
+                    st.error("인덱스에 'drawings_analysis' 프로젝트 문서가 없습니다!")
+                
+                st.write("---")
+                st.write("### 2. 키워드 검색 테스트 ('foundation loading data')")
+                search_results = client.search(search_text="foundation loading data", filter="project eq 'drawings_analysis'", top=5, select=["metadata_storage_name", "content"])
+                search_docs = list(search_results)
+                
+                st.write(f"검색 결과: {len(search_docs)}개")
+                for doc in search_docs:
+                    st.text(f"Match: {doc['metadata_storage_name']}")
+                    st.caption(f"Content: {doc['content'][:200]}...")
+                
+                st.write("---")
+                st.write("### 3. 와일드카드 검색 테스트 ('*')")
+                wild_results = client.search(search_text="*", filter="project eq 'drawings_analysis'", top=5, select=["metadata_storage_name", "content"])
+                wild_docs = list(wild_results)
+                
+                st.write(f"검색 결과: {len(wild_docs)}개")
+                for doc in wild_docs:
+                    st.text(f"Match: {doc['metadata_storage_name']}")
+                    st.caption(f"Content: {doc['content'][:200]}...")
+                    
+            except Exception as e:
+                st.error(f"진단 중 오류 발생: {str(e)}")
+                st.code(str(e))
         
         if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
             st.session_state.rag_chat_messages = []
