@@ -999,8 +999,28 @@ elif menu == "도면/스펙 분석":
                     for i, citation in enumerate(message["citations"], 1):
                         filepath = citation.get('filepath', 'Unknown')
                         url = citation.get('url', '')
-                        if url: display_url = url
-                        else: display_url = "#"
+                        
+                        # Generate SAS URL for browser viewing
+                        if url:
+                            display_url = url
+                        else:
+                            try:
+                                blob_service_client = get_blob_service_client()
+                                # Generate SAS with inline content disposition
+                                sas_token = generate_blob_sas(
+                                    account_name=blob_service_client.account_name,
+                                    container_name=CONTAINER_NAME,
+                                    blob_name=filepath,
+                                    account_key=blob_service_client.credential.account_key,
+                                    permission=BlobSasPermissions(read=True),
+                                    expiry=datetime.utcnow() + timedelta(hours=1),
+                                    content_disposition="inline",
+                                    content_type="application/pdf"
+                                )
+                                display_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(filepath)}?{sas_token}"
+                            except:
+                                display_url = "#"
+                        
                         st.markdown(f"{i}. [{filepath}]({display_url})")
 
         if prompt := st.chat_input("도면이나 스펙에 대해 질문하세요..."):
@@ -1037,7 +1057,29 @@ elif menu == "도면/스펙 분석":
                             for i, citation in enumerate(citations, 1):
                                 filepath = citation.get('filepath', 'Unknown')
                                 url = citation.get('url', '')
-                                st.markdown(f"{i}. [{filepath}]({url})")
+                                
+                                # Generate SAS URL for browser viewing
+                                if url:
+                                    display_url = url
+                                else:
+                                    try:
+                                        blob_service_client = get_blob_service_client()
+                                        # Generate SAS with inline content disposition
+                                        sas_token = generate_blob_sas(
+                                            account_name=blob_service_client.account_name,
+                                            container_name=CONTAINER_NAME,
+                                            blob_name=filepath,
+                                            account_key=blob_service_client.credential.account_key,
+                                            permission=BlobSasPermissions(read=True),
+                                            expiry=datetime.utcnow() + timedelta(hours=1),
+                                            content_disposition="inline",
+                                            content_type="application/pdf"
+                                        )
+                                        display_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(filepath)}?{sas_token}"
+                                    except:
+                                        display_url = "#"
+                                
+                                st.markdown(f"{i}. [{filepath}]({display_url})")
                         
                         st.session_state.rag_chat_messages.append({
                             "role": "assistant",
