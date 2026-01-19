@@ -286,71 +286,130 @@ if menu == "홈":
     st.markdown("---")
     
     # Features Section
+    st.markdown("""
+    <style>
+    /* Card Container Styling */
+    .card-container {
+        background-color: #1e293b;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        padding: 1.5rem;
+        height: 220px; /* Fixed height for consistency */
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform 0.2s;
+    }
+    .card-container:hover {
+        transform: translateY(-5px);
+        border-color: #3b82f6;
+    }
+    .card-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+    }
+    .card-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 0.5rem;
+    }
+    .card-desc {
+        font-size: 0.9rem;
+        color: #94a3b8;
+        line-height: 1.4;
+        flex-grow: 1;
+    }
+    /* Streamlit Button Styling Override */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 600;
+        margin-top: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Grid Layout for 4 Cards
     col1, col2 = st.columns(2)
     
+    # Card 1: 정밀 검색 -> 검색 & AI 채팅
     with col1:
-        st.markdown("""
-        <div class="feature-card">
-            <div class="feature-icon">🔍</div>
-            <div class="feature-title">정밀 검색</div>
-            <div class="feature-desc">
-                애저 AI 서치 기반의 RAG 기술로 기계 번호, 설계 스펙을 오차 없이 찾아냅니다.
+        with st.container():
+            st.markdown("""
+            <div class="card-container">
+                <div>
+                    <div class="card-icon">🔍</div>
+                    <div class="card-title">정밀 검색</div>
+                    <div class="card-desc">
+                        애저 AI 서치 기반의 RAG 기술로 기계 번호, 설계 스펙을 오차 없이 찾아냅니다.
+                    </div>
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.write("") # Spacer
-        st.markdown("""
-        <div class="feature-card">
-            <div class="feature-icon">🤖 업무 자동화</div>
-            <div class="feature-title">업무 자동화</div>
-            <div class="feature-desc">
-                검색된 데이터를 바탕으로 검측 요청서, 일일 보고서 등 반복적인 문서 작성을 자동화합니다.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            if st.button("바로가기", key="btn_search", use_container_width=True):
+                st.session_state.page = "검색 & AI 채팅"
+                st.rerun()
 
+    # Card 2: 글로벌 협업 -> 도면/스펙 분석
     with col2:
-        st.markdown("""
-        <div class="feature-card">
-            <div class="feature-icon">🌏</div>
-            <div class="feature-title">글로벌 협업</div>
-            <div class="feature-desc">
-                해외 벤더의 기술 문서를 즉시 번역하여 현장 소통의 장벽을 허뭅니다.
+        with st.container():
+            st.markdown("""
+            <div class="card-container">
+                <div>
+                    <div class="card-icon">🌏</div>
+                    <div class="card-title">글로벌 협업</div>
+                    <div class="card-desc">
+                        해외 벤더의 기술 문서를 즉시 분석하여 현장 소통의 장벽을 허뭅니다.
+                    </div>
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.write("") # Spacer
-        st.markdown("""
-        <div class="feature-card">
-            <div class="feature-icon">🔒</div>
-            <div class="feature-title">철저한 보안</div>
-            <div class="feature-desc">
-                업로드된 회사의 소중한 기술 자산은 외부 학습에 이용되지 않아 안전합니다.
+            """, unsafe_allow_html=True)
+            if st.button("바로가기", key="btn_analysis", use_container_width=True):
+                st.session_state.page = "도면/스펙 분석"
+                st.rerun()
+
+    st.write("") # Spacer Row
+
+    col3, col4 = st.columns(2)
+
+    # Card 3: 업무 자동화 -> 번역하기
+    with col3:
+        with st.container():
+            st.markdown("""
+            <div class="card-container">
+                <div>
+                    <div class="card-icon">🤖</div>
+                    <div class="card-title">업무 자동화</div>
+                    <div class="card-desc">
+                        다국어 문서를 신속하게 번역하여 반복적인 업무 시간을 획기적으로 단축합니다.
+                    </div>
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+            """, unsafe_allow_html=True)
+            if st.button("바로가기", key="btn_translate", use_container_width=True):
+                st.session_state.page = "번역하기"
+                st.rerun()
+
+    # Card 4: 철저한 보안 -> 파일 보관함
+    with col4:
+        with st.container():
+            st.markdown("""
+            <div class="card-container">
+                <div>
+                    <div class="card-icon">🔒</div>
+                    <div class="card-title">철저한 보안</div>
+                    <div class="card-desc">
+                        업로드된 회사의 소중한 기술 자산은 외부 학습에 이용되지 않아 안전합니다.
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("바로가기", key="btn_archive", use_container_width=True):
+                st.session_state.page = "파일 보관함"
+                st.rerun()
+    
     st.markdown("---")
-    
-    # Quick Navigation
-    st.markdown("### 🚀 바로가기")
-    
-    b1, b2, b3, b4 = st.columns(4)
-    if b1.button("📄 번역하기", use_container_width=True):
-        st.session_state.page = "번역하기"
-        st.rerun()
-        
-    if b2.button("📂 파일 보관함", use_container_width=True):
-        st.session_state.page = "파일 보관함"
-        st.rerun()
-        
-    if b3.button("🔍 검색 & AI 채팅", use_container_width=True):
-        st.session_state.page = "검색 & AI 채팅"
-        st.rerun()
-        
-    if b4.button("⚙️ 관리자 설정", use_container_width=True):
-        st.session_state.page = "관리자 설정"
-        st.rerun()
 
 if menu == "번역하기":
     uploaded_file = st.file_uploader("번역할 문서 업로드 (PPTX, PDF, DOCX, XLSX 등)", type=["pptx", "pdf", "docx", "xlsx"])
