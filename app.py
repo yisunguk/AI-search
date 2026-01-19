@@ -934,10 +934,14 @@ elif menu == "도면/스펙 분석":
                 
                 for idx, file in enumerate(uploaded_files):
                     try:
-                        status_text.text(f"처리 중 ({idx+1}/{total_files}): {file.name}")
+                        # Normalize filename to NFC (to match search query logic)
+                        import unicodedata
+                        safe_filename = unicodedata.normalize('NFC', file.name)
+                        
+                        status_text.text(f"처리 중 ({idx+1}/{total_files}): {safe_filename}")
                         
                         # 1. Upload to Blob (drawings folder)
-                        blob_path = f"drawings/{file.name}"
+                        blob_path = f"drawings/{safe_filename}"
                         blob_client = container_client.get_blob_client(blob_path)
                         blob_client.upload_blob(file, overwrite=True)
                         
@@ -957,7 +961,7 @@ elif menu == "도면/스펙 분석":
                         page_chunks = doc_intel_manager.analyze_document(blob_url)
                         
                         # 4. Indexing (Push to Search) - One document per page
-                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {file.name} - {len(page_chunks)} 페이지")
+                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {safe_filename} - {len(page_chunks)} 페이지")
                         
                         documents_to_index = []
                         for page_chunk in page_chunks:
@@ -971,7 +975,7 @@ elif menu == "도면/스펙 분석":
                                 "id": doc_id,
                                 "content": page_chunk['content'],
                                 "content_exact": page_chunk['content'],
-                                "metadata_storage_name": f"{file.name} (p.{page_chunk['page_number']})",
+                                "metadata_storage_name": f"{safe_filename} (p.{page_chunk['page_number']})",
                                 "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_path}#page={page_chunk['page_number']}",
                                 "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
                                 "metadata_storage_size": file.size,
