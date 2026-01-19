@@ -128,6 +128,8 @@ CRITICAL RULES:
                         fallback_query, 
                         filter_expr=filter_expr,
                         use_semantic_ranker=use_semantic_ranker,
+                        search_mode="any" # Force 'any' for fallback to increase recall
+                    )
             # Detect follow-up intent (e.g., "Make it a table", "Summarize")
             follow_up_keywords = ['표', '테이블', 'table', '정리', '요약', 'summary', '가시성', '보기 편하게']
             is_follow_up = any(keyword in user_message for keyword in follow_up_keywords)
