@@ -110,6 +110,9 @@ CRITICAL RULES:
                 search_mode=search_mode
             )
             
+            # Debug: Check search results
+            print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
+            
             # 2. Construct context from search results
             context_parts = []
             citations = []
@@ -144,7 +147,7 @@ CRITICAL RULES:
                 filename = unquote(filename)
                 
                 # Extract relative path from URL (handle folders)
-                # Format: https://account.blob.core.windows.net/container/folder/file.pdf
+                # Format: https://account.blob.core.windows.net/container/folder/file.pdf#page=N
                 blob_path = filename # Default fallback
                 if path and self.container_name in path:
                     try:
@@ -152,6 +155,9 @@ CRITICAL RULES:
                         parts = path.split(f"/{self.container_name}/")
                         if len(parts) > 1:
                             blob_path = parts[1]
+                            # Remove #page fragment if present
+                            if '#page=' in blob_path:
+                                blob_path = blob_path.split('#page=')[0]
                             # Decode URL encoding if needed (e.g. %20 -> space)
                             blob_path = unquote(blob_path)
                     except:
@@ -160,6 +166,11 @@ CRITICAL RULES:
                 # Clean OCR noise (AutoCAD artifacts)
                 content = content.replace("AutoCAD SHX Text", "")
                 content = content.replace("%%C", "Ø") # CAD diameter symbol
+                
+                # Skip documents with no content
+                if not content or len(content.strip()) == 0:
+                    print(f"Warning: Skipping document {filename} - no content")
+                    continue
                 
                 # Truncate content to fit context window (increased for o1 models)
                 # Drawings might have scattered text, so we need more context
