@@ -1343,6 +1343,35 @@ elif menu == "도면/스펙 분석":
                 st.rerun()
             except Exception as e:
                 st.error(f"초기화 실패: {e}")
+
+        if st.button("🧹 '페이지 번호 없는' 중복 데이터 정리 (권장)", help="인덱스에서 (p.N) 형식이 아닌 잘못된 데이터를 찾아 삭제합니다."):
+            try:
+                search_manager = get_search_manager()
+                results = search_manager.search_client.search(
+                    search_text="*",
+                    filter="project eq 'drawings_analysis'",
+                    select=["id", "metadata_storage_name"],
+                    top=1000
+                )
+                
+                ids_to_delete = []
+                count = 0
+                for doc in results:
+                    name = doc['metadata_storage_name']
+                    # Delete if it doesn't contain "(p." (standard page suffix)
+                    if "(p." not in name:
+                        ids_to_delete.append({"id": doc['id']})
+                        count += 1
+                
+                if ids_to_delete:
+                    search_manager.search_client.delete_documents(documents=ids_to_delete)
+                    st.success(f"정리 완료! {count}개의 중복/잘못된 문서를 삭제했습니다.")
+                    st.rerun()
+                else:
+                    st.info("삭제할 잘못된 데이터가 없습니다. 인덱스가 깨끗합니다! ✨")
+                    
+            except Exception as e:
+                st.error(f"정리 중 오류 발생: {e}")
         
         if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
             st.session_state.rag_chat_messages = []
