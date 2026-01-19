@@ -247,10 +247,18 @@ if menu == "홈":
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
-    .hero-subtitle {
-        font-size: 1.1rem;
-        color: #6b7280;
-        margin-bottom: 1.5rem;
+    .hero-description {
+        font-size: 1rem;
+        color: #cbd5e1; /* Lighter text for description */
+        margin-top: 1.5rem;
+        line-height: 1.6;
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+        background-color: rgba(30, 41, 59, 0.5); /* Semi-transparent background */
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid rgba(51, 65, 85, 0.5);
     }
     /* Card Container Styling */
     .card-container {
@@ -303,10 +311,8 @@ if menu == "홈":
     st.markdown('<div class="hero-container">', unsafe_allow_html=True)
     st.markdown('<h1 class="hero-title">현장똑똑 AI</h1>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-description">현장똑똑 AI는 방대한 건설 현장의 데이터를 지능형으로 관리하는 차세대 EPC 업무 지원 솔루션입니다.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown("### 💡 솔루션 소개")
-    st.info("현장똑똑 AI는 방대한 건설 현장의 데이터를 지능형으로 관리하는 차세대 EPC 업무 지원 솔루션입니다.")
     
     st.markdown("---")
 
