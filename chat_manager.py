@@ -76,173 +76,193 @@ You must interpret the provided text as if you are looking at an engineering dia
 8. **Language**: Respond in Korean unless asked otherwise.
 """
 
-    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None):
+    def _extract_filename_filter(self, user_message, available_files):
         """
-        Get chat response with client-side RAG
+        Detect if user mentioned a specific file and return OData filter
+        """
+        if not available_files:
+            return None
+            
+        # Normalize message
+        msg_lower = user_message.lower()
         
-        Args:
-            filter_expr: OData filter expression (e.g., "project eq 'drawings_analysis'")
+        # Check for exact or partial matches
+        matched_file = None
         
-        Returns:
-            response_text: AI response
-            citations: List of citation objects with file info
+        # Sort files by length (descending) to match longest filename first
+        # e.g. "Drawing_RevA.pdf" vs "Drawing.pdf"
+        sorted_files = sorted(available_files, key=len, reverse=True)
+        
+        for filename in sorted_files:
+            # Remove extension for matching if user didn't say it
+            name_no_ext = os.path.splitext(filename)[0].lower()
+            filename_lower = filename.lower()
+            
+            if filename_lower in msg_lower or name_no_ext in msg_lower:
+                matched_file = filename
+                break
+        
+        if matched_file:
+            print(f"DEBUG: Detected filename in query: {matched_file}")
+            # Escape single quotes for OData
+            safe_filename = matched_file.replace("'", "''")
+            # Filter by metadata_storage_name
+            # Note: We need to handle the case where the stored name might be URL encoded or have path
+            # But usually metadata_storage_name is the filename.
+            return f"metadata_storage_name eq '{safe_filename}'"
+            
+        return None
+
+    def _rewrite_query(self, user_message):
+        """
+        Rewrite user query to be search-friendly using LLM
         """
         try:
-            # 1. Extract keywords from user question for better search
-            # Remove common question words that don't help with search
-            import re
+            # Simple rule-based first for speed
+            # If it's a "Load List" request, add specific keywords
+            if "전기부하리스트" in user_message or "Load List" in user_message:
+                return f"{user_message} Electrical Load List Motor Heater kW HP Tag No Rating"
             
-            # Remove question patterns
-            search_query = user_message
-            question_patterns = [
-                r'는\s*두\s*문서간?\s*차이점?이?\s*있나요?\?*',
-                r'를?\s*비교해?\s*주세요\.?',
-                r'를?\s*검토해?\s*주세요\.?',
-                r'이?\s*뭐?야?\?*',
-                r'이?\s*무엇인가요?\?*',
-                r'에\s*대해\s*질문하세요\.?',
-                r'에\s*대해\s*알려주세요\.?',
-                r'차이점?을?\s*알려주세요\.?',
-                r'를?\s*찾아서?\s*알려주세[요여]\.?',
-                r'를?\s*알려주세[요여]\.?',
-                r'에\s*대해\s*설명해?\s*주세[요여]\.?'
-            ]
+            # Use LLM for complex rewriting
+            system_prompt = """You are a search query optimizer for technical documents.
+Convert the user's natural language question into a keyword-based search query.
+- Remove conversational filler (e.g., "Please find", "Can you tell me").
+- Add relevant technical synonyms (e.g., "Load List" -> "Load List Motor Heater kW").
+- Keep specific Tag Numbers (e.g., 10-P-101).
+- Output ONLY the search query.
+"""
+            response = self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                max_tokens=100,
+                temperature=0.1
+            )
+            rewritten = response.choices[0].message.content.strip()
+            print(f"DEBUG: Rewritten query: '{user_message}' -> '{rewritten}'")
+            return rewritten
+        except Exception as e:
+            print(f"DEBUG: Query rewriting failed: {e}")
+            return user_message
+
+    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None):
+        """
+        Get chat response with client-side RAG
+        """
+        try:
+            # 1. Intent Detection & Filtering
+            # Check if user specified a file
+            file_filter = self._extract_filename_filter(user_message, available_files)
             
-            for pattern in question_patterns:
-                search_query = re.sub(pattern, '', search_query, flags=re.IGNORECASE)
+            final_filter = filter_expr
+            if file_filter:
+                if final_filter:
+                    final_filter = f"({final_filter}) and ({file_filter})"
+                else:
+                    final_filter = file_filter
+                print(f"DEBUG: Applied file filter: {final_filter}")
+
+            # 2. Query Rewriting
+            search_query = self._rewrite_query(user_message)
             
-            # Clean up extra spaces
-            search_query = ' '.join(search_query.split()).strip()
-            
-            # If the query is too short after cleaning, use original
-            if len(search_query) < 2:
-                search_query = user_message
-            
-            # 2. Search for relevant documents using Azure AI Search
-            # Use cleaned search query
+            # 3. Search
             search_results = self.search_manager.search(
                 search_query, 
-                filter_expr=filter_expr,
+                filter_expr=final_filter,
                 use_semantic_ranker=use_semantic_ranker,
                 search_mode=search_mode
             )
             
-            # Debug: Check search results
-            print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
-            
-            # Fallback: If no results, try extracting only English/Number words (Technical terms)
-            # This helps when Korean particles/verbs mess up the search
-            if not search_results:
-                # Extract words with at least 2 alphanumeric characters
-                eng_terms = re.findall(r'[a-zA-Z0-9]{2,}', user_message)
-                if eng_terms:
-                    fallback_query = ' '.join(eng_terms)
-                    print(f"DEBUG: Fallback search with technical terms: '{fallback_query}'")
-                    search_results = self.search_manager.search(
-                        fallback_query, 
-                        filter_expr=filter_expr,
-                        use_semantic_ranker=use_semantic_ranker,
-                        search_mode="any" # Force 'any' for fallback to increase recall
-                    )
-            # Detect follow-up intent (e.g., "Make it a table", "Summarize")
-            follow_up_keywords = ['표', '테이블', 'table', '정리', '요약', 'summary', '가시성', '보기 편하게']
-            is_follow_up = any(keyword in user_message for keyword in follow_up_keywords)
-            
-            # Fallback 2: Contextual Search
-            # If it's a follow-up question OR no results found, try using previous conversation context
-            if (is_follow_up or not search_results) and conversation_history:
-                # Find the last user message from history
-                last_user_msg = None
-                for msg in reversed(conversation_history):
-                    if msg['role'] == 'user':
-                        last_user_msg = msg['content']
-                        break
-                
-                if last_user_msg:
-                    print(f"DEBUG: Contextual search fallback (Follow-up={is_follow_up}): '{last_user_msg[:50]}...'")
-                    # Search using the previous message
-                    prev_query = last_user_msg
-                    for pattern in question_patterns:
-                        prev_query = re.sub(pattern, '', prev_query, flags=re.IGNORECASE)
-                    prev_query = ' '.join(prev_query.split()).strip()
-                    if len(prev_query) < 2: prev_query = last_user_msg
+            # Fallback: If specific file search failed, try without file filter (maybe user got name wrong)
+            if not search_results and file_filter:
+                print("DEBUG: Specific file search failed, retrying globally...")
+                search_results = self.search_manager.search(
+                    search_query, 
+                    filter_expr=filter_expr, # Use original filter
+                    use_semantic_ranker=use_semantic_ranker,
+                    search_mode=search_mode
+                )
 
-                    # If it's a follow-up, we prioritize the previous query's results
-                    # because "Make it a table" has no content keywords
-                    search_results = self.search_manager.search(
-                        prev_query, 
-                        filter_expr=filter_expr,
-                        use_semantic_ranker=use_semantic_ranker,
-                        search_mode="any"
-                    )
+            # 4. Page-Aware Context Grouping
+            # Group chunks by (Filename, Page)
+            grouped_context = {} # Key: (filename, page), Value: list of chunks
+            citations_map = {} # Key: (filename, page), Value: citation info
             
-            # 2. Construct context from search results
+            for result in search_results:
+                filename = result.get('metadata_storage_name', 'Unknown')
+                path = result.get('metadata_storage_path', '')
+                content = result.get('content', '')
+                
+                # Extract page number
+                page = 1
+                import re
+                from urllib.parse import unquote
+                
+                filename = unquote(filename)
+                
+                # Try to get page from path
+                if path:
+                    page_match = re.search(r'#page=(\d+)', path)
+                    if page_match:
+                        page = int(page_match.group(1))
+                
+                key = (filename, page)
+                
+                if key not in grouped_context:
+                    grouped_context[key] = []
+                    
+                    # Clean up path for citation
+                    blob_path = filename
+                    if path and self.container_name in path:
+                        try:
+                            parts = path.split(f"/{self.container_name}/")
+                            if len(parts) > 1:
+                                blob_path = parts[1].split('#')[0]
+                                blob_path = unquote(blob_path)
+                        except: pass
+                        
+                    citations_map[key] = {
+                        'filepath': blob_path,
+                        'url': '',
+                        'path': path,
+                        'title': filename,
+                        'page': page
+                    }
+                
+                grouped_context[key].append(content)
+
+            # 5. Construct Context String
             context_parts = []
             citations = []
             
-            # Detect if this is a comparison/analysis question
-            comparison_keywords = ['비교', '검토', '차이', '다른', '변경', 'compare', 'review', 'difference', 'change', 'vs', 'versus']
-            is_comparison = any(keyword in user_message.lower() for keyword in comparison_keywords)
+            # Sort by filename and page
+            sorted_keys = sorted(grouped_context.keys())
             
-            # For comparison questions, if no good search results, try broader search
-            if is_comparison and (not search_results or len(search_results) < 2):
-                search_results = self.search_manager.search(
-                    "*", 
-                    filter_expr=filter_expr,
-                    use_semantic_ranker=False,
-                    search_mode="any"
-                )
+            # Limit total pages to avoid token limit (e.g., top 5 pages)
+            # But since we already limited search results, we just take what we have
+            # Maybe limit to top 10 pages if search returned many small chunks
             
-            # Increase context limit for comparison questions
-            context_limit = 20 if is_comparison else 10
+            for key in sorted_keys[:10]:
+                filename, page = key
+                chunks = grouped_context[key]
+                # Join chunks for the same page
+                page_content = "\n...\n".join(chunks)
+                
+                # Clean content
+                page_content = page_content.replace("AutoCAD SHX Text", "").replace("%%C", "Ø")
+                if len(page_content) > 4000: page_content = page_content[:4000] + "..."
+                
+                context_parts.append(f"[Document: {filename}, Page: {page}]\n{page_content}\n")
+                citations.append(citations_map[key])
             
-            for i, result in enumerate(search_results, 1):
-                if i > context_limit: break
-                
-                filename = result.get('metadata_storage_name', 'Unknown')
-                content = result.get('content', '')
-                path = result.get('metadata_storage_path', '') 
-                
-                from urllib.parse import unquote
-                filename = unquote(filename)
-                
-                blob_path = filename
-                if path and self.container_name in path:
-                    try:
-                        parts = path.split(f"/{self.container_name}/")
-                        if len(parts) > 1:
-                            blob_path = parts[1]
-                            if '#page=' in blob_path:
-                                blob_path = blob_path.split('#page=')[0]
-                            blob_path = unquote(blob_path)
-                    except:
-                        pass
-
-                content = content.replace("AutoCAD SHX Text", "")
-                content = content.replace("%%C", "Ø")
-                
-                if not content or len(content.strip()) == 0:
-                    continue
-                
-                if len(content) > 3000:
-                    content = content[:3000] + "..."
-                
-                context_parts.append(f"[Document {i}: {filename}]\n{content}\n")
-                
-                citations.append({
-                    'filepath': blob_path,
-                    'url': '',
-                    'path': path,
-                    'title': filename
-                })
-            
-            # Allow empty context if we have conversation history
             if not context_parts and not conversation_history:
                 return "검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.", []
-            
+
             context = "\n" + "="*50 + "\n".join(context_parts) if context_parts else "(No new documents found. Use conversation history.)"
             
-            # 3. Build messages
+            # 6. Build Prompt
             full_prompt = f"""{self.system_prompt}
 
 CONTEXT:
@@ -252,56 +272,33 @@ USER QUESTION:
 {user_message}"""
             
             messages = []
-            
             if conversation_history:
                 history = [msg for msg in conversation_history if msg['role'] != 'system']
                 messages.extend(history)
             messages.append({"role": "user", "content": full_prompt})
             
-            # 4. Call Azure OpenAI
-            # Use standard parameters first (more reliable for most models)
+            # 7. Call LLM
             try:
-                print("DEBUG: Calling Azure OpenAI with standard params...")
+                print("DEBUG: Calling Azure OpenAI...")
                 response = self.client.chat.completions.create(
                     model=self.deployment_name,
                     messages=messages,
-                    max_tokens=2000,
+                    max_tokens=2500,
                     temperature=0.3
                 )
                 response_text = response.choices[0].message.content
-                
             except Exception as e:
-                print(f"DEBUG: Standard params failed, retrying with o1 params. Error: {e}")
-                # Fallback to o1 parameters (max_completion_tokens)
-                try:
-                    response = self.client.chat.completions.create(
-                        model=self.deployment_name,
-                        messages=messages,
-                        max_completion_tokens=5000,
-                        timeout=300
-                    )
-                    response_text = response.choices[0].message.content
-                except Exception as e2:
-                    print(f"DEBUG: o1 params also failed. Error: {e2}")
-                    response_text = ""
-            
-            # Check for empty response
+                print(f"DEBUG: LLM call failed: {e}")
+                # Fallback to o1 or retry logic could go here
+                response_text = ""
+
             if not response_text or not response_text.strip():
-                print("Warning: LLM returned empty response")
                 response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. (응답 없음)\n\n질문을 조금 더 구체적으로 해주시거나, 다른 검색어를 시도해 주세요."
-            
-            import re
-            for citation in citations:
-                path = citation.get('path', '')
-                page_match = re.search(r'#page=(\d+)', path)
-                if page_match:
-                    citation['page'] = int(page_match.group(1))
-                else:
-                    citation['page'] = None
-            
+
             return response_text, citations
-            
+
         except Exception as e:
+            print(f"Error in get_chat_response: {e}")
             return f"오류가 발생했습니다: {str(e)}", []
     
     def generate_sas_url(self, blob_name):

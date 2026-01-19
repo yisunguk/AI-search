@@ -1006,13 +1006,16 @@ elif menu == "도면/스펙 분석":
             # List files in drawings folder
             blobs = container_client.list_blobs(name_starts_with="drawings/")
             blob_list = []
+            available_filenames = []
             for blob in blobs:
                 if not blob.name.endswith('/'):  # Skip folder markers
+                    filename = blob.name.replace('drawings/', '')
                     blob_list.append({
-                        'name': blob.name.replace('drawings/', ''),
+                        'name': filename,
                         'size': blob.size,
                         'modified': blob.last_modified
                     })
+                    available_filenames.append(filename)
             
             # Sort by modified date (most recent first)
             blob_list.sort(key=lambda x: x['modified'], reverse=True)
@@ -1144,12 +1147,17 @@ elif menu == "도면/스펙 분석":
                         # Use 'any' search mode for better recall (find documents even with partial keyword match)
                         # This is important because technical drawings may have specific terms
                         # Filter to only search documents from the drawings folder
+                        # Pass available_filenames for specific file filtering
+                        # If available_filenames is not defined (e.g. error above), use empty list
+                        current_files = locals().get('available_filenames', [])
+                        
                         response_text, citations = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history,
                             search_mode="any",  # Changed from 'all' to 'any' for better recall
                             use_semantic_ranker=False,  # Disable semantic ranker if using Basic tier
-                            filter_expr="project eq 'drawings_analysis'"  # Only search drawings documents
+                            filter_expr="project eq 'drawings_analysis'",  # Only search drawings documents
+                            available_files=current_files
                         )
                         
                         st.markdown(response_text)
