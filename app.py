@@ -1018,6 +1018,11 @@ elif menu == "도면/스펙 분석":
                                     content_type="application/pdf"
                                 )
                                 display_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(filepath)}?{sas_token}"
+                                
+                                # Add page number if available
+                                page_num = citation.get('page')
+                                if page_num:
+                                    display_url += f"#page={page_num}"
                             except:
                                 display_url = "#"
                         
@@ -1076,6 +1081,11 @@ elif menu == "도면/스펙 분석":
                                             content_type="application/pdf"
                                         )
                                         display_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(filepath)}?{sas_token}"
+                                        
+                                        # Add page number if available
+                                        page_num = citation.get('page')
+                                        if page_num:
+                                            display_url += f"#page={page_num}"
                                     except:
                                         display_url = "#"
                                 
