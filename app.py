@@ -296,8 +296,8 @@ if menu == "홈":
         background-color: #1e293b;
         border-radius: 10px;
         border: 1px solid #334155;
-        padding: 1.5rem;
-        height: 220px; /* Fixed height for consistency */
+        padding: 1.2rem; /* Reduced padding */
+        height: 200px; /* Reduced height */
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -308,19 +308,19 @@ if menu == "홈":
         border-color: #3b82f6;
     }
     .card-icon {
-        font-size: 2.5rem;
-        margin-bottom: 1rem;
+        font-size: 2rem; /* Reduced icon size */
+        margin-bottom: 0.5rem;
     }
     .card-title {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         font-weight: 700;
         color: #f8fafc;
         margin-bottom: 0.5rem;
     }
     .card-desc {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: #94a3b8;
-        line-height: 1.4;
+        line-height: 1.3;
         flex-grow: 1;
     }
     /* Streamlit Button Styling Override */
@@ -328,7 +328,8 @@ if menu == "홈":
         width: 100%;
         border-radius: 8px;
         font-weight: 600;
-        margin-top: 10px;
+        margin-top: 5px;
+        padding: 0.25rem 0.5rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -336,16 +337,16 @@ if menu == "홈":
     # Grid Layout for 4 Cards
     col1, col2 = st.columns(2)
     
-    # Card 1: 정밀 검색 -> 검색 & AI 채팅
+    # Card 1: 검색 & AI 채팅
     with col1:
         with st.container():
             st.markdown("""
             <div class="card-container">
                 <div>
                     <div class="card-icon">🔍</div>
-                    <div class="card-title">정밀 검색</div>
+                    <div class="card-title">검색 & AI 채팅</div>
                     <div class="card-desc">
-                        애저 AI 서치 기반의 RAG 기술로 기계 번호, 설계 스펙을 오차 없이 찾아냅니다.
+                        방대한 기술 문서에서 필요한 정보를 즉시 찾아내고, AI와 대화하며 심층적인 분석 결과를 얻으세요.
                     </div>
                 </div>
             </div>
@@ -353,16 +354,16 @@ if menu == "홈":
             if st.button("바로가기", key="btn_search", use_container_width=True, on_click=change_page, args=("검색 & AI 채팅",)):
                 pass
 
-    # Card 2: 글로벌 협업 -> 도면/스펙 분석
+    # Card 2: 도면/스펙 분석
     with col2:
         with st.container():
             st.markdown("""
             <div class="card-container">
                 <div>
-                    <div class="card-icon">🌏</div>
-                    <div class="card-title">글로벌 협업</div>
+                    <div class="card-icon">📐</div>
+                    <div class="card-title">도면/스펙 분석</div>
                     <div class="card-desc">
-                        해외 벤더의 기술 문서를 즉시 분석하여 현장 소통의 장벽을 허뭅니다.
+                        복잡한 도면과 스펙 문서를 AI가 정밀하게 분석하여 설계 데이터와 요구사항을 자동으로 추출합니다.
                     </div>
                 </div>
             </div>
@@ -374,16 +375,16 @@ if menu == "홈":
 
     col3, col4 = st.columns(2)
 
-    # Card 3: 업무 자동화 -> 번역하기
+    # Card 3: 문서 번역 (번역하기)
     with col3:
         with st.container():
             st.markdown("""
             <div class="card-container">
                 <div>
-                    <div class="card-icon">🤖</div>
-                    <div class="card-title">업무 자동화</div>
+                    <div class="card-icon">🌏</div>
+                    <div class="card-title">문서 번역</div>
                     <div class="card-desc">
-                        다국어 문서를 신속하게 번역하여 반복적인 업무 시간을 획기적으로 단축합니다.
+                        해외 기술 문서를 레이아웃 파괴 없이 다국어로 즉시 번역하여 글로벌 협업 속도를 높입니다.
                     </div>
                 </div>
             </div>
@@ -391,16 +392,16 @@ if menu == "홈":
             if st.button("바로가기", key="btn_translate", use_container_width=True, on_click=change_page, args=("번역하기",)):
                 pass
 
-    # Card 4: 철저한 보안 -> 파일 보관함
+    # Card 4: 파일 보관함
     with col4:
         with st.container():
             st.markdown("""
             <div class="card-container">
                 <div>
-                    <div class="card-icon">🔒</div>
-                    <div class="card-title">철저한 보안</div>
+                    <div class="card-icon">📂</div>
+                    <div class="card-title">파일 보관함</div>
                     <div class="card-desc">
-                        업로드된 회사의 소중한 기술 자산은 외부 학습에 이용되지 않아 안전합니다.
+                        프로젝트의 중요 자산을 안전하게 클라우드에 보관하고, 언제 어디서나 팀원들과 공유하세요.
                     </div>
                 </div>
             </div>
