@@ -238,12 +238,38 @@ Convert the user's natural language question into a keyword-based search query.
             context_parts = []
             citations = []
             
-            # Sort by filename and page
-            sorted_keys = sorted(grouped_context.keys())
+            # Strategy: Round Robin selection by Document to ensure diversity
+            # We want to avoid filling the context with just one document if multiple are relevant
             
-            # Limit total pages to avoid token limit
-            # Reduced to 3 to prevent LLM errors (especially for dense drawings)
-            for key in sorted_keys[:3]:
+            # Group keys by filename
+            docs_map = {}
+            for key in grouped_context:
+                fname = key[0]
+                if fname not in docs_map:
+                    docs_map[fname] = []
+                docs_map[fname].append(key)
+            
+            # Sort pages within each doc
+            for fname in docs_map:
+                docs_map[fname].sort(key=lambda x: x[1]) # Sort by page number
+            
+            # Interleave keys: Doc1_P1, Doc2_P1, Doc3_P1, Doc1_P2, ...
+            sorted_keys = []
+            max_pages_per_doc = max(len(p) for p in docs_map.values()) if docs_map else 0
+            
+            sorted_filenames = sorted(docs_map.keys())
+            
+            for i in range(max_pages_per_doc):
+                for fname in sorted_filenames:
+                    if i < len(docs_map[fname]):
+                        sorted_keys.append(docs_map[fname][i])
+            
+            # Limit total pages
+            # Increased back to 10 since we fixed the API parameter issue
+            # This allows for comparing multiple documents
+            context_limit = 10
+            
+            for key in sorted_keys[:context_limit]:
                 filename, page = key
                 chunks = grouped_context[key]
                 # Join chunks for the same page
