@@ -1581,8 +1581,13 @@ with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=F
     if st.button("🔍 인덱스된 파일명 확인"):
         try:
             search_manager = get_search_manager()
-            # Query all docs, select only name
-            results = search_manager.search_client.search(search_text="*", select=["metadata_storage_name"], top=50)
+            # Query all docs, select only name, filtered by project
+            results = search_manager.search_client.search(
+                search_text="*", 
+                filter="project eq 'drawings_analysis'",
+                select=["metadata_storage_name"], 
+                top=50
+            )
             
             st.write("### Index Contents (Top 50)")
             for res in results:
