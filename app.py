@@ -1319,10 +1319,7 @@ if menu == "엑셀데이터 자동추출":
     
     external_url = "https://cjwzc6h3rtmsadhrwrhaz4.streamlit.app/"
     
-    st.info(f"아래 창에서 바로 작업을 수행하거나, [새 탭에서 열기]({external_url})를 클릭하세요.")
-    
-    # Embed the external app using iframe
-    st.components.v1.iframe(external_url, height=800, scrolling=True)
+    st.info(f"보안상의 이유로 외부 앱은 별도 창에서 실행됩니다.\n\n👉 [**엑셀 데이터 자동 추출 도구 열기**]({external_url})")
 
 if menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
