@@ -230,23 +230,38 @@ USER QUESTION:
                 history = [msg for msg in conversation_history if msg['role'] != 'system']
             messages.append({"role": "user", "content": full_prompt})
             
-            # 4. Call Azure OpenAI with standard API
-            # Now we can use max_completion_tokens for GPT-5
-            # Note: o1 models do not support temperature (must be 1)
-            response = self.client.chat.completions.create(
-                model=self.deployment_name,
-                messages=messages,
-                max_completion_tokens=2000,
-                timeout=300  # Increase timeout for o1 models (5 minutes)
-            )
-            
-            # Extract response
-            response_text = response.choices[0].message.content
+            # 4. Call Azure OpenAI
+            # Try with o1-compatible parameters first (max_completion_tokens, no temperature)
+            try:
+                print("DEBUG: Calling Azure OpenAI with o1 params...")
+                response = self.client.chat.completions.create(
+                    model=self.deployment_name,
+                    messages=messages,
+                    max_completion_tokens=5000, # Increased from 2000
+                    timeout=300
+                )
+                
+                response_text = response.choices[0].message.content
+                finish_reason = response.choices[0].finish_reason
+                print(f"DEBUG: API Response - Finish Reason: {finish_reason}, Content Length: {len(response_text) if response_text else 0}")
+                
+            except Exception as e:
+                print(f"DEBUG: o1 params failed, retrying with standard params. Error: {e}")
+                # Fallback to standard GPT-4/3.5 parameters
+                response = self.client.chat.completions.create(
+                    model=self.deployment_name,
+                    messages=messages,
+                    max_tokens=2000,
+                    temperature=0.3
+                )
+                response_text = response.choices[0].message.content
             
             # Check for empty response
             if not response_text or not response_text.strip():
                 print("Warning: LLM returned empty response")
-                response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. 질문을 조금 더 구체적으로 해주시면 다시 시도해보겠습니다."
+                # One last try with a simplified prompt if context was too heavy?
+                # But for now, just return the fallback message
+                response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. (응답 없음)\n\n질문을 조금 더 구체적으로 해주시거나, 다른 검색어를 시도해 주세요."
             
             # Extract page numbers from metadata_storage_path (which contains #page=N)
             import re
