@@ -1175,7 +1175,7 @@ elif menu == "도면/스펙 분석":
                         # Note: selected_filenames comes from the UI loop above
                         current_files = locals().get('selected_filenames', [])
                         
-                        response_text, citations = chat_manager.get_chat_response(
+                        response_text, citations, context = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history,
                             search_mode="any",  # Changed from 'all' to 'any' for better recall
@@ -1221,10 +1221,15 @@ elif menu == "도면/스펙 분석":
                                 
                                 st.markdown(f"{i}. [{filepath}]({display_url})")
                         
+                        # Debug: Show Context
+                        with st.expander("🔍 검색된 컨텍스트 확인 (Debug Context)", expanded=False):
+                            st.text_area("LLM에게 전달된 원문 데이터", value=context, height=300)
+
                         st.session_state.rag_chat_messages.append({
                             "role": "assistant",
                             "content": response_text,
-                            "citations": citations
+                            "citations": citations,
+                            "context": context
                         })
                         st.rerun()
 

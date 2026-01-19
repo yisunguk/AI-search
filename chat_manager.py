@@ -342,7 +342,7 @@ Convert the user's natural language question into a keyword-based search query.
                 debug_msg = ""
                 if scope_filter:
                     debug_msg = f"\n\n(Debug: Filter applied: {scope_filter})"
-                return f"검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.{debug_msg}", []
+                return f"검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.{debug_msg}", [], ""
 
             context = "\n" + "="*50 + "\n".join(context_parts) if context_parts else "(No new documents found. Use conversation history.)"
             
@@ -389,11 +389,11 @@ USER QUESTION:
             if not response_text or not response_text.strip():
                 response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. (응답 없음)"
 
-            return response_text, citations
+            return response_text, citations, context
 
         except Exception as e:
             print(f"Error in get_chat_response: {e}")
-            return f"오류가 발생했습니다: {str(e)}", []
+            return f"오류가 발생했습니다: {str(e)}", [], ""
     
     def generate_sas_url(self, blob_name):
         """
