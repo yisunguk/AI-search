@@ -131,6 +131,35 @@ CRITICAL RULES:
                         search_mode="any" # Force 'any' for fallback to increase recall
                     )
             
+            # Fallback 2: If still no results, check conversation history for context
+            # This handles follow-up questions like "Make it a table" where the context is in the previous turn
+            if not search_results and conversation_history:
+                # Find the last user message from history
+                last_user_msg = None
+                for msg in reversed(conversation_history):
+                    if msg['role'] == 'user':
+                        last_user_msg = msg['content']
+                        break
+                
+                if last_user_msg:
+                    print(f"DEBUG: Contextual search fallback using previous message: '{last_user_msg[:50]}...'")
+                    # Search using the previous message
+                    # We use the same cleaning logic (simplified here)
+                    prev_query = last_user_msg
+                    
+                    # Clean previous query similarly
+                    for pattern in question_patterns:
+                        prev_query = re.sub(pattern, '', prev_query, flags=re.IGNORECASE)
+                    prev_query = ' '.join(prev_query.split()).strip()
+                    if len(prev_query) < 2: prev_query = last_user_msg
+
+                    search_results = self.search_manager.search(
+                        prev_query, 
+                        filter_expr=filter_expr,
+                        use_semantic_ranker=use_semantic_ranker,
+                        search_mode="any"
+                    )
+            
             # 2. Construct context from search results
             context_parts = []
             citations = []
@@ -205,10 +234,11 @@ CRITICAL RULES:
                     'title': filename
                 })
             
-            if not context_parts:
+            # Allow empty context if we have conversation history (LLM can answer from history)
+            if not context_parts and not conversation_history:
                 return "검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.", []
             
-            context = "\n" + "="*50 + "\n".join(context_parts)
+            context = "\n" + "="*50 + "\n".join(context_parts) if context_parts else "(No new documents found. Use conversation history.)"
             
             # 3. Build messages with context
             # For o1 models, it's safer to include context in the user message
