@@ -1533,6 +1533,16 @@ if menu == "관리자 설정":
         else:
             st.error(msg)
             
+    # Add Delete Indexer Button
+    if st.button("🛑 인덱서 삭제 (자동 인덱싱 중지)", help="자동으로 실행되는 인덱서를 삭제하여 중복 인덱싱을 방지합니다."):
+        manager = get_search_manager()
+        indexer_name = f"indexer-{target_folder}" if target_folder else "indexer-all"
+        try:
+            manager.indexer_client.delete_indexer(indexer_name)
+            st.success(f"인덱서 '{indexer_name}'가 삭제되었습니다. 이제 자동 인덱싱이 중지됩니다.")
+        except Exception as e:
+            st.error(f"인덱서 삭제 실패: {e}")
+            
     st.divider()
     
     col_status, col_refresh = st.columns([3, 1])
