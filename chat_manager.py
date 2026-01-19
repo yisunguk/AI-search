@@ -88,7 +88,10 @@ CRITICAL RULES:
                 r'이?\s*무엇인가요?\?*',
                 r'에\s*대해\s*질문하세요\.?',
                 r'에\s*대해\s*알려주세요\.?',
-                r'차이점?을?\s*알려주세요\.?'
+                r'차이점?을?\s*알려주세요\.?',
+                r'를?\s*찾아서?\s*알려주세[요여]\.?',
+                r'를?\s*알려주세[요여]\.?',
+                r'에\s*대해\s*설명해?\s*주세[요여]\.?'
             ]
             
             for pattern in question_patterns:
@@ -98,7 +101,7 @@ CRITICAL RULES:
             search_query = ' '.join(search_query.split()).strip()
             
             # If the query is too short after cleaning, use original
-            if len(search_query) < 3:
+            if len(search_query) < 2:
                 search_query = user_message
             
             # 2. Search for relevant documents using Azure AI Search
@@ -112,6 +115,21 @@ CRITICAL RULES:
             
             # Debug: Check search results
             print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
+            
+            # Fallback: If no results, try extracting only English/Number words (Technical terms)
+            # This helps when Korean particles/verbs mess up the search
+            if not search_results:
+                # Extract words with at least 2 alphanumeric characters
+                eng_terms = re.findall(r'[a-zA-Z0-9]{2,}', user_message)
+                if eng_terms:
+                    fallback_query = ' '.join(eng_terms)
+                    print(f"DEBUG: Fallback search with technical terms: '{fallback_query}'")
+                    search_results = self.search_manager.search(
+                        fallback_query, 
+                        filter_expr=filter_expr,
+                        use_semantic_ranker=use_semantic_ranker,
+                        search_mode="any" # Force 'any' for fallback to increase recall
+                    )
             
             # 2. Construct context from search results
             context_parts = []
