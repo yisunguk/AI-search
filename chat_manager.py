@@ -239,8 +239,9 @@ Convert the user's natural language question into a keyword-based search query.
             # Group chunks by (Filename, Page)
             grouped_context = {} # Key: (filename, page), Value: list of chunks
             citations_map = {} # Key: (filename, page), Value: citation info
+            page_ranks = {} # Key: (filename, page), Value: min_rank (lower is better)
             
-            for result in search_results:
+            for rank, result in enumerate(search_results):
                 filename = result.get('metadata_storage_name', 'Unknown')
                 path = result.get('metadata_storage_path', '')
                 content = result.get('content', '')
@@ -259,6 +260,12 @@ Convert the user's natural language question into a keyword-based search query.
                         page = int(page_match.group(1))
                 
                 key = (filename, page)
+                
+                # Track the best rank for this page
+                if key not in page_ranks:
+                    page_ranks[key] = rank
+                else:
+                    page_ranks[key] = min(page_ranks[key], rank)
                 
                 if key not in grouped_context:
                     grouped_context[key] = []
@@ -298,11 +305,12 @@ Convert the user's natural language question into a keyword-based search query.
                     docs_map[fname] = []
                 docs_map[fname].append(key)
             
-            # Sort pages within each doc
+            # Sort pages within each doc by RELEVANCE (min_rank) instead of page number
+            # This ensures we pick the most relevant pages first
             for fname in docs_map:
-                docs_map[fname].sort(key=lambda x: x[1]) # Sort by page number
+                docs_map[fname].sort(key=lambda x: page_ranks[x])
             
-            # Interleave keys: Doc1_P1, Doc2_P1, Doc3_P1, Doc1_P2, ...
+            # Interleave keys: Doc1_BestPage, Doc2_BestPage, Doc3_BestPage, Doc1_2ndBest, ...
             sorted_keys = []
             max_pages_per_doc = max(len(p) for p in docs_map.values()) if docs_map else 0
             
@@ -314,9 +322,8 @@ Convert the user's natural language question into a keyword-based search query.
                         sorted_keys.append(docs_map[fname][i])
             
             # Limit total pages
-            # Increased back to 10 since we fixed the API parameter issue
-            # This allows for comparing multiple documents
-            context_limit = 10
+            # Increased to 20 to allow for more context when comparing multiple documents
+            context_limit = 20
             
             for key in sorted_keys[:context_limit]:
                 filename, page = key
