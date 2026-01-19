@@ -190,6 +190,9 @@ LANG_SUFFIX_OVERRIDE = {
 if "page" not in st.session_state:
     st.session_state.page = "홈"
 
+def change_page(page_name):
+    st.session_state.page = page_name
+
 with st.sidebar:
     st.header("메뉴")
     # key="page" binds the radio selection to st.session_state.page
@@ -347,9 +350,8 @@ if menu == "홈":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_search", use_container_width=True):
-                st.session_state.page = "검색 & AI 채팅"
-                st.rerun()
+            if st.button("바로가기", key="btn_search", use_container_width=True, on_click=change_page, args=("검색 & AI 채팅",)):
+                pass
 
     # Card 2: 글로벌 협업 -> 도면/스펙 분석
     with col2:
@@ -365,9 +367,8 @@ if menu == "홈":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_analysis", use_container_width=True):
-                st.session_state.page = "도면/스펙 분석"
-                st.rerun()
+            if st.button("바로가기", key="btn_analysis", use_container_width=True, on_click=change_page, args=("도면/스펙 분석",)):
+                pass
 
     st.write("") # Spacer Row
 
@@ -387,9 +388,8 @@ if menu == "홈":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_translate", use_container_width=True):
-                st.session_state.page = "번역하기"
-                st.rerun()
+            if st.button("바로가기", key="btn_translate", use_container_width=True, on_click=change_page, args=("번역하기",)):
+                pass
 
     # Card 4: 철저한 보안 -> 파일 보관함
     with col4:
@@ -405,9 +405,8 @@ if menu == "홈":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_archive", use_container_width=True):
-                st.session_state.page = "파일 보관함"
-                st.rerun()
+            if st.button("바로가기", key="btn_archive", use_container_width=True, on_click=change_page, args=("파일 보관함",)):
+                pass
     
     st.markdown("---")
 
