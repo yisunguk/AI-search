@@ -196,7 +196,7 @@ def change_page(page_name):
 with st.sidebar:
     st.header("메뉴")
     # key="page" binds the radio selection to st.session_state.page
-    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "관리자 설정"], key="page")
+    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정"], key="page")
     
     st.divider()
     
@@ -1320,6 +1320,22 @@ if menu == "엑셀데이터 자동추출":
     external_url = "https://cjwzc6h3rtmsadhrwrhaz4.streamlit.app/"
     
     st.info(f"보안상의 이유로 외부 앱은 별도 창에서 실행됩니다.\n\n👉 [**엑셀 데이터 자동 추출 도구 열기**]({external_url})")
+
+if menu == "사진대지 자동작성":
+    st.title("사진대지 자동작성")
+    st.caption("현장 사진을 업로드하여 사진대지를 자동으로 생성합니다.")
+    
+    photo_log_url = "https://photo-log-a0215.web.app/"
+    
+    st.info(f"보안상의 이유로 외부 앱은 별도 창에서 실행됩니다.\n\n👉 [**사진대지 자동작성 도구 열기**]({photo_log_url})")
+
+if menu == "작업계획 및 투입비 자동작성":
+    st.title("작업계획 및 투입비 자동작성")
+    st.caption("작업 계획을 수립하고 투입비를 자동으로 산출합니다.")
+    
+    schedule_url = "https://workschedule-7b1cf.web.app/"
+    
+    st.info(f"보안상의 이유로 외부 앱은 별도 창에서 실행됩니다.\n\n👉 [**작업계획 및 투입비 자동작성 도구 열기**]({schedule_url})")
 
 if menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
