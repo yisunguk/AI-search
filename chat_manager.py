@@ -36,7 +36,11 @@ CRITICAL RULES:
 
 4. **Numeric Values**: Quote exact numbers with units.
 
-5. **Citations**: Always cite the document name when providing specific facts.
+5. **Citations with Page Numbers**: 
+   - ALWAYS cite the source document name AND page number when providing specific facts.
+   - Use the format: (문서명: p.페이지번호)
+   - Example: "FILTER ELEMENT는 POLYESTER입니다. (Fuel Gas Coalescing Filter for Gas Turbine(filter).pdf: p.3)"
+   - Each document in the context includes its page number - use it in your citation.
 
 6. **Language**: Respond in Korean unless asked otherwise.
 """
@@ -151,27 +155,16 @@ USER QUESTION:
             # Extract response
             response_text = response.choices[0].message.content
             
-            # Extract page numbers from response text and match to citations
-            # Look for patterns like "문서명: 페이지" or "p.3", "3페이지", etc.
+            # Extract page numbers from metadata_storage_path (which contains #page=N)
             import re
             
             for citation in citations:
-                filename = citation['title']
-                # Search for page references near this filename in the response
-                # Patterns: "3페이지", "p.3", "page 3", "페이지 3"
-                
-                # Create a regex pattern to find page numbers mentioned after the filename
-                # Look within 100 characters after the filename mention
-                filename_escaped = re.escape(filename)
-                pattern = rf'{filename_escaped}.{{0,100}}?(?:페이지\s*|p\.\s*|page\s+)(\d+)'
-                
-                match = re.search(pattern, response_text, re.IGNORECASE)
-                if match:
-                    page_num = int(match.group(1))
-                    citation['page'] = page_num
+                # Check if the path contains #page=N
+                path = citation.get('path', '')
+                page_match = re.search(r'#page=(\d+)', path)
+                if page_match:
+                    citation['page'] = int(page_match.group(1))
                 else:
-                    # Try simpler pattern: just look for "N페이지" or "p.N" in the response
-                    # and associate with the first citation (common case)
                     citation['page'] = None
             
             return response_text, citations

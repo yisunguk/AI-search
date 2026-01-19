@@ -913,31 +913,37 @@ elif menu == "도면/스펙 분석":
                         
                         # 3. Analyze with Document Intelligence
                         status_text.text(f"분석 중 ({idx+1}/{total_files}): {file.name} - Document Intelligence Layout 모델 실행...")
-                        analyzed_content = doc_intel_manager.analyze_document(blob_url)
+                        page_chunks = doc_intel_manager.analyze_document(blob_url)
                         
-                        # 4. Indexing (Push to Search)
-                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {file.name}")
+                        # 4. Indexing (Push to Search) - One document per page
+                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {file.name} - {len(page_chunks)} 페이지")
                         
-                        # Create document object
-                        # ID must be unique and URL safe. Base64 encode the path.
-                        import base64
-                        doc_id = base64.urlsafe_b64encode(blob_path.encode('utf-8')).decode('utf-8')
+                        documents_to_index = []
+                        for page_chunk in page_chunks:
+                            # Create document object for each page
+                            # ID must be unique and URL safe. Include page number in ID.
+                            import base64
+                            page_id_str = f"{blob_path}_page_{page_chunk['page_number']}"
+                            doc_id = base64.urlsafe_b64encode(page_id_str.encode('utf-8')).decode('utf-8')
+                            
+                            document = {
+                                "id": doc_id,
+                                "content": page_chunk['content'],
+                                "content_exact": page_chunk['content'],
+                                "metadata_storage_name": f"{file.name} (p.{page_chunk['page_number']})",
+                                "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_path}#page={page_chunk['page_number']}",
+                                "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                                "metadata_storage_size": file.size,
+                                "metadata_storage_content_type": file.type,
+                                "project": "drawings_analysis"  # Tag for filtering
+                            }
+                            documents_to_index.append(document)
                         
-                        document = {
-                            "id": doc_id,
-                            "content": analyzed_content,
-                            "content_exact": analyzed_content, # Use same content for exact match for now
-                            "metadata_storage_name": file.name,
-                            "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_path}",
-                            "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
-                            "metadata_storage_size": file.size,
-                            "metadata_storage_content_type": file.type,
-                            "project": "drawings_analysis" # Tag for filtering
-                        }
-                        
-                        success, msg = search_manager.upload_documents([document])
-                        if not success:
-                            st.error(f"인덱싱 실패 ({file.name}): {msg}")
+                        # Batch upload all pages
+                        if documents_to_index:
+                            success, msg = search_manager.upload_documents(documents_to_index)
+                            if not success:
+                                st.error(f"인덱싱 실패 ({file.name}): {msg}")
                         
                         progress_bar.progress((idx + 1) / total_files)
                         
