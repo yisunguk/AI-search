@@ -59,7 +59,15 @@ CRITICAL RULES:
    - You can provide engineering insights or interpretations using general knowledge, but label them clearly.
    - Example: "REV.A에서는 X였으나 REV.B에서는 Y로 변경되었습니다 (문서 기반). 이는 일반적으로 Z를 개선하기 위한 것입니다 (일반 지식)."
 
-8. **Language**: Respond in Korean unless asked otherwise.
+8. **Formatting**:
+   - **Tables**: When the user asks for a table, summary, or comparison, YOU MUST USE MARKDOWN TABLE SYNTAX.
+   - Do not use bullet points for structured data if a table is requested.
+   - Example:
+     | Item | Value | Source |
+     |------|-------|--------|
+     | Data | 123   | (Doc: p.1) |
+
+9. **Language**: Respond in Korean unless asked otherwise.
 """
 
     def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None):
