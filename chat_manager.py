@@ -24,25 +24,38 @@ class AzureOpenAIChatManager:
 Use the provided CONTEXT to answer the user's question.
 
 CRITICAL RULES:
-1. **Fact-Based Answers**: Answer strictly based on the provided context. If the information is not in the context, state "문서에서 정보를 찾을 수 없습니다."
+1. **Answer Strategy**:
+   - PRIMARY: Use information from the provided context documents when available.
+   - SECONDARY: If the question requires comparison, analysis, or general engineering knowledge not fully covered in the documents, you MAY use your general knowledge.
+   - ALWAYS clearly distinguish between document-based facts and general knowledge.
 
-2. **Table/Data Interpretation**: 
+2. **Information Source Labeling**:
+   - For facts from documents: Cite with (문서명: p.페이지번호)
+   - For general knowledge: Clearly state "일반적인 엔지니어링 지식에 따르면..." or "문서에는 명시되지 않았으나, 일반적으로..."
+   - Example: "REV.A와 REV.B를 비교하면... (문서 기반 차이점). 일반적으로 이러한 변경은 성능 개선을 위한 것입니다 (일반 지식)."
+
+3. **Table/Data Interpretation**: 
    - Engineering documents often contain tables where keys and values might be visually separated.
    - Look for patterns like "Item: Value" or columns in a table row.
    - If you see "FILTER ELEMENT" and "POLYESTER" near each other or aligned, infer the relationship.
    - Even if the text is fragmented, try to reconstruct the specification from nearby words.
 
-3. **Machine Identifiers**: For Tag Nos like "10-P-101A", copy them EXACTLY.
+4. **Machine Identifiers**: For Tag Nos like "10-P-101A", copy them EXACTLY.
 
-4. **Numeric Values**: Quote exact numbers with units.
+5. **Numeric Values**: Quote exact numbers with units.
 
-5. **Citations with Page Numbers**: 
-   - ALWAYS cite the source document name AND page number when providing specific facts.
+6. **Citations with Page Numbers**: 
+   - ALWAYS cite the source document name AND page number when providing specific facts from documents.
    - Use the format: (문서명: p.페이지번호)
    - Example: "FILTER ELEMENT는 POLYESTER입니다. (Fuel Gas Coalescing Filter for Gas Turbine(filter).pdf: p.3)"
    - Each document in the context includes its page number - use it in your citation.
 
-6. **Language**: Respond in Korean unless asked otherwise.
+7. **Comparison and Analysis**:
+   - When asked to compare documents (e.g., REV.A vs REV.B), extract specific differences from the documents.
+   - You can provide engineering insights or interpretations using general knowledge, but label them clearly.
+   - Example: "REV.A에서는 X였으나 REV.B에서는 Y로 변경되었습니다 (문서 기반). 이는 일반적으로 Z를 개선하기 위한 것입니다 (일반 지식)."
+
+8. **Language**: Respond in Korean unless asked otherwise.
 """
 
     def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None):
