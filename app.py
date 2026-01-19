@@ -234,102 +234,67 @@ if menu == "홈":
     st.markdown("""
     <style>
     .hero-container {
-        padding: 0 0 2rem 0;
+        padding: 0 0 1rem 0;
         text-align: center;
-        margin-bottom: 2rem;
-        margin-top: -4.5rem;
+        margin-bottom: 1rem;
+        margin-top: -8rem; /* Moved up significantly */
     }
     .hero-title {
-        font-size: 3rem;
+        font-size: 2.5rem; /* Slightly smaller */
         font-weight: 800;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
         background: -webkit-linear-gradient(45deg, #3b82f6, #8b5cf6);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
     .hero-subtitle {
-        font-size: 1.5rem;
+        font-size: 1.1rem;
         color: #6b7280;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
-    .feature-card {
-        background-color: #1e293b;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border: 1px solid #334155;
-        height: 100%;
-    }
-    .feature-icon {
-        font-size: 2rem;
-        margin-bottom: 1rem;
-    }
-    .feature-title {
-        font-weight: 700;
-        font-size: 1.2rem;
-        margin-bottom: 0.5rem;
-        color: #f8fafc;
-    }
-    .feature-desc {
-        font-size: 0.95rem;
-        color: #94a3b8;
-        line-height: 1.5;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Hero Section
-    st.markdown('<div class="hero-container">', unsafe_allow_html=True)
-    st.markdown('<h1 class="hero-title">현장똑똑 AI</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.</p>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown("### 💡 솔루션 소개")
-    st.info("현장똑똑 AI는 방대한 건설 현장의 데이터를 지능형으로 관리하는 차세대 EPC 업무 지원 솔루션입니다.")
-    
-    st.markdown("---")
-    
-    # Features Section
-    st.markdown("""
-    <style>
     /* Card Container Styling */
     .card-container {
         background-color: #1e293b;
         border-radius: 10px;
         border: 1px solid #334155;
-        padding: 1.2rem; /* Reduced padding */
-        height: 200px; /* Reduced height */
+        padding: 1rem; /* Reduced padding */
+        height: 150px; /* Reduced height by ~25-30% */
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         transition: transform 0.2s;
     }
     .card-container:hover {
-        transform: translateY(-5px);
+        transform: translateY(-3px);
         border-color: #3b82f6;
     }
     .card-icon {
-        font-size: 2rem; /* Reduced icon size */
-        margin-bottom: 0.5rem;
+        font-size: 1.5rem; /* Reduced icon size */
+        margin-bottom: 0.3rem;
     }
     .card-title {
-        font-size: 1.1rem;
+        font-size: 1rem; /* Reduced title size */
         font-weight: 700;
         color: #f8fafc;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.3rem;
     }
     .card-desc {
-        font-size: 0.85rem;
+        font-size: 0.8rem; /* Reduced desc size */
         color: #94a3b8;
-        line-height: 1.3;
+        line-height: 1.2;
         flex-grow: 1;
+        overflow: hidden;
     }
     /* Streamlit Button Styling Override */
     div.stButton > button {
         width: 100%;
-        border-radius: 8px;
+        border-radius: 6px;
         font-weight: 600;
-        margin-top: 5px;
-        padding: 0.25rem 0.5rem;
+        margin-top: 3px;
+        padding: 0.1rem 0.5rem;
+        font-size: 0.8rem;
+        min-height: 0px;
+        height: 28px;
     }
     </style>
     """, unsafe_allow_html=True)
