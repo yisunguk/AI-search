@@ -384,18 +384,28 @@ class AzureSearchManager:
         문서 검색
         """
         try:
+            # Force AND logic if search_mode is 'all'
+            # Azure AI Search 'search_mode' parameter sometimes behaves unexpectedly with certain analyzers
+            # So we manually enforce AND by prepending + to each term in Simple Query Syntax
+            if search_mode == "all" and query and not any(char in query for char in ['+', '|', '"', '*']):
+                # Split by whitespace and prepend +
+                terms = query.split()
+                if len(terms) > 1:
+                    # Only apply if multiple terms
+                    query = " ".join([f"+{term}" for term in terms])
+                    print(f"DEBUG: Transformed query for ALL mode: '{query}'")
+
             # 기본 검색 파라미터
             search_params = {
                 "search_text": query,
                 "filter": filter_expr,
                 "include_total_count": True,
                 "select": ["metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified", "metadata_storage_content_type"],
-                # 하이라이트 요청
                 "highlight_fields": "content,content_exact",
                 "highlight_pre_tag": "<mark style='background-color: #ffd700; color: black; font-weight: bold;'>",
                 "highlight_post_tag": "</mark>",
-                "top": 30,  # Increased from 10 to support comparison questions
-                "search_mode": search_mode  # 'all' (AND) or 'any' (OR)
+                "top": 30,
+                "search_mode": search_mode
             }
 
             # 시맨틱 랭커 적용
