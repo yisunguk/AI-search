@@ -982,9 +982,60 @@ elif menu == "도면/스펙 분석":
                 # Display as expandable list
                 with st.expander("📄 문서 목록 보기", expanded=True):
                     for idx, blob_info in enumerate(blob_list, 1):
-                        size_mb = blob_info['size'] / (1024 * 1024)
-                        modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
-                        st.markdown(f"{idx}. **{blob_info['name']}** ({size_mb:.2f} MB) - {modified_str}")
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            size_mb = blob_info['size'] / (1024 * 1024)
+                            modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
+                            st.markdown(f"{idx}. **{blob_info['name']}** ({size_mb:.2f} MB) - {modified_str}")
+                        with col2:
+                            if st.button("🗑️ 삭제", key=f"del_{blob_info['name']}"):
+                                try:
+                                    # 1. Delete from Blob Storage
+                                    blob_client = container_client.get_blob_client(f"drawings/{blob_info['name']}")
+                                    blob_client.delete_blob()
+                                    
+                                    # 2. Delete from Search Index
+                                    # We need to delete all documents associated with this file
+                                    # Since we now split by pages, we should delete by metadata_storage_path or project+filename
+                                    # Ideally, we query for all docs with this filename in metadata
+                                    search_manager = get_search_manager()
+                                    # Search for docs with this filename
+                                    # Note: metadata_storage_name might be "filename (p.1)" or just "filename"
+                                    # Let's search by project and filter by name content
+                                    
+                                    # Simple approach: Delete by project and filename match
+                                    # But we don't have a direct delete_by_query in simple SDK usage often
+                                    # We'll list IDs and delete them
+                                    
+                                    # Find docs to delete
+                                    # Escape single quotes in filename for OData filter
+                                    safe_filename = blob_info['name'].replace("'", "''")
+                                    # We look for docs where metadata_storage_name starts with the filename
+                                    # Or better, we can just re-index. But to be clean, let's try to delete.
+                                    
+                                    # Actually, just deleting the blob is enough for now as the search results will just point to dead links
+                                    # But to clean up the index:
+                                    results = search_manager.search_client.search(
+                                        search_text="*",
+                                        filter=f"project eq 'drawings_analysis'",
+                                        select=["id", "metadata_storage_name"]
+                                    )
+                                    
+                                    ids_to_delete = []
+                                    for doc in results:
+                                        # Check if this doc belongs to the deleted file
+                                        # Old docs: name == filename
+                                        # New docs: name == filename (p.N)
+                                        if doc['metadata_storage_name'].startswith(blob_info['name']):
+                                            ids_to_delete.append({"id": doc['id']})
+                                    
+                                    if ids_to_delete:
+                                        search_manager.search_client.delete_documents(documents=ids_to_delete)
+                                    
+                                    st.success(f"{blob_info['name']} 삭제 완료")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"삭제 실패: {e}")
             else:
                 st.warning("분석된 문서가 없습니다. '문서 업로드 및 분석' 탭에서 문서를 업로드하세요.")
         except Exception as e:
