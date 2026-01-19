@@ -155,6 +155,7 @@ Convert the user's natural language question into a keyword-based search query.
             # 0. Construct Scope Filter from available_files (if provided, treat as selected files)
             # This ensures we ONLY search within the files the user has selected in the UI
             scope_filter = None
+            if available_files:
                  # Use search.ismatch for more robust matching (handles tokenization and minor differences)
                  # We use a phrase search ("...") to ensure the filename sequence matches
                  # search.ismatch('"{filename}"', 'metadata_storage_name')
