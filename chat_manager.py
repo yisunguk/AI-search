@@ -151,16 +151,41 @@ Convert the user's natural language question into a keyword-based search query.
         """
         try:
             # 1. Intent Detection & Filtering
-            # Check if user specified a file
-            file_filter = self._extract_filename_filter(user_message, available_files)
+            
+            # 0. Construct Scope Filter from available_files (if provided, treat as selected files)
+            # This ensures we ONLY search within the files the user has selected in the UI
+            scope_filter = None
+            if available_files:
+                 # Create OR filter for all selected files
+                 # startswith(metadata_storage_name, 'FileA') or startswith(...)
+                 # We use startswith to handle page suffixes (e.g. FileA.pdf (p.1))
+                 conditions = [f"startswith(metadata_storage_name, '{f.replace("'", "''")}')" for f in available_files]
+                 if conditions:
+                    scope_filter = f"({' or '.join(conditions)})"
+                    print(f"DEBUG: Scope filter (Selected files): {len(available_files)} files")
+
+            # Check if user specified a file (Intent Detection)
+            # We still pass available_files to help detection, but the scope_filter enforces the selection
+            specific_file_filter = self._extract_filename_filter(user_message, available_files)
             
             final_filter = filter_expr
-            if file_filter:
+            
+            # Apply Scope Filter (Selected Documents)
+            if scope_filter:
                 if final_filter:
-                    final_filter = f"({final_filter}) and ({file_filter})"
+                    final_filter = f"({final_filter}) and {scope_filter}"
                 else:
-                    final_filter = file_filter
-                print(f"DEBUG: Applied file filter: {final_filter}")
+                    final_filter = scope_filter
+            
+            # Apply Specific File Filter (User Mentioned)
+            if specific_file_filter:
+                if final_filter:
+                    final_filter = f"({final_filter}) and ({specific_file_filter})"
+                else:
+                    final_filter = specific_file_filter
+                print(f"DEBUG: Applied specific file filter: {specific_file_filter}")
+            
+            print(f"DEBUG: Final OData Filter: {final_filter}")
 
             # 2. Query Rewriting
             search_query = self._rewrite_query(user_message)

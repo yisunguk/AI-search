@@ -1020,17 +1020,28 @@ elif menu == "도면/스펙 분석":
             # Sort by modified date (most recent first)
             blob_list.sort(key=lambda x: x['modified'], reverse=True)
             
+            selected_filenames = []
+            
             if blob_list:
-                st.info(f"총 {len(blob_list)}개의 문서가 분석되어 있습니다.")
+                st.info(f"총 {len(blob_list)}개의 문서가 분석되어 있습니다. 분석할 문서를 선택하세요.")
+                
+                # Add "Select All" checkbox
+                select_all = st.checkbox("전체 선택", value=True)
                 
                 # Display as expandable list
-                with st.expander("📄 문서 목록 보기", expanded=True):
+                with st.expander("📄 문서 목록 및 선택", expanded=True):
                     for idx, blob_info in enumerate(blob_list, 1):
-                        col1, col2 = st.columns([4, 1])
+                        col0, col1, col2 = st.columns([0.5, 4, 1])
+                        with col0:
+                            # Checkbox for selection
+                            is_selected = st.checkbox(f"select_{idx}", value=select_all, key=f"chk_{blob_info['name']}", label_visibility="collapsed")
+                            if is_selected:
+                                selected_filenames.append(blob_info['name'])
+                        
                         with col1:
                             size_mb = blob_info['size'] / (1024 * 1024)
                             modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
-                            st.markdown(f"{idx}. **{blob_info['name']}** ({size_mb:.2f} MB) - {modified_str}")
+                            st.markdown(f"**{blob_info['name']}** ({size_mb:.2f} MB)")
                         with col2:
                             if st.button("🗑️ 삭제", key=f"del_{blob_info['name']}"):
                                 try:
@@ -1147,9 +1158,14 @@ elif menu == "도면/스펙 분석":
                         # Use 'any' search mode for better recall (find documents even with partial keyword match)
                         # This is important because technical drawings may have specific terms
                         # Filter to only search documents from the drawings folder
-                        # Pass available_filenames for specific file filtering
-                        # If available_filenames is not defined (e.g. error above), use empty list
-                        current_files = locals().get('available_filenames', [])
+                        # Pass selected_filenames for specific file filtering
+                        # If selected_filenames is empty (user deselected all), we should probably warn or search nothing.
+                        # But for now let's pass it. If empty, the chat manager might search nothing or all depending on logic.
+                        # Actually, let's default to all if none selected? No, user explicitly deselected.
+                        # Let's pass the list as is.
+                        
+                        # Note: selected_filenames comes from the UI loop above
+                        current_files = locals().get('selected_filenames', [])
                         
                         response_text, citations = chat_manager.get_chat_response(
                             prompt, 
