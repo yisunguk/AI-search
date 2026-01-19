@@ -172,10 +172,10 @@ CRITICAL RULES:
                     print(f"Warning: Skipping document {filename} - no content")
                     continue
                 
-                # Truncate content to fit context window (increased for o1 models)
-                # Drawings might have scattered text, so we need more context
-                if len(content) > 15000:
-                    content = content[:15000] + "..."
+                # Truncate content to fit context window
+                # Reduced from 15000 to 3000 to prevent context overflow with 20+ documents
+                if len(content) > 3000:
+                    content = content[:3000] + "..."
                 
                 context_parts.append(f"[Document {i}: {filename}]\n{content}\n")
                 
@@ -211,29 +211,6 @@ USER QUESTION:
                 # Filter out any system messages from history if they exist
                 history = [msg for msg in conversation_history if msg['role'] != 'system']
                 messages.extend(history)
-            
-            messages.append({"role": "user", "content": full_prompt})
-            
-            # 4. Call Azure OpenAI with standard API
-            # Now we can use max_completion_tokens for GPT-5
-            # Note: o1 models do not support temperature (must be 1)
-            response = self.client.chat.completions.create(
-                model=self.deployment_name,
-                messages=messages,
-                max_completion_tokens=2000,
-                timeout=300  # Increase timeout for o1 models (5 minutes)
-            )
-            
-            # Extract response
-            response_text = response.choices[0].message.content
-            
-            # Extract page numbers from metadata_storage_path (which contains #page=N)
-            import re
-            
-            for citation in citations:
-                # Check if the path contains #page=N
-                path = citation.get('path', '')
-                page_match = re.search(r'#page=(\d+)', path)
                 if page_match:
                     citation['page'] = int(page_match.group(1))
                 else:
