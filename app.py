@@ -1311,7 +1311,7 @@ elif menu == "도면/스펙 분석":
             st.session_state.rag_chat_messages = []
             st.rerun()
 
-el    st.markdown("---")
+    st.markdown("---")
 
 if menu == "엑셀데이터 자동추출":
     st.title("엑셀데이터 자동추출")
