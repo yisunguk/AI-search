@@ -156,13 +156,23 @@ Convert the user's natural language question into a keyword-based search query.
             # This ensures we ONLY search within the files the user has selected in the UI
             scope_filter = None
             if available_files:
+                 import unicodedata
                  # Create OR filter for all selected files
+                 # Normalize to NFC to ensure matching
                  # startswith(metadata_storage_name, 'FileA') or startswith(...)
-                 # We use startswith to handle page suffixes (e.g. FileA.pdf (p.1))
-                 conditions = [f"startswith(metadata_storage_name, '{f.replace("'", "''")}')" for f in available_files]
+                 conditions = []
+                 for f in available_files:
+                     # Normalize to NFC
+                     f_nfc = unicodedata.normalize('NFC', f)
+                     safe_f = f_nfc.replace("'", "''")
+                     conditions.append(f"startswith(metadata_storage_name, '{safe_f}')")
+                 
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
                     print(f"DEBUG: Scope filter (Selected files): {len(available_files)} files")
+                    print(f"DEBUG: Scope filter string: {scope_filter}")
+            else:
+                print("DEBUG: No available_files passed (or empty list)")
 
             # Check if user specified a file (Intent Detection)
             # We still pass available_files to help detection, but the scope_filter enforces the selection
@@ -204,9 +214,18 @@ Convert the user's natural language question into a keyword-based search query.
             # Fallback: If specific file search failed, try without file filter (maybe user got name wrong)
             if not search_results and specific_file_filter:
                 print("DEBUG: Specific file search failed, retrying globally...")
+                # Only retry if scope_filter allows it (i.e., search within selected files but ignore specific mention)
+                # If scope_filter is set, we must respect it.
+                retry_filter = filter_expr
+                if scope_filter:
+                    if retry_filter:
+                        retry_filter = f"({retry_filter}) and {scope_filter}"
+                    else:
+                        retry_filter = scope_filter
+                
                 search_results = self.search_manager.search(
                     search_query, 
-                    filter_expr=filter_expr, # Use original filter
+                    filter_expr=retry_filter, 
                     use_semantic_ranker=use_semantic_ranker,
                     search_mode=search_mode
                 )
@@ -308,7 +327,10 @@ Convert the user's natural language question into a keyword-based search query.
                 citations.append(citations_map[key])
             
             if not context_parts and not conversation_history:
-                return "검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.", []
+                debug_msg = ""
+                if scope_filter:
+                    debug_msg = f"\n\n(Debug: Filter applied: {scope_filter})"
+                return f"검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.{debug_msg}", []
 
             context = "\n" + "="*50 + "\n".join(context_parts) if context_parts else "(No new documents found. Use conversation history.)"
             
