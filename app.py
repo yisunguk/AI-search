@@ -299,6 +299,17 @@ if menu == "홈":
     </style>
     """, unsafe_allow_html=True)
 
+    # Hero Section
+    st.markdown('<div class="hero-container">', unsafe_allow_html=True)
+    st.markdown('<h1 class="hero-title">현장똑똑 AI</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.</p>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("### 💡 솔루션 소개")
+    st.info("현장똑똑 AI는 방대한 건설 현장의 데이터를 지능형으로 관리하는 차세대 EPC 업무 지원 솔루션입니다.")
+    
+    st.markdown("---")
+
     # Grid Layout for 4 Cards
     col1, col2 = st.columns(2)
     
