@@ -228,7 +228,33 @@ USER QUESTION:
                 # Add history but ensure we don't duplicate system messages
                 # Filter out any system messages from history if they exist
                 history = [msg for msg in conversation_history if msg['role'] != 'system']
-                messages.extend(history)
+            messages.append({"role": "user", "content": full_prompt})
+            
+            # 4. Call Azure OpenAI with standard API
+            # Now we can use max_completion_tokens for GPT-5
+            # Note: o1 models do not support temperature (must be 1)
+            response = self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=messages,
+                max_completion_tokens=2000,
+                timeout=300  # Increase timeout for o1 models (5 minutes)
+            )
+            
+            # Extract response
+            response_text = response.choices[0].message.content
+            
+            # Check for empty response
+            if not response_text or not response_text.strip():
+                print("Warning: LLM returned empty response")
+                response_text = "죄송합니다. 문서 내용을 분석했지만 답변을 생성하지 못했습니다. 질문을 조금 더 구체적으로 해주시면 다시 시도해보겠습니다."
+            
+            # Extract page numbers from metadata_storage_path (which contains #page=N)
+            import re
+            
+            for citation in citations:
+                # Check if the path contains #page=N
+                path = citation.get('path', '')
+                page_match = re.search(r'#page=(\d+)', path)
                 if page_match:
                     citation['page'] = int(page_match.group(1))
                 else:
