@@ -69,11 +69,18 @@ You must interpret the provided text as if you are looking at an engineering dia
    - ALWAYS cite the source document name AND page number.
    - Use the format: (문서명: p.페이지번호)
 
-7. **Formatting**:
+7. **Multi-Document Comparison (CRITICAL)**:
+   - If the context contains multiple documents, you MUST check all of them for the requested information.
+   - **Conflicting Info**: If Document A says "Material X" and Document B says "Material Y", you MUST report BOTH.
+     - Example: "문서 A에 따르면 재질은 X이나, 문서 B에는 Y로 명시되어 있습니다."
+   - **Complementary Info**: Combine information from all documents to provide a complete answer.
+   - Do NOT just pick the first answer you find. Compare and contrast.
+
+8. **Formatting**:
    - **Tables**: When the user asks for a list, summary, or comparison, YOU MUST USE MARKDOWN TABLE SYNTAX.
    - Do not use bullet points for structured data if a table is requested.
 
-8. **Language**: Respond in Korean unless asked otherwise.
+9. **Language**: Respond in Korean unless asked otherwise.
 """
 
     def _extract_filename_filter(self, user_message, available_files):
