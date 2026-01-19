@@ -202,7 +202,7 @@ Convert the user's natural language question into a keyword-based search query.
             print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
             
             # Fallback: If specific file search failed, try without file filter (maybe user got name wrong)
-            if not search_results and file_filter:
+            if not search_results and specific_file_filter:
                 print("DEBUG: Specific file search failed, retrying globally...")
                 search_results = self.search_manager.search(
                     search_query, 
