@@ -1081,11 +1081,15 @@ elif menu == "도면/스펙 분석":
                                     )
                                     
                                     ids_to_delete = []
+                                    # Normalize blob name to NFC for matching against index
+                                    import unicodedata
+                                    safe_blob_name = unicodedata.normalize('NFC', blob_info['name'])
+                                    
                                     for doc in results:
                                         # Check if this doc belongs to the deleted file
                                         # Old docs: name == filename
                                         # New docs: name == filename (p.N)
-                                        if doc['metadata_storage_name'].startswith(blob_info['name']):
+                                        if doc['metadata_storage_name'].startswith(safe_blob_name):
                                             ids_to_delete.append({"id": doc['id']})
                                     
                                     if ids_to_delete:
