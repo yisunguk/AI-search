@@ -279,12 +279,21 @@ USER QUESTION:
             # 7. Call LLM
             try:
                 print("DEBUG: Calling Azure OpenAI...")
-                response = self.client.chat.completions.create(
-                    model=self.deployment_name,
-                    messages=messages,
-                    max_tokens=2500,
-                    temperature=0.3
-                )
+                # Check model name to decide parameter
+                # o1 models use max_completion_tokens, others use max_tokens
+                if "o1" in self.deployment_name.lower():
+                    response = self.client.chat.completions.create(
+                        model=self.deployment_name,
+                        messages=messages,
+                        max_completion_tokens=5000, # o1 models support larger output
+                    )
+                else:
+                    response = self.client.chat.completions.create(
+                        model=self.deployment_name,
+                        messages=messages,
+                        max_tokens=2500,
+                        temperature=0.3
+                    )
                 response_text = response.choices[0].message.content
             except Exception as e:
                 print(f"DEBUG: LLM call failed: {e}")
