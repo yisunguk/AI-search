@@ -404,7 +404,10 @@ if menu == "홈":
     st.markdown("---")
 
 if menu == "번역하기":
-    uploaded_file = st.file_uploader("번역할 문서 업로드 (PPTX, PDF, DOCX, XLSX 등)", type=["pptx", "pdf", "docx", "xlsx"])
+    if "translate_uploader_key" not in st.session_state:
+        st.session_state.translate_uploader_key = 0
+
+    uploaded_file = st.file_uploader("번역할 문서 업로드 (PPTX, PDF, DOCX, XLSX 등)", type=["pptx", "pdf", "docx", "xlsx"], key=f"translate_{st.session_state.translate_uploader_key}")
 
     if st.button("번역 시작", type="primary", disabled=not uploaded_file):
         if not uploaded_file:
@@ -579,6 +582,11 @@ if menu == "번역하기":
 
                             download_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
                             st.markdown(f"[{file_name} 다운로드]({download_sas})", unsafe_allow_html=True)
+                            
+                    # 성공적으로 완료되면 업로더 초기화 (키 변경)
+                    st.session_state.translate_uploader_key += 1
+                    time.sleep(2) # 사용자가 결과를 볼 수 있도록 잠시 대기
+                    st.rerun()
                             
                 except Exception as e:
                     st.error(f"번역 요청 중 오류 발생: {e}")
@@ -928,7 +936,11 @@ elif menu == "도면/스펙 분석":
     
     with tab1:
         st.markdown("### 1. 분석할 문서 업로드 (drawings 폴더)")
-        uploaded_files = st.file_uploader("PDF 도면, 스펙, 사양서 등을 업로드하세요", accept_multiple_files=True, type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'])
+        
+        if "drawing_uploader_key" not in st.session_state:
+            st.session_state.drawing_uploader_key = 0
+            
+        uploaded_files = st.file_uploader("PDF 도면, 스펙, 사양서 등을 업로드하세요", accept_multiple_files=True, type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'], key=f"drawing_{st.session_state.drawing_uploader_key}")
         
         if uploaded_files:
             if st.button("업로드 및 분석 시작"):
@@ -1023,6 +1035,11 @@ elif menu == "도면/스펙 분석":
                 
                 status_text.text("모든 작업이 완료되었습니다!")
                 st.success("업로드, 분석 및 인덱싱이 완료되었습니다.")
+                
+                # 성공적으로 완료되면 업로더 초기화
+                st.session_state.drawing_uploader_key += 1
+                time.sleep(2)
+                st.rerun()
 
     with tab2:
         st.markdown("### 💬 도면/스펙 전문 채팅")
