@@ -329,7 +329,9 @@ Convert the user's natural language question into a keyword-based search query.
             
             # Limit total pages
             # Increased to 20 to allow for more context when comparing multiple documents
-            context_limit = 20
+            # Limit total pages
+            # Reduced to 10 to prevent token overflow (finish_reason='length')
+            context_limit = 10
             
             for key in sorted_keys[:context_limit]:
                 filename, page = key
@@ -339,7 +341,7 @@ Convert the user's natural language question into a keyword-based search query.
                 
                 # Clean content
                 page_content = page_content.replace("AutoCAD SHX Text", "").replace("%%C", "Ø")
-                if len(page_content) > 3000: page_content = page_content[:3000] + "..."
+                if len(page_content) > 2000: page_content = page_content[:2000] + "..."
                 
                 context_parts.append(f"[Document: {filename}, Page: {page}]\n{page_content}\n")
                 citations.append(citations_map[key])
@@ -393,6 +395,13 @@ USER QUESTION:
                     print("DEBUG: Content filter triggered")
                     response_text = "⚠️ Azure OpenAI 콘텐츠 정책에 의해 답변이 차단되었습니다. (Content Filter Triggered)\n\n질문을 변경하거나 문서에 민감한 내용이 있는지 확인해주세요."
                 
+                elif finish_reason == "length":
+                    print("DEBUG: Token limit reached (length)")
+                    if response_text and response_text.strip():
+                        response_text += "\n\n(⚠️ 답변이 길어서 중단되었습니다. 더 짧게 질문하거나 컨텍스트를 줄여주세요.)"
+                    else:
+                        response_text = "⚠️ 입력된 문서 내용이 너무 많아 답변을 생성할 수 없습니다. (Token Limit Exceeded)\n\n참조 문서가 너무 많거나 내용이 깁니다. 검색 범위를 좁혀주세요."
+
                 elif not response_text or not response_text.strip():
                     print(f"DEBUG: Empty response. Finish reason: {finish_reason}")
                     response_text = f"죄송합니다. 답변을 생성하지 못했습니다. (응답 없음, 사유: {finish_reason})"
