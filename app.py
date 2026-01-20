@@ -857,7 +857,7 @@ elif menu == "검색 & AI 채팅":
                         ]
                         
                         # Pass the selected search options to the chat manager
-                        response_text, citations = chat_manager.get_chat_response(
+                        response_text, citations, context = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history, 
                             search_mode=chat_search_mode, 
