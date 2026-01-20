@@ -429,7 +429,16 @@ class AzureSearchManager:
         documents: list of dict
         """
         try:
-            result = self.search_client.upload_documents(documents=documents)
+            results = self.search_client.upload_documents(documents=documents)
+            
+            failed_docs = []
+            for res in results:
+                if not res.succeeded:
+                    failed_docs.append(f"Key: {res.key}, Error: {res.error_message}")
+            
+            if failed_docs:
+                return False, f"Partial upload failure: {'; '.join(failed_docs)}"
+                
             return True, f"Successfully uploaded {len(documents)} documents."
         except Exception as e:
             return False, f"Upload failed: {str(e)}"
