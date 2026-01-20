@@ -1058,7 +1058,7 @@ elif menu == "도면/스펙 분석":
                 # Display as expandable list
                 with st.expander("📄 문서 목록 및 선택", expanded=True):
                     for idx, blob_info in enumerate(blob_list, 1):
-                        col0, col1, col2 = st.columns([0.5, 4, 1])
+                        col0, col1, col2, col3 = st.columns([0.5, 4, 1.2, 1])
                         with col0:
                             # Checkbox for selection
                             is_selected = st.checkbox(f"select_{idx}", value=select_all, key=f"chk_{blob_info['name']}", label_visibility="collapsed")
@@ -1069,7 +1069,35 @@ elif menu == "도면/스펙 분석":
                             size_mb = blob_info['size'] / (1024 * 1024)
                             modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
                             st.markdown(f"**{blob_info['name']}** ({size_mb:.2f} MB)")
+                        
                         with col2:
+                            # JSON Download Logic
+                            json_key = f"json_data_{blob_info['name']}"
+                            
+                            if json_key not in st.session_state:
+                                if st.button("JSON 생성", key=f"gen_json_{blob_info['name']}"):
+                                    with st.spinner("데이터 가져오는 중..."):
+                                        search_manager = get_search_manager()
+                                        docs = search_manager.get_document_json(blob_info['name'])
+                                        if docs:
+                                            import json
+                                            json_str = json.dumps(docs, ensure_ascii=False, indent=2)
+                                            st.session_state[json_key] = json_str
+                                            st.rerun()
+                                        else:
+                                            st.error("데이터가 없습니다.")
+                            else:
+                                # Show download button
+                                json_data = st.session_state[json_key]
+                                st.download_button(
+                                    label="💾 다운로드",
+                                    data=json_data,
+                                    file_name=f"{blob_info['name']}.json",
+                                    mime="application/json",
+                                    key=f"dl_json_{blob_info['name']}"
+                                )
+
+                        with col3:
                             if st.button("🗑️ 삭제", key=f"del_{blob_info['name']}"):
                                 try:
                                     # 1. Delete from Blob Storage
@@ -1077,26 +1105,12 @@ elif menu == "도면/스펙 분석":
                                     blob_client.delete_blob()
                                     
                                     # 2. Delete from Search Index
-                                    # We need to delete all documents associated with this file
-                                    # Since we now split by pages, we should delete by metadata_storage_path or project+filename
-                                    # Ideally, we query for all docs with this filename in metadata
                                     search_manager = get_search_manager()
-                                    # Search for docs with this filename
-                                    # Note: metadata_storage_name might be "filename (p.1)" or just "filename"
-                                    # Let's search by project and filter by name content
-                                    
-                                    # Simple approach: Delete by project and filename match
-                                    # But we don't have a direct delete_by_query in simple SDK usage often
-                                    # We'll list IDs and delete them
                                     
                                     # Find docs to delete
-                                    # Escape single quotes in filename for OData filter
                                     safe_filename = blob_info['name'].replace("'", "''")
-                                    # We look for docs where metadata_storage_name starts with the filename
-                                    # Or better, we can just re-index. But to be clean, let's try to delete.
                                     
-                                    # Actually, just deleting the blob is enough for now as the search results will just point to dead links
-                                    # But to clean up the index:
+                                    # Clean up index
                                     results = search_manager.search_client.search(
                                         search_text="*",
                                         filter=f"project eq 'drawings_analysis'",
@@ -1104,20 +1118,21 @@ elif menu == "도면/스펙 분석":
                                     )
                                     
                                     ids_to_delete = []
-                                    # Normalize blob name to NFC for matching against index
                                     import unicodedata
                                     safe_blob_name = unicodedata.normalize('NFC', blob_info['name'])
                                     
                                     for doc in results:
-                                        # Check if this doc belongs to the deleted file
-                                        # Old docs: name == filename
-                                        # New docs: name == filename (p.N)
                                         if doc['metadata_storage_name'].startswith(safe_blob_name):
                                             ids_to_delete.append({"id": doc['id']})
                                     
                                     if ids_to_delete:
                                         search_manager.search_client.delete_documents(documents=ids_to_delete)
                                     
+                                    # Clear JSON state if exists
+                                    json_key = f"json_data_{blob_info['name']}"
+                                    if json_key in st.session_state:
+                                        del st.session_state[json_key]
+
                                     st.success(f"{blob_info['name']} 삭제 완료")
                                     st.rerun()
                                 except Exception as e:
@@ -1395,6 +1410,44 @@ elif menu == "도면/스펙 분석":
                     
             except Exception as e:
                 st.error(f"정리 중 오류 발생: {e}")
+        with st.expander("📊 선택된 파일 토큰 분석 (Token Analyzer)", expanded=False):
+            st.caption("특정 파일의 인덱스 내용을 분석하여 토큰 사용량을 확인합니다.")
+            target_file_input = st.text_input("분석할 파일명 (일부만 입력해도 됨)", value="PH20-810-EC115-00540")
+            
+            if st.button("분석 실행", key="analyze_token_btn"):
+                try:
+                    search_manager = get_search_manager()
+                    # Search for chunks matching the filename
+                    results = search_manager.search_client.search(
+                        search_text="*",
+                        filter=f"search.ismatch('{target_file_input}', 'metadata_storage_name')",
+                        select=["metadata_storage_name", "content", "metadata_storage_path"]
+                    )
+                    
+                    results_list = list(results)
+                    st.info(f"검색된 청크(Chunk) 수: {len(results_list)}개")
+                    
+                    total_chars = 0
+                    for i, doc in enumerate(results_list):
+                        content = doc.get('content', '')
+                        char_count = len(content)
+                        total_chars += char_count
+                        
+                        with st.expander(f"Chunk {i+1}: {doc.get('metadata_storage_name')} ({char_count}자)"):
+                            st.code(content[:1000] + ("..." if len(content) > 1000 else ""))
+                    
+                    st.divider()
+                    st.metric("총 글자 수 (Total Characters)", f"{total_chars:,}")
+                    est_tokens = int(total_chars / 4)
+                    st.metric("예상 토큰 수 (Estimated Tokens)", f"{est_tokens:,}")
+                    
+                    if est_tokens > 5000:
+                        st.warning(f"⚠️ 토큰 수가 많습니다 ({est_tokens} > 5000). AI 답변 생성 시 'Token Limit Exceeded' 오류가 발생할 수 있습니다.")
+                    else:
+                        st.success(f"✅ 토큰 수가 적절합니다 ({est_tokens}).")
+                        
+                except Exception as e:
+                    st.error(f"분석 실패: {e}")
         
         if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
             st.session_state.rag_chat_messages = []

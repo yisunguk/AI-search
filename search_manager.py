@@ -442,3 +442,34 @@ class AzureSearchManager:
             return True, f"Successfully uploaded {len(documents)} documents."
         except Exception as e:
             return False, f"Upload failed: {str(e)}"
+
+    def get_document_json(self, filename):
+        """
+        특정 파일의 모든 페이지/청크를 JSON 형태로 가져오기
+        """
+        try:
+            # Escape single quotes
+            safe_filename = filename.replace("'", "''")
+            
+            # Normalize to NFC (just in case)
+            import unicodedata
+            safe_filename = unicodedata.normalize('NFC', safe_filename)
+
+            # Filter by project and filename prefix
+            # Note: metadata_storage_name is usually "filename (p.N)"
+            # So we use startswith
+            results = self.search_client.search(
+                search_text="*",
+                filter=f"project eq 'drawings_analysis' and startswith(metadata_storage_name, '{safe_filename}')",
+                select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
+                top=1000 # Assuming max 1000 pages per doc
+            )
+            
+            documents = list(results)
+            # Sort by page number if possible, or just name
+            documents.sort(key=lambda x: x.get('metadata_storage_name', ''))
+            
+            return documents
+        except Exception as e:
+            print(f"Error fetching document JSON: {e}")
+            return []
