@@ -393,9 +393,12 @@ USER QUESTION:
                     print("DEBUG: Content filter triggered")
                     response_text = "⚠️ Azure OpenAI 콘텐츠 정책에 의해 답변이 차단되었습니다. (Content Filter Triggered)\n\n질문을 변경하거나 문서에 민감한 내용이 있는지 확인해주세요."
                 
-                elif not response_text or not response_text.strip():
                     print(f"DEBUG: Empty response. Finish reason: {finish_reason}")
                     response_text = f"죄송합니다. 답변을 생성하지 못했습니다. (응답 없음, 사유: {finish_reason})"
+
+            except Exception as e:
+                print(f"DEBUG: LLM call failed: {e}")
+                return f"LLM 호출 중 오류가 발생했습니다: {str(e)}\n\n(컨텍스트 길이: {len(context)} 자)", citations, context
 
             return response_text, citations, context
 
