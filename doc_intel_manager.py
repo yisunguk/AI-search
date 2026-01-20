@@ -27,6 +27,8 @@ class DocumentIntelligenceManager:
             # Process each page separately
             page_chunks = []
             
+            print(f"DEBUG: Document Intelligence found {len(result.pages)} pages.")
+            
             for page in result.pages:
                 page_num = page.page_number
                 
