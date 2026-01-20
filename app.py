@@ -1617,13 +1617,27 @@ if menu == "관리자 설정":
 with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=False):
     st.warning("개발자용 디버그 도구입니다.")
     
-    if st.button("🔍 인덱스된 파일명 확인"):
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        filename_filter = st.text_input("파일명 검색 (비워두면 전체)", help="특정 파일만 확인하려면 파일명의 일부를 입력하세요.")
+    with col2:
+        check_btn = st.button("🔍 인덱스된 파일명 확인")
+
+    if check_btn:
         try:
             search_manager = get_search_manager()
+            
+            # Build filter
+            filter_str = "project eq 'drawings_analysis'"
+            if filename_filter:
+                # Escape single quotes if present
+                safe_filter = filename_filter.replace("'", "''")
+                filter_str += f" and search.ismatch('*{safe_filter}*', 'metadata_storage_name')"
+
             # Query all docs, select only name and content, filtered by project
             results = search_manager.search_client.search(
                 search_text="*", 
-                filter="project eq 'drawings_analysis'",
+                filter=filter_str,
                 select=["metadata_storage_name", "content"], 
                 top=50
             )
