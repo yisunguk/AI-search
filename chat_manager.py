@@ -260,10 +260,10 @@ Convert the user's natural language question into a keyword-based search query.
                         page = int(page_match.group(1))
                 
                 # CRITICAL: If page is None, this is a "rogue" document (whole file indexed without page splitting).
-                # We MUST skip it to avoid polluting the context with non-granular data.
+                # We used to skip it, but now we default to Page 1 to ensure we don't miss data.
                 if page is None:
-                    print(f"DEBUG: Skipping rogue document (no page number): {filename}")
-                    continue
+                    print(f"DEBUG: Rogue document found (no page number), defaulting to Page 1: {filename}")
+                    page = 1
                 
                 key = (filename, page)
                 
