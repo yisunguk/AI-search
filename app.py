@@ -1402,11 +1402,14 @@ if menu == "엑셀데이터 자동추출":
 
 if menu == "사진대지 자동작성":
     st.title("사진대지 자동작성")
-    st.caption("현장 사진을 업로드하여 사진대지를 자동으로 생성합니다.")
+    st.caption("건설 현장 사진을 업로드하여 Excel 사진대지를 자동으로 생성합니다.")
     
-    photo_log_url = "https://photo-log-a0215.web.app/"
-    
-    st.info(f"보안상의 이유로 외부 앱은 별도 창에서 실행됩니다.\n\n👉 [**사진대지 자동작성 도구 열기**]({photo_log_url})")
+    # Embed Photo Log app via iframe
+    st.components.v1.iframe(
+        src="https://photo-log-a0215.web.app/",
+        height=800,
+        scrolling=True
+    )
 
 if menu == "작업계획 및 투입비 자동작성":
     st.title("작업계획 및 투입비 자동작성")
