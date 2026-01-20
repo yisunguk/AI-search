@@ -1047,7 +1047,13 @@ elif menu == "도면/스펙 분석":
                 st.info(f"총 {len(blob_list)}개의 문서가 분석되어 있습니다. 분석할 문서를 선택하세요.")
                 
                 # Add "Select All" checkbox
-                select_all = st.checkbox("전체 선택", value=True)
+                def toggle_all():
+                    new_state = st.session_state.select_all_files
+                    for key in st.session_state.keys():
+                        if key.startswith("chk_"):
+                            st.session_state[key] = new_state
+
+                select_all = st.checkbox("전체 선택", value=True, key="select_all_files", on_change=toggle_all)
                 
                 # Display as expandable list
                 with st.expander("📄 문서 목록 및 선택", expanded=True):
