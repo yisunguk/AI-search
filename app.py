@@ -15,6 +15,7 @@ from search_manager import AzureSearchManager
 # Chat Manager Import  
 from chat_manager import AzureOpenAIChatManager
 from doc_intel_manager import DocumentIntelligenceManager
+import excel_manager
 
 # -----------------------------
 # 설정 및 비밀 관리
@@ -1396,12 +1397,8 @@ elif menu == "도면/스펙 분석":
     st.markdown("---")
 
 if menu == "엑셀데이터 자동추출":
-    st.title("엑셀데이터 자동추출")
-    st.caption("외부 도구를 사용하여 엑셀 데이터를 자동으로 추출합니다.")
-    
-    external_url = "https://cjwzc6h3rtmsadhrwrhaz4.streamlit.app/"
-    
-    st.info(f"보안상의 이유로 외부 앱은 별도 창에서 실행됩니다.\n\n👉 [**엑셀 데이터 자동 추출 도구 열기**]({external_url})")
+    # Integrated Excel Tool
+    excel_manager.render_excel_tool()
 
 if menu == "사진대지 자동작성":
     st.title("사진대지 자동작성")

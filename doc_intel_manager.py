@@ -19,9 +19,10 @@ class DocumentIntelligenceManager:
         """
         try:
             # Use prebuilt-layout to extract text and tables
-            # Explicitly request pages 1-1000 to ensure all pages are processed
+            # Explicitly request pages 1-2000 to ensure all pages are processed
+            # (Requires Azure Form Recognizer Standard Tier for >2 pages)
             poller = self.client.begin_analyze_document_from_url(
-                "prebuilt-layout", document_url, pages="1-1000"
+                "prebuilt-layout", document_url, pages="1-2000"
             )
             result = poller.result()
 
