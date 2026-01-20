@@ -46,8 +46,7 @@ SEARCH_DATASOURCE_NAME = "blob-datasource"
 # 4. Azure OpenAI
 AZURE_OPENAI_ENDPOINT = get_secret("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = get_secret("AZURE_OPENAI_KEY")
-AZURE_OPENAI_DEPLOYMENT = get_secret("AZURE_OPENAI_DEPLOYMENT")
-AZURE_OPENAI_DEPLOYMENT = get_secret("AZURE_OPENAI_DEPLOYMENT")
+AZURE_OPENAI_DEPLOYMENT = get_secret("AZURE_OPENAI_DEPLOYMENT") or get_secret("AZURE_OPENAI_DEPLOYMENT_NAME")
 AZURE_OPENAI_API_VERSION = get_secret("AZURE_OPENAI_API_VERSION")
 
 # 5. Document Intelligence
@@ -824,8 +823,8 @@ elif menu == "검색 & AI 채팅":
                             st.divider()
     
     with tab2:
-        st.subheader("🤖 AI 문서 도우미")
-        st.caption("Azure OpenAI와 문서 검색을 활용한 정확한 답변 제공")
+        st.subheader("🤖 AI 문서 도우미 (GPT-5.2)")
+        st.caption("Azure OpenAI(GPT-5.2)와 문서 검색을 활용한 정확한 답변 제공")
         
         # Initialize chat history in session state
         if "chat_messages" not in st.session_state:
