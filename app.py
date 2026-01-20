@@ -1058,7 +1058,7 @@ elif menu == "도면/스펙 분석":
                 st.rerun()
 
     with tab2:
-        st.markdown("### 💬 도면/스펙 전문 채팅")
+        st.markdown("### 💬 도면/스펙 전문 채팅 (GPT-5.2)")
         
         # Display analyzed documents
         st.markdown("#### 📋 분석된 문서 목록")
