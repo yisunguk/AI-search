@@ -19,8 +19,9 @@ class DocumentIntelligenceManager:
         """
         try:
             # Use prebuilt-layout to extract text and tables
+            # Explicitly request pages 1-1000 to ensure all pages are processed
             poller = self.client.begin_analyze_document_from_url(
-                "prebuilt-layout", document_url
+                "prebuilt-layout", document_url, pages="1-1000"
             )
             result = poller.result()
 
