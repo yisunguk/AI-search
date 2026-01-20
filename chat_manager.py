@@ -235,6 +235,25 @@ Convert the user's natural language question into a keyword-based search query.
                     search_mode=search_mode
                 )
 
+            # Fallback 2: If user selected files (scope_filter) but keywords didn't match,
+            # fetch the content of the selected files directly.
+            if not search_results and scope_filter:
+                print("DEBUG: No results with query but files selected. Retrying with '*'...")
+                
+                # Reconstruct filter to ensure we only search within scope
+                fallback_filter = filter_expr
+                if fallback_filter:
+                    fallback_filter = f"({fallback_filter}) and {scope_filter}"
+                else:
+                    fallback_filter = scope_filter
+                    
+                search_results = self.search_manager.search(
+                    "*", 
+                    filter_expr=fallback_filter, 
+                    use_semantic_ranker=use_semantic_ranker,
+                    search_mode=search_mode
+                )
+
             # 4. Page-Aware Context Grouping
             # Group chunks by (Filename, Page)
             grouped_context = {} # Key: (filename, page), Value: list of chunks
