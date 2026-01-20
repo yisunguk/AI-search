@@ -409,6 +409,17 @@ if menu == "번역하기":
 
     uploaded_file = st.file_uploader("번역할 문서 업로드 (PPTX, PDF, DOCX, XLSX 등)", type=["pptx", "pdf", "docx", "xlsx"], key=f"translate_{st.session_state.translate_uploader_key}")
 
+    # 이전 번역 결과가 있으면 표시
+    if "last_translation_result" in st.session_state:
+        result = st.session_state.last_translation_result
+        st.success("✅ 번역이 완료되었습니다!")
+        st.markdown(f"[{result['file_name']} 다운로드]({result['url']})", unsafe_allow_html=True)
+        
+        # 결과를 지우고 싶을 수 있으므로 닫기 버튼 제공 (선택 사항)
+        if st.button("결과 닫기"):
+            del st.session_state.last_translation_result
+            st.rerun()
+
     if st.button("번역 시작", type="primary", disabled=not uploaded_file):
         if not uploaded_file:
             st.error("파일을 업로드해주세요.")
@@ -583,9 +594,15 @@ if menu == "번역하기":
                             download_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
                             st.markdown(f"[{file_name} 다운로드]({download_sas})", unsafe_allow_html=True)
                             
+                            # 결과 세션에 저장
+                            st.session_state.last_translation_result = {
+                                "file_name": file_name,
+                                "url": download_sas
+                            }
+                            
                     # 성공적으로 완료되면 업로더 초기화 (키 변경)
                     st.session_state.translate_uploader_key += 1
-                    time.sleep(2) # 사용자가 결과를 볼 수 있도록 잠시 대기
+                    time.sleep(1) # 잠시 대기
                     st.rerun()
                             
                 except Exception as e:
