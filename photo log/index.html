@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📷 건설현장 사진대지 자동화</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">
+                    <span class="icon">📷</span>
+                    건설현장 사진대지 자동화
+                </h1>
+                <p class="subtitle">사진을 업로드하면 자동으로 Excel 사진대지가 생성됩니다</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Project Info Section -->
+            <section class="section project-info-section">
+                <div class="section-header">
+                    <h2 class="section-title">📋 프로젝트 정보</h2>
+                </div>
+                <div class="card">
+                    <div class="form-group">
+                        <label for="projectName" class="label">프로젝트명 / 현장명</label>
+                        <input type="text" id="projectName" class="input" placeholder="예) OO아파트 신축공사">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Work Areas Section -->
+            <section class="section work-areas-section">
+                <div class="section-header">
+                    <h2 class="section-title">🏗️ 작업장 관리</h2>
+                    <div class="work-area-controls">
+                        <button id="addWorkAreaBtn" class="btn btn-secondary">
+                            <span class="btn-icon">➕</span>
+                            작업장 추가
+                        </button>
+                        <button id="manageTemplatesBtn" class="btn btn-secondary">
+                            <span class="btn-icon">📋</span>
+                            작업장 템플릿 관리
+                        </button>
+                        <button id="deleteWorksBtn" class="btn btn-outline">
+                            <span class="btn-icon">🗑️</span>
+                            저장된 작업 삭제
+                        </button>
+                    </div>
+                </div>
+                <div id="workAreasContainer" class="work-areas-container">
+                    <!-- Work area cards will be added here dynamically -->
+                </div>
+            </section>
+
+            <!-- Actions Section -->
+            <section class="section actions-section">
+                <div class="actions-container">
+                    <button id="generateExcelBtn" class="btn btn-primary btn-large" disabled>
+                        <span class="btn-icon">📑</span>
+                        사진대지 Excel 생성
+                    </button>
+                    <button id="saveWorkBtn" class="btn btn-secondary">
+                        <span class="btn-icon">💾</span>
+                        작업 저장
+                    </button>
+                    <button id="loadWorkBtn" class="btn btn-secondary">
+                        <span class="btn-icon">📂</span>
+                        작업 불러오기
+                    </button>
+                    <button id="resetBtn" class="btn btn-outline">
+                        <span class="btn-icon">🔄</span>
+                        초기화
+                    </button>
+                </div>
+                <div id="statusMessage" class="status-message"></div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 건설현장 사진대지 자동화 시스템</p>
+        </footer>
+    </div>
+
+    <!-- Save Name Modal -->
+    <div id="saveNameModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">💾 작업 저장</h2>
+                <button class="close-modal-btn"
+                    onclick="document.getElementById('saveNameModal').classList.add('hidden')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="saveNameInput" class="label">저장할 이름을 입력해주세요</label>
+                    <input type="text" id="saveNameInput" class="input" placeholder="예) 1601동 25층 바닥철근 검측">
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+                    <button class="btn btn-outline"
+                        onclick="document.getElementById('saveNameModal').classList.add('hidden')">취소</button>
+                    <button id="confirmSaveBtn" class="btn btn-primary">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Works Modal -->
+    <div id="deleteWorksModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🗑️ 저장된 작업 삭제</h2>
+                <button class="close-modal-btn"
+                    onclick="document.getElementById('deleteWorksModal').classList.add('hidden')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="deleteWorksList" class="saved-works-list">
+                    <!-- Works to delete will be populated here -->
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+                    <button class="btn btn-outline"
+                        onclick="document.getElementById('deleteWorksModal').classList.add('hidden')">취소</button>
+                    <button id="confirmDeleteBtn" class="btn btn-danger">선택 항목 삭제</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Work Modal -->
+    <div id="loadWorkModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">📂 저장된 작업 불러오기</h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="savedWorksList" class="saved-works-list">
+                    <!-- Saved works will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Management Modal -->
+    <div id="templateManagementModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">📋 작업장 템플릿 관리</h2>
+                <button class="close-modal-btn"
+                    onclick="document.getElementById('templateManagementModal').classList.add('hidden')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="template-add-section">
+                    <div class="form-group">
+                        <label for="newTemplateInput" class="label">새 템플릿 추가</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="newTemplateInput" class="input" placeholder="예) 1601동 25층 바닥철근 검측">
+                            <button id="addTemplateBtn" class="btn btn-primary">추가</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="template-list-section">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 class="template-section-title" style="margin-bottom: 0;">등록된 템플릿</h3>
+                        <div class="bulk-actions" style="display: none; gap: 12px; align-items: center;">
+                            <span id="selectedCount" style="font-size: 0.9rem; color: var(--primary);">0개 선택됨</span>
+                            <button id="bulkCreateBtn" class="btn btn-primary btn-small"
+                                onclick="handleBulkCreateWorkAreas()">
+                                선택한 항목으로 작업장 추가
+                            </button>
+                        </div>
+                    </div>
+                    <div class="template-list-header"
+                        style="padding: 8px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #eee;">
+                        <input type="checkbox" id="selectAllTemplates"
+                            onchange="handleSelectAllTemplates(this.checked)">
+                        <span style="font-size: 0.9rem; color: #666;">전체 선택</span>
+                    </div>
+                    <div id="templatesList" class="templates-list">
+                        <!-- Templates will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p class="loading-text">파일 생성 중...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script src="utils.js"></script>
+    <script src="exifReader.js"></script>
+    <script src="fileHandler.js"></script>
+    <script src="excelGenerator.js"></script>
+    <script src="excelGeneratorNew.js"></script>
+    <script src="excelGenerator_exceljs.js"></script>
+    <script src="storage.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

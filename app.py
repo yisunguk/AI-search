@@ -120,6 +120,15 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
     
     if blob_name:
         # Blob SAS 사용 (파일 직접 열기 지원을 위해 content_disposition 설정)
+        import mimetypes
+        content_type, _ = mimetypes.guess_type(blob_name)
+        if not content_type:
+            content_type = "application/octet-stream"
+            
+        # PDF는 inline, 나머지는 attachment (또는 브라우저 기본 동작)
+        # 엑셀 등은 브라우저가 알아서 다운로드 처리함
+        content_disposition = "inline" if content_type == "application/pdf" else "attachment"
+
         sas_token = generate_blob_sas(
             account_name=account_name,
             container_name=container_name,
@@ -128,8 +137,8 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
             permission=BlobSasPermissions(read=True),
             start=start,
             expiry=expiry,
-            content_disposition="inline", # 브라우저에서 바로 열기
-            content_type="application/pdf" # PDF로 강제 인식
+            content_disposition=content_disposition, 
+            content_type=content_type
         )
         
         base_url = f"https://{account_name}.blob.core.windows.net/{container_name}"

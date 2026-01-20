@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>작업계획 자동화 시스템</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-top">
+                <div class="menu-item active" data-mode="workplan">
+                    <h1>🏗️ 작업계획 자동화 시스템</h1>
+                    <p class="menu-subtitle">AI 기반 작업계획서 자동 작성 도구</p>
+                </div>
+                <div class="menu-item" data-mode="direct_payment">
+                    <h1>💰 투입비(직불) 자동화 시스템</h1>
+                    <p class="menu-subtitle">AI 기반 투입비 직불 양식 자동 작성 도구</p>
+                </div>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="templates">엑셀 양식 관리</button>
+            <button class="tab-btn" data-tab="workplan" id="workTabBtn">작업계획 작성</button>
+        </nav>
+
+        <main class="content-area">
+            <!-- 탭 1: 엑셀 양식 관리 -->
+            <section id="templates" class="tab-content active">
+                <div class="card">
+                    <h2>양식 등록</h2>
+                    <form id="templateForm" class="form-grid">
+                        <div class="form-group full-width">
+                            <label for="file">엑셀 양식 파일 (.xlsx)</label>
+                            <div class="file-upload-wrapper">
+                                <input type="file" id="file" name="file" accept=".xlsx" required>
+                                <div class="file-upload-placeholder">
+                                    <span>클릭하여 파일 선택 또는 드래그 앤 드롭</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="templateName">양식 이름</label>
+                            <input type="text" id="templateName" name="templateName" placeholder="예: 기본 작업계획서">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sheetName">시트 이름 (선택사항)</label>
+                            <input type="text" id="sheetName" name="sheetName" placeholder="비워두면 첫 번째 시트 사용">
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label for="sectionNames">공사구분 목록 (쉼표로 구분)</label>
+                            <input type="text" id="sectionNames" name="sectionNames"
+                                placeholder="예: 토공, 배수공, 포장공, 구조물공">
+                        </div>
+
+                        <div class="form-group" id="dataRowOffsetGroup" style="display: none;">
+                            <label for="dataRowOffset">데이터 시작 오프셋</label>
+                            <input type="number" id="dataRowOffset" name="dataRowOffset" placeholder="예: 11" min="0"
+                                value="11">
+                            <small>섹션 헤더에서 몇 행 아래부터 데이터 입력 (예: 11 → 12행부터)</small>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label>열 매핑 설정</label>
+                            <div class="column-mapping-header">
+                                <span>필드명 (AI가 찾을 항목)</span>
+                                <span>엑셀 열 (예: B)</span>
+                                <span>삭제</span>
+                            </div>
+                            <div id="columnMappingList" class="column-mapping-list">
+                                <!--동적으로 추가되는 열 매핑 항목들 -->
+                            </div>
+                            <button type="button" id="btnAddColumn" class="btn secondary small"
+                                style="margin-top: 0.5rem;">
+                                + 열 추가하기
+                            </button>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label for="systemPrompt">AI 시스템 프롬프트 (선택사항)</label>
+                            <textarea id="systemPrompt" name="systemPrompt" rows="4"
+                                placeholder="AI에게 추가로 전달할 지시사항을 입력하세요. 예: '작업 내용에서 특정 키워드를 찾아주세요', '시공사명은 괄호 안에 있습니다' 등"></textarea>
+                            <small>이 프롬프트는 AI가 텍스트를 파싱할 때 참고합니다.</small>
+                        </div>
+
+                        <div class="form-actions full-width">
+                            <button type="submit" class="btn primary">양식 등록하기</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 style="margin: 0;">등록된 양식 목록</h2>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button id="btnBackup" class="btn secondary small">
+                                📥 백업
+                            </button>
+                            <button id="btnRestore" class="btn secondary small">
+                                📤 복원
+                            </button>
+                            <input type="file" id="restoreFile" accept=".json" style="display: none;">
+                        </div>
+                    </div>
+                    <div id="templateList" class="template-list">
+                        <!-- 템플릿 목록이 여기에 동적으로 추가됨 -->
+                        <div class="empty-state">등록된 양식이 없습니다.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 탭 2: 작업계획 작성 -->
+            <section id="workplan" class="tab-content">
+                <div class="card">
+                    <h2 id="workCardTitle">작업계획 작성</h2>
+                    <div class="form-group">
+                        <label for="selectTemplate">사용할 양식 선택</label>
+                        <select id="selectTemplate">
+                            <option value="">양식을 선택하세요</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="workText">협력사 작업계획 텍스트</label>
+                        <textarea id="workText" rows="10" placeholder="예시:
+◆ 토공
+- 지방도835호선 노상토공정지 및 상차(B/H06-1대,D/T15-1대)
+- 부체도로#22 노상성토 및 정리(B/H06-병행,D/T15-병행)
+
+◆ 배수공
+- 시점부 자연형개거#1 기초터파기(B/H0.2-1대)"></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button id="btnParse" class="btn primary">
+                            <span class="icon">🤖</span> AI 파싱 실행
+                        </button>
+                    </div>
+                </div>
+
+                <div id="resultSection" class="card hidden">
+                    <div class="card-header">
+                        <h2>파싱 결과 확인</h2>
+                        <button id="btnGenerate" class="btn success">
+                            <span class="icon">📥</span> 엑셀 다운로드
+                        </button>
+                    </div>
+                    <div id="parseResult" class="json-viewer"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p id="loadingText">처리 중...</p>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>

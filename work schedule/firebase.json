@@ -1,0 +1,20 @@
+{
+    "hosting": {
+        "public": "public",
+        "ignore": [
+            "firebase.json",
+            "**/.*",
+            "**/node_modules/**"
+        ],
+        "rewrites": [
+            {
+                "source": "/api/parse",
+                "function": "parseWorkplan"
+            }
+        ]
+    },
+    "functions": {
+        "source": "functions",
+        "runtime": "nodejs22"
+    }
+}
