@@ -22,6 +22,20 @@ import excel_manager
 # -----------------------------
 st.set_page_config(page_title="현장똑똑 AI", page_icon="�️", layout="centered")
 
+# Custom CSS for larger tab labels
+st.markdown("""
+<style>
+    /* Increase font size for tab labels */
+    button[data-baseweb="tab"] {
+        font-size: 20px !important;
+    }
+    button[data-baseweb="tab"] p {
+        font-size: 20px !important;
+        font-weight: 600 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 def get_secret(key):
     if key in st.secrets:
         return st.secrets[key]
