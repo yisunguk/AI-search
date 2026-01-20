@@ -394,19 +394,23 @@ USER QUESTION:
                 # Check model name to decide parameter
                 # o1 models and gpt-5 preview use max_completion_tokens
                 deployment_lower = self.deployment_name.lower()
-                if "o1" in deployment_lower or "gpt-5" in deployment_lower:
+                
+                # Check for high-capacity models (o1, gpt-5, 5.2, etc.)
+                if any(x in deployment_lower for x in ["o1", "gpt-5", "5.2"]):
+                    print(f"DEBUG: Using high-capacity model: {self.deployment_name}")
                     response = self.client.chat.completions.create(
                         model=self.deployment_name,
                         messages=messages,
-                        max_completion_tokens=5000, # o1/gpt-5 models support larger output
+                        max_completion_tokens=32000, # Increased limit for Pro models
                     )
                 else:
                     response = self.client.chat.completions.create(
                         model=self.deployment_name,
                         messages=messages,
-                        max_tokens=2500,
+                        max_tokens=4096, # Increased standard limit
                         temperature=0.3
                     )
+                
                 response_text = response.choices[0].message.content
                 finish_reason = response.choices[0].finish_reason
                 
@@ -416,10 +420,11 @@ USER QUESTION:
                 
                 elif finish_reason == "length":
                     print("DEBUG: Token limit reached (length)")
-                    if response_text and response_text.strip():
-                        response_text += "\n\n(⚠️ 답변이 길어서 중단되었습니다. 더 짧게 질문하거나 컨텍스트를 줄여주세요.)"
+                    # CRITICAL FIX: Do not hide the partial response!
+                    if response_text:
+                        response_text += "\n\n---\n⚠️ **답변이 길어서 중단되었습니다.** (Token Limit Reached)\n모델의 출력 한도에 도달했습니다. 이어서 답변을 원하시면 '계속'이라고 입력해주세요."
                     else:
-                        response_text = "⚠️ 입력된 문서 내용이 너무 많아 답변을 생성할 수 없습니다. (Token Limit Exceeded)\n\n참조 문서가 너무 많거나 내용이 깁니다. 검색 범위를 좁혀주세요."
+                        response_text = "⚠️ 답변을 생성하는 도중 한도에 도달했으나, 생성된 텍스트가 없습니다."
 
                 elif not response_text or not response_text.strip():
                     print(f"DEBUG: Empty response. Finish reason: {finish_reason}")
