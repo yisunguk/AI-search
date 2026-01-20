@@ -961,7 +961,12 @@ elif menu == "도면/스펙 분석":
                         page_chunks = doc_intel_manager.analyze_document(blob_url)
                         
                         # 4. Indexing (Push to Search) - One document per page
-                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {safe_filename} - {len(page_chunks)} 페이지")
+                        # 4. Indexing (Push to Search) - One document per page
+                        detected_pages = [chunk['page_number'] for chunk in page_chunks]
+                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {safe_filename} - {len(page_chunks)} 페이지 발견 (Pages: {detected_pages})")
+                        
+                        if len(page_chunks) == 0:
+                            st.warning(f"⚠️ 경고: '{file.name}'에서 페이지를 찾을 수 없습니다.")
                         
                         documents_to_index = []
                         for page_chunk in page_chunks:
