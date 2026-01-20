@@ -1668,6 +1668,53 @@ with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=F
         except Exception as e:
             st.error(f"Error querying index: {e}")
 
+    st.divider()
+    
+    with st.expander("🔬 문서 분석 테스트 (Document Intelligence)", expanded=False):
+        st.info("Blob Storage에 있는 문서를 선택하여 분석 기능을 테스트합니다. (인덱싱은 하지 않음)")
+        
+        try:
+            blob_service_client = get_blob_service_client()
+            container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+            blobs = container_client.list_blobs(name_starts_with="drawings/")
+            blob_names = [b.name for b in blobs if not b.name.endswith('/')]
+            
+            selected_blob = st.selectbox("테스트할 문서 선택", blob_names)
+            
+            if st.button("분석 실행 (Analyze)"):
+                if selected_blob:
+                    with st.spinner("문서 분석 중..."):
+                        try:
+                            # Generate SAS
+                            from datetime import timedelta
+                            sas_token = generate_blob_sas(
+                                account_name=blob_service_client.account_name,
+                                container_name=CONTAINER_NAME,
+                                blob_name=selected_blob,
+                                account_key=blob_service_client.credential.account_key,
+                                permission=BlobSasPermissions(read=True),
+                                expiry=datetime.utcnow() + timedelta(hours=1)
+                            )
+                            blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(selected_blob)}?{sas_token}"
+                            
+                            st.write(f"URL generated: {blob_url[:50]}...")
+                            
+                            doc_intel_manager = get_doc_intel_manager()
+                            chunks = doc_intel_manager.analyze_document(blob_url)
+                            
+                            st.success(f"분석 성공! 총 {len(chunks)} 페이지 발견.")
+                            
+                            for i, chunk in enumerate(chunks):
+                                with st.expander(f"Page {chunk['page_number']} (Tables: {chunk.get('tables_count', 0)})"):
+                                    st.text(chunk['content'][:500] + "...")
+                                    
+                        except Exception as e:
+                            st.error(f"분석 실패: {str(e)}")
+                            import traceback
+                            st.code(traceback.format_exc())
+        except Exception as e:
+            st.error(f"Blob 목록 로드 실패: {e}")
+
 
 
 
