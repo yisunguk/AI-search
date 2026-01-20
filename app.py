@@ -1415,9 +1415,12 @@ if menu == "작업계획 및 투입비 자동작성":
     st.title("작업계획 및 투입비 자동작성")
     st.caption("작업 계획을 수립하고 투입비를 자동으로 산출합니다.")
     
-    schedule_url = "https://workschedule-7b1cf.web.app/"
-    
-    st.info(f"보안상의 이유로 외부 앱은 별도 창에서 실행됩니다.\n\n👉 [**작업계획 및 투입비 자동작성 도구 열기**]({schedule_url})")
+    # Embed Work Schedule app via iframe
+    st.components.v1.iframe(
+        src="https://workschedule-7b1cf.web.app/",
+        height=800,
+        scrolling=True
+    )
 
 if menu == "관리자 설정":
     st.subheader("⚙️ 관리자 설정")
