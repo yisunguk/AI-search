@@ -393,6 +393,7 @@ USER QUESTION:
                     print("DEBUG: Content filter triggered")
                     response_text = "⚠️ Azure OpenAI 콘텐츠 정책에 의해 답변이 차단되었습니다. (Content Filter Triggered)\n\n질문을 변경하거나 문서에 민감한 내용이 있는지 확인해주세요."
                 
+                elif not response_text or not response_text.strip():
                     print(f"DEBUG: Empty response. Finish reason: {finish_reason}")
                     response_text = f"죄송합니다. 답변을 생성하지 못했습니다. (응답 없음, 사유: {finish_reason})"
 
