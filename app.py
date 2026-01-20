@@ -940,12 +940,23 @@ elif menu == "도면/스펙 분석":
                         
                         status_text.text(f"처리 중 ({idx+1}/{total_files}): {safe_filename}")
                         
-                        # 1. Upload to Blob (drawings folder)
                         blob_path = f"drawings/{safe_filename}"
-                        blob_client = container_client.get_blob_client(blob_path)
+                        # 2. Upload to Azure Blob Storage
+                        status_text.text(f"업로드 중 ({idx+1}/{total_files}): {file.name}...")
+                        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=blob_path)
+                        
+                        # CRITICAL: Reset file pointer to ensure full upload
+                        file.seek(0)
                         blob_client.upload_blob(file, overwrite=True)
                         
-                        # 2. Generate SAS URL for Doc Intel
+                        # Verify upload size
+                        props = blob_client.get_blob_properties()
+                        if props.size != file.size:
+                            st.error(f"⚠️ 파일 업로드 크기 불일치! (원본: {file.size}, 업로드됨: {props.size})")
+                        else:
+                            print(f"DEBUG: Upload verified. Size: {props.size} bytes")
+
+                        # Generate SAS Token for Document Intelligence access
                         sas_token = generate_blob_sas(
                             account_name=blob_service_client.account_name,
                             container_name=CONTAINER_NAME,
