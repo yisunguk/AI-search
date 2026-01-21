@@ -20,36 +20,7 @@ def render_user_settings(auth_manager: AuthManager):
     st.write(f"**이메일:** {user_info.get('email', 'Unknown')}")
     st.write(f"**권한:** {user_info.get('role', 'user').upper()}")
     
-    st.divider()
-    
-    # Password change
-    st.markdown("### 🔒 비밀번호 변경")
-    
-    with st.form("change_password_form"):
-        old_password = st.text_input("현재 비밀번호", type="password")
-        new_password = st.text_input("새 비밀번호", type="password")
-        new_password_confirm = st.text_input("새 비밀번호 확인", type="password")
-        
-        submitted = st.form_submit_button("비밀번호 변경")
-        
-        if submitted:
-            if not all([old_password, new_password, new_password_confirm]):
-                st.error("모든 필드를 입력해주세요.")
-            elif new_password != new_password_confirm:
-                st.error("새 비밀번호가 일치하지 않습니다.")
-            elif len(new_password) < 6:
-                st.error("비밀번호는 최소 6자 이상이어야 합니다.")
-            else:
-                success, message = auth_manager.update_password(
-                    user_info['email'],
-                    old_password,
-                    new_password
-                )
-                
-                if success:
-                    st.success(message)
-                else:
-                    st.error(message)
+    st.info("ℹ️ 비밀번호 변경이나 정보 수정은 관리자에게 문의하세요.")
     
     st.divider()
     
@@ -60,8 +31,8 @@ def render_user_settings(auth_manager: AuthManager):
 
 def _render_admin_panel(auth_manager: AuthManager):
     """Render admin panel for user management"""
-    st.markdown("### ⚙️ 관리자 기능")
-    st.caption("사용자 관리 및 권한 설정")
+    st.markdown("### ⚙️ 관리자 기능 (읽기 전용)")
+    st.caption("현재 등록된 사용자 목록입니다. 사용자 추가/수정은 Streamlit Cloud Secrets 설정에서 가능합니다.")
     
     users = auth_manager.get_all_users()
     
@@ -70,56 +41,19 @@ def _render_admin_panel(auth_manager: AuthManager):
         
         for user in users:
             with st.expander(f"{user['name']} ({user['email']})"):
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    st.write(f"**ID:** {user['id']}")
-                    st.write(f"**가입일:** {user['created_at']}")
-                    st.write(f"**현재 권한:** {user['role'].upper()}")
-                
-                with col2:
-                    new_role = st.selectbox(
-                        "권한 변경",
-                        options=['user', 'admin'],
-                        index=0 if user['role'] == 'user' else 1,
-                        key=f"role_{user['id']}"
-                    )
-                    
-                    if st.button("권한 변경", key=f"btn_role_{user['id']}"):
-                        if new_role != user['role']:
-                            success, message = auth_manager.update_user_role(user['id'], new_role)
-                            if success:
-                                st.success(message)
-                                st.rerun()
-                            else:
-                                st.error(message)
-                
-                st.divider()
+                st.write(f"**ID (Key):** {user['id']}")
+                st.write(f"**권한:** {user['role'].upper()}")
                 
                 # Menu Permissions
                 st.markdown("#### 🔐 메뉴 접근 권한")
-                all_menus = ["번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성"]
-                
-                # Current permissions
                 current_perms = user.get('permissions', [])
-                # Ensure "홈" and "사용자 설정" are not in the selection list (they are mandatory)
-                default_selection = [m for m in current_perms if m in all_menus]
-                
-                selected_menus = st.multiselect(
-                    "허용할 메뉴 선택",
-                    options=all_menus,
-                    default=default_selection,
-                    key=f"perms_{user['id']}"
-                )
-                
-                if st.button("메뉴 권한 저장", key=f"btn_perms_{user['id']}"):
-                    # Always include mandatory menus
-                    final_permissions = ["홈", "사용자 설정"] + selected_menus
-                    success, message = auth_manager.update_user_permissions(user['id'], final_permissions)
-                    if success:
-                        st.success(message)
-                        st.rerun()
-                    else:
-                        st.error(message)
+                if 'all' in current_perms:
+                    st.success("모든 메뉴 접근 가능 (Admin)")
+                elif current_perms:
+                    for perm in current_perms:
+                        st.write(f"- {perm}")
+                else:
+                    st.warning("접근 가능한 메뉴가 없습니다.")
+                    
     else:
         st.info("등록된 사용자가 없습니다.")
