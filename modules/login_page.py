@@ -107,3 +107,14 @@ def _render_login_form(auth_manager: AuthManager):
                     st.error(message)
     
     st.info("ℹ️ 계정 생성 및 비밀번호 초기화는 관리자에게 문의하세요.")
+    
+    # Debug info (Temporary)
+    user_count = len(auth_manager.users)
+    if user_count == 0:
+        st.error("⚠️ 사용자 정보가 로드되지 않았습니다. Secrets 설정을 확인하세요.")
+        try:
+            st.write("Available Secret Keys:", list(st.secrets.keys()))
+        except:
+            st.write("Secrets access failed")
+    else:
+        st.caption(f"Debug: {user_count} users loaded from secrets.")
