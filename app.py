@@ -250,51 +250,68 @@ if menu != "홈":
 
 if menu == "홈":
     # -----------------------------
-    # 랜딩 페이지 (Home) - Gemini Style Redesign (Round 3)
+    # 랜딩 페이지 (Home) - Gemini Style Redesign (Round 4)
     # -----------------------------
     
-    # Custom CSS for Gemini-like UI
-    st.markdown("""
+    # Initialize Chat History for Home
+    if "home_chat_messages" not in st.session_state:
+        st.session_state.home_chat_messages = []
+
+    # Custom CSS for Gemini-like UI & Centering
+    # Only center if no messages yet
+    center_css = ""
+    if not st.session_state.home_chat_messages:
+        center_css = """
+        <style>
+        /* Move the bottom chat input container to the middle */
+        [data-testid="stBottom"] {
+            bottom: 45vh !important;
+            transition: bottom 0.3s ease-in-out;
+            background: transparent !important;
+        }
+        /* Hide the default footer decoration if visible */
+        footer {display: none !important;}
+        </style>
+        """
+    
+    st.markdown(f"""
     <style>
     /* Greeting Styles */
-    .greeting-container {
+    .greeting-container {{
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        height: 60vh; /* Center vertically */
+        height: 40vh; /* Adjusted to sit above the centered input */
         text-align: center;
-    }
-    .greeting-title {
-        font-size: 3rem; /* Adjusted size */
+    }}
+    .greeting-title {{
+        font-size: 3rem;
         font-weight: 700;
         background: -webkit-linear-gradient(45deg, #4285F4, #9B72CB, #D96570);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.5rem;
-        white-space: nowrap; /* Force single line */
-    }
-    .greeting-subtitle {
+        white-space: nowrap;
+    }}
+    .greeting-subtitle {{
         font-size: 2rem;
         font-weight: 600;
-        color: #5f6368; /* Dark gray for light mode */
-    }
-    @media (prefers-color-scheme: dark) {
-        .greeting-subtitle {
+        color: #5f6368;
+    }}
+    @media (prefers-color-scheme: dark) {{
+        .greeting-subtitle {{
             color: #bdc1c6;
-        }
-    }
+        }}
+    }}
     
     /* Chat Message Styles */
-    .stChatMessage {
+    .stChatMessage {{
         background-color: transparent !important;
-    }
+    }}
     </style>
+    {center_css}
     """, unsafe_allow_html=True)
-
-    # Initialize Chat History for Home
-    if "home_chat_messages" not in st.session_state:
-        st.session_state.home_chat_messages = []
 
     # 1. Greeting Section (Only show if chat is empty or minimal)
     if not st.session_state.home_chat_messages:
@@ -323,17 +340,28 @@ if menu == "홈":
 
     # Tools / Attachments (Popover)
     # Placed above chat input (conceptually)
+    # If centered, we want this to float near the input.
+    # Since we can't easily put it *inside*, we place it here.
+    # When centered (bottom: 45vh), this element in the main flow needs to be positioned appropriately.
+    # Actually, if we just place it here, it will be in the main scroll area.
+    # If the input is moved up, it might cover this if we are not careful.
+    # But since the greeting is 40vh, and input is at 45vh (from bottom), there is space.
+    
     with st.container():
         # Use a popover for "Tools"
-        with st.popover("➕ 도구 / 파일 첨부", use_container_width=False):
-            st.markdown("### 파일 첨부 (저장되지 않음)")
-            uploaded_file = st.file_uploader("문서 또는 이미지 업로드", key="home_chat_upload")
+        # We use columns to center the button if we want, or keep it left.
+        # User asked for "+" button "inside". We can't do that, but we can make it look close.
+        
+        # If we are in "Centered" mode, we might want to center this button too?
+        # Let's keep it simple: Just the popover.
+        
+        with st.popover("➕ 파일 첨부", use_container_width=False):
+            st.markdown("### 파일/이미지 첨부")
+            st.caption("이미지를 복사(Ctrl+C) 후 아래 영역을 클릭하고 붙여넣기(Ctrl+V) 하세요.")
+            uploaded_file = st.file_uploader("파일 선택 또는 붙여넣기", key="home_chat_upload")
             
-            st.markdown("### 카메라")
-            camera_img = st.camera_input("사진 촬영", key="home_chat_camera")
-            
-            if uploaded_file or camera_img:
-                st.info("파일이 선택되었습니다. 질문과 함께 전송됩니다.")
+            if uploaded_file:
+                st.info(f"선택됨: {uploaded_file.name}")
 
     # Chat Input
     if prompt := st.chat_input("GPT 5.2에게 물어보기"):
@@ -341,20 +369,10 @@ if menu == "홈":
         user_content = [{"type": "text", "text": prompt}]
         attachments = []
         
-        # Handle Image (Camera or Uploaded Image)
+        # Handle Uploaded File (Image or Text)
         image_data = None
-        if camera_img:
-            import base64
-            image_bytes = camera_img.getvalue()
-            base64_image = base64.b64encode(image_bytes).decode('utf-8')
-            image_data = f"data:image/jpeg;base64,{base64_image}"
-            user_content.append({
-                "type": "image_url",
-                "image_url": {"url": image_data}
-            })
-            attachments.append("카메라 사진")
             
-        elif uploaded_file and uploaded_file.type.startswith('image/'):
+        if uploaded_file and uploaded_file.type.startswith('image/'):
             import base64
             image_bytes = uploaded_file.getvalue()
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
@@ -374,9 +392,6 @@ if menu == "홈":
                     user_content[0]["text"] += f"\n\n[첨부 파일 내용 ({uploaded_file.name})]:\n{text_content}"
                     attachments.append(uploaded_file.name)
                 elif uploaded_file.type == "application/pdf":
-                     # PDF handling (Basic text extraction if possible, else placeholder)
-                     # Since we can't easily install new libs without user permission, we'll try basic approach or warn
-                     # For now, just append a note that file was attached but content might not be fully read without OCR
                      user_content[0]["text"] += f"\n\n[첨부 파일 ({uploaded_file.name})이 전송되었습니다. (PDF 텍스트 추출은 현재 제한적일 수 있습니다)]"
                      attachments.append(uploaded_file.name)
                 else:
@@ -407,7 +422,6 @@ if menu == "홈":
                     chat_manager = get_chat_manager()
                     
                     # Prepare messages for API
-                    # We need to convert our session state format to OpenAI format
                     api_messages = []
                     for msg in st.session_state.home_chat_messages:
                         api_messages.append({
@@ -415,12 +429,11 @@ if menu == "홈":
                             "content": msg["content"]
                         })
                     
-                    # Direct Client Call (Bypassing RAG Search for Home Chat as requested "No DB")
-                    # Using the client from chat_manager
+                    # Direct Client Call
                     response = chat_manager.client.chat.completions.create(
                         model=chat_manager.deployment_name,
                         messages=api_messages,
-                        max_completion_tokens=4096, # Fixed parameter name
+                        max_completion_tokens=4096,
                         temperature=0.7
                     )
                     
@@ -433,6 +446,9 @@ if menu == "홈":
                         "role": "assistant",
                         "content": response_text
                     })
+                    
+                    # Rerun to reset the UI (move input to bottom)
+                    st.rerun()
                     
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {e}")
