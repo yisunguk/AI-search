@@ -346,52 +346,58 @@ footer {display: none !important;}
             if "attachments" in message and message["attachments"]:
                 st.caption(f"📎 첨부파일: {', '.join(message['attachments'])}")
 
-    # Tools / Attachments (Popover)
-    # Placed above chat input (conceptually)
-    # If centered, we want this to float near the input.
-    # Since we can't easily put it *inside*, we place it here.
-    # When centered (bottom: 45vh), this element in the main flow needs to be positioned appropriately.
-    # Actually, if we just place it here, it will be in the main scroll area.
-    # If the input is moved up, it might cover this if we are not careful.
-    # But since the greeting is 40vh, and input is at 45vh (from bottom), there is space.
+    # File Upload Section (at top, like in the 도면/스펙 분석 page)
+    st.markdown("### 파일/이미지 첨부")
     
-    with st.container():
-        # Use columns to center the input box
-        # Ratio [1, 6, 1] to make it much wider, matching the long greeting title
-        col1, col2, col3 = st.columns([1, 6, 1])
+    if "home_uploader_key" not in st.session_state:
+        st.session_state.home_uploader_key = 0
+    
+    uploaded_file = st.file_uploader(
+        "Drag and drop file here", 
+        type=['pdf', 'png', 'jpg', 'jpeg', 'txt'],
+        key=f"home_upload_{st.session_state.home_uploader_key}",
+        help="Limit 200MB per file • PDF, PNG, JPG, JPEG, TXT"
+    )
+    
+    if uploaded_file:
+        st.success(f"✅ 첨부됨: {uploaded_file.name}")
+    
+    st.divider()
+    
+    # Chat History Display
+    for message in st.session_state.home_chat_messages:
+        with st.chat_message(message["role"]):
+            # Check if content is a tuple (text, images) or just text
+            if isinstance(message["content"], list):
+                # Multimodal content
+                for item in message["content"]:
+                    if item["type"] == "text":
+                        st.markdown(item["text"])
+                    elif item["type"] == "image_url":
+                        st.image(item["image_url"]["url"], width=300)
+            else:
+                st.markdown(message["content"])
+                
+            if "attachments" in message and message["attachments"]:
+                st.caption(f"📎 첨부파일: {', '.join(message['attachments'])}")
+
+    # Chat Input Area (at bottom, in main flow, not floating)
+    st.markdown("### GPT 5.2에게 물어보기")
+    
+    with st.form(key="home_chat_form", clear_on_submit=True):
+        user_input = st.text_area(
+            "Message", 
+            height=100, 
+            placeholder="무엇을 도와드릴까요?", 
+            label_visibility="collapsed"
+        )
+        
+        col1, col2 = st.columns([6, 1])
         with col2:
-            # Removed border=True to make it look cleaner
-            with st.container():
-                # 1. Text Input Area
-                # Use a form to capture Enter (partial support) or just standard text area
-                # We use a simple text area for now.
-                user_input = st.text_area(
-                    "Query", 
-                    height=68, 
-                    placeholder="GPT 5.2에게 물어보기", 
-                    label_visibility="collapsed",
-                    key="home_user_input"
-                )
-                
-                # 2. Bottom Action Bar (Attachments left, Send right)
-                tool_col, gap_col, send_col = st.columns([1, 5, 1])
-                
-                with tool_col:
-                    # Attachment Button (Popover)
-                    with st.popover("➕", use_container_width=True):
-                        st.markdown("### 파일 첨부")
-                        uploaded_file = st.file_uploader("파일 선택", key="home_chat_upload", label_visibility="collapsed")
-                        if uploaded_file:
-                            st.success(f"선택됨: {uploaded_file.name}")
-
-                with send_col:
-                    # Send Button
-                    submit_button = st.button("🚀", use_container_width=True)
-
-            # Logic to handle submission
-            if submit_button and user_input:
-                prompt = user_input
-                # ... proceed with chat logic ...
+            submit_button = st.form_submit_button("🚀 전송", use_container_width=True)
+    
+    if submit_button and user_input:
+        prompt = user_input
                 
     # Logic adapter:
     if 'prompt' in locals() and prompt:
