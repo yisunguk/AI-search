@@ -268,9 +268,10 @@ if menu == "홈":
     bottom: 50vh !important;
     transition: bottom 0.3s ease-in-out;
     background: transparent !important;
+    z-index: 10000 !important; /* Ensure input is on top but manageable */
 }
 /* Move the attachment button to BELOW the input when centered */
-[data-testid="stMain"] [data-testid="stPopover"] {
+[data-testid="stPopover"] {
     bottom: 44vh !important;
 }
 /* Hide the default footer decoration if visible */
@@ -286,9 +287,11 @@ footer {display: none !important;}
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding-top: 15vh; /* Push greeting up slightly */
+        padding-top: 10vh; /* Reduced padding to prevent push-off */
         padding-bottom: 5vh;
         text-align: center;
+        position: relative;
+        z-index: 1; /* Ensure text is above background */
     }}
     .greeting-title {{
         font-size: 3rem;
@@ -303,6 +306,7 @@ footer {display: none !important;}
         font-size: 2rem;
         font-weight: 600;
         color: #5f6368;
+        display: block !important; /* Force display */
     }}
     @media (prefers-color-scheme: dark) {{
         .greeting-subtitle {{
@@ -316,17 +320,17 @@ footer {display: none !important;}
     }}
 
     /* Attachment Button Positioning (Default - Active State - ABOVE Input) */
-    [data-testid="stMain"] [data-testid="stPopover"] {{
+    [data-testid="stPopover"] {{
         position: fixed !important;
         bottom: 80px !important; /* Just above the standard input bar */
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 1000 !important;
+        z-index: 999999 !important; /* Extremely high z-index to ensure visibility */
         transition: bottom 0.3s ease-in-out;
     }}
     
     /* Adjust width of the popover button container if needed */
-    [data-testid="stMain"] [data-testid="stPopover"] > div {{
+    [data-testid="stPopover"] > div {{
         display: flex;
         justify-content: center;
     }}
