@@ -361,11 +361,11 @@ footer {display: none !important;}
         with col2:
             with st.popover("➕ 파일 첨부", use_container_width=True):
                 st.markdown("### 파일/이미지 첨부")
-            st.caption("이미지를 복사(Ctrl+C) 후 아래 영역을 클릭하고 붙여넣기(Ctrl+V) 하세요.")
-            uploaded_file = st.file_uploader("파일 선택 또는 붙여넣기", key="home_chat_upload")
-            
-            if uploaded_file:
-                st.info(f"선택됨: {uploaded_file.name}")
+                st.caption("이미지를 복사(Ctrl+C) 후 아래 영역을 클릭하고 붙여넣기(Ctrl+V) 하세요.")
+                uploaded_file = st.file_uploader("파일 선택 또는 붙여넣기", key="home_chat_upload")
+                
+                if uploaded_file:
+                    st.info(f"선택됨: {uploaded_file.name}")
 
     # Chat Input
     if prompt := st.chat_input("GPT 5.2에게 물어보기"):
