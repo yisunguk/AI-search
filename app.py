@@ -265,13 +265,13 @@ if menu == "홈":
 <style>
 /* Move the bottom chat input container to the middle */
 [data-testid="stBottom"] {
-    bottom: 30vh !important;
+    bottom: 50vh !important;
     transition: bottom 0.3s ease-in-out;
     background: transparent !important;
 }
-/* Move the attachment button to follow the input */
+/* Move the attachment button to BELOW the input when centered */
 [data-testid="stMain"] [data-testid="stPopover"] {
-    bottom: calc(30vh + 70px) !important;
+    bottom: 44vh !important;
 }
 /* Hide the default footer decoration if visible */
 footer {display: none !important;}
@@ -286,7 +286,7 @@ footer {display: none !important;}
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding-top: 10vh;
+        padding-top: 15vh; /* Push greeting up slightly */
         padding-bottom: 5vh;
         text-align: center;
     }}
@@ -315,7 +315,7 @@ footer {display: none !important;}
         background-color: transparent !important;
     }}
 
-    /* Attachment Button Positioning (Default - Bottom) */
+    /* Attachment Button Positioning (Default - Active State - ABOVE Input) */
     [data-testid="stMain"] [data-testid="stPopover"] {{
         position: fixed !important;
         bottom: 80px !important; /* Just above the standard input bar */
