@@ -1,10 +1,11 @@
 """
-Home Chat Module with Function Calling
-Provides a clean chat interface with web search capability
+Home Chat Module with Function Calling and File Upload
+Provides a clean chat interface with web search capability and image upload support
 """
 
 import streamlit as st
 import json
+import base64
 from web_search import perform_web_search
 
 def render_home_chat(chat_manager):
@@ -86,19 +87,71 @@ footer {display: none !important;}
     # Display Chat History
     for message in st.session_state.home_chat_messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            # Handle both simple string content and list content (multimodal)
+            if isinstance(message["content"], list):
+                for item in message["content"]:
+                    if item["type"] == "text":
+                        st.markdown(item["text"])
+                    elif item["type"] == "image_url":
+                        st.image(item["image_url"]["url"], width=300)
+            else:
+                st.markdown(message["content"])
+
+    # File Upload Section (above chat input)
+    if "home_uploader_key" not in st.session_state:
+        st.session_state.home_uploader_key = 0
+    
+    uploaded_file = st.file_uploader(
+        "Drag and drop files here",
+        type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'tif'],
+        key=f"home_upload_{st.session_state.home_uploader_key}",
+        help="Limit 200MB per file • PDF, PNG, JPG, JPEG, TIFF, BMP, TIF"
+    )
+    
+    if uploaded_file:
+        st.success(f"✅ 첨부됨: {uploaded_file.name}")
 
     # Chat Input Area
     if prompt := st.chat_input("GPT 5.2에게 물어보기"):
+        # Prepare content for user message
+        user_content = [{"type": "text", "text": prompt}]
+        
+        # Handle Uploaded File (Image)
+        if uploaded_file and uploaded_file.type.startswith('image/'):
+            image_bytes = uploaded_file.getvalue()
+            base64_image = base64.b64encode(image_bytes).decode('utf-8')
+            image_data = f"data:{uploaded_file.type};base64,{base64_image}"
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": image_data}
+            })
+        
+        # Handle Text/PDF File (Context Injection)
+        elif uploaded_file:
+            try:
+                if uploaded_file.type == "text/plain":
+                    text_content = uploaded_file.getvalue().decode("utf-8")
+                    user_content[0]["text"] += f"\n\n[첨부 파일 내용 ({uploaded_file.name})]:\n{text_content}"
+                elif uploaded_file.type == "application/pdf":
+                    user_content[0]["text"] += f"\n\n[첨부 파일 ({uploaded_file.name})이 전송되었습니다. PDF는 현재 화면 출력이 제한적일 수 있습니다.]"
+                else:
+                    user_content[0]["text"] += f"\n\n[첨부 파일 ({uploaded_file.name})이 전송되었습니다.]"
+            except Exception as e:
+                st.error(f"파일 읽기 실패: {e}")
+        
         # Add user message to state
         st.session_state.home_chat_messages.append({
             "role": "user", 
-            "content": prompt
+            "content": user_content
         })
         
         # Display user message
         with st.chat_message("user"):
-            st.markdown(prompt)
+            for item in user_content:
+                if item["type"] == "text":
+                    st.markdown(item["text"])
+                elif item["type"] == "image_url":
+                    st.image(item["image_url"]["url"], width=300)
             
         # Assistant Response with Function Calling
         with st.chat_message("assistant"):
@@ -200,6 +253,10 @@ footer {display: none !important;}
                         "role": "assistant",
                         "content": response_text
                     })
+                    
+                    # Clear uploaded file by incrementing key
+                    if uploaded_file:
+                        st.session_state.home_uploader_key += 1
                     
                     # Rerun to update UI
                     st.rerun()
