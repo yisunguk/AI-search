@@ -357,11 +357,11 @@ footer {display: none !important;}
     
     with st.container():
         # Use columns to center the input box
-        # Ratio [1, 2, 1] seems to match the title width best based on previous feedback
-        col1, col2, col3 = st.columns([1, 2, 1])
+        # Ratio [1, 6, 1] to make it much wider, matching the long greeting title
+        col1, col2, col3 = st.columns([1, 6, 1])
         with col2:
-            # Create a "Unified" Input Box look using a container with border
-            with st.container(border=True):
+            # Removed border=True to make it look cleaner
+            with st.container():
                 # 1. Text Input Area
                 # Use a form to capture Enter (partial support) or just standard text area
                 # We use a simple text area for now.
