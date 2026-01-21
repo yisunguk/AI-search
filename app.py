@@ -245,7 +245,7 @@ with st.sidebar:
 
 # Common Header for non-Home pages
 if menu != "홈":
-    st.title("현장똑똑 AI")
+    st.title(menu)
     st.caption("검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.")
 
 if menu == "홈":
@@ -460,7 +460,7 @@ if menu == "번역하기":
                     st.error(f"번역 요청 중 오류 발생: {e}")
 
 elif menu == "파일 보관함":
-    st.subheader("📂 클라우드 파일 보관함")
+    # st.subheader("📂 클라우드 파일 보관함") - Removed to avoid duplication
     
     # -----------------------------
     # 1. 파일 직접 업로드 (Save)
@@ -788,7 +788,7 @@ elif menu == "검색 & AI 채팅":
                 st.rerun()
 
 elif menu == "도면/스펙 분석":
-    st.subheader("🏗️ 도면/스펙 정밀 분석 (RAG)")
+    # st.subheader("🏗️ 도면/스펙 정밀 분석 (RAG)") - Removed to avoid duplication
     st.caption("Azure Document Intelligence를 활용한 고정밀 문서 분석 및 질의응답")
     
     with st.expander("ℹ️ Document Intelligence가 왜 더 좋은가요?", expanded=False):
@@ -1354,7 +1354,6 @@ if menu == "엑셀데이터 자동추출":
     excel_manager.render_excel_tool()
 
 if menu == "사진대지 자동작성":
-    st.title("사진대지 자동작성")
     st.caption("건설 현장 사진을 업로드하여 Excel 사진대지를 자동으로 생성합니다.")
     
     # Embed Photo Log app via iframe
@@ -1365,7 +1364,6 @@ if menu == "사진대지 자동작성":
     )
 
 if menu == "작업계획 및 투입비 자동작성":
-    st.title("작업계획 및 투입비 자동작성")
     st.caption("작업 계획을 수립하고 투입비를 자동으로 산출합니다.")
     
     # Embed Work Schedule app via iframe
@@ -1376,7 +1374,7 @@ if menu == "작업계획 및 투입비 자동작성":
     )
 
 if menu == "관리자 설정":
-    st.subheader("⚙️ 관리자 설정")
+    # st.subheader("⚙️ 관리자 설정") - Removed to avoid duplication
     st.info("Azure AI Search 리소스를 초기화하거나 상태를 확인합니다.")
     
     # 인덱싱 대상 폴더 설정
