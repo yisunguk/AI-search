@@ -357,9 +357,10 @@ footer {display: none !important;}
     
     with st.container():
         # Use columns to center the uploader and chat input in the main flow
-        col1, col2, col3 = st.columns([1, 2, 1])
+        # Adjusted ratio to [1, 4, 1] to make the input area wider, matching the title better
+        col1, col2, col3 = st.columns([1, 4, 1])
         with col2:
-            st.markdown("##### 📎 파일/이미지 첨부 (Ctrl+V 가능)")
+            # Removed the text label as requested
             uploaded_file = st.file_uploader("파일 선택 또는 붙여넣기", key="home_chat_upload", label_visibility="collapsed")
             
             if uploaded_file:
