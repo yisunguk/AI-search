@@ -317,11 +317,6 @@ footer {display: none !important;}
         display: flex;
         justify-content: center;
     }}
-    
-    /* Hide form submit button */
-    .stForm button[kind="primary"] {{
-        display: none !important;
-    }}
     </style>
     {center_css}
     """, unsafe_allow_html=True)
@@ -386,27 +381,13 @@ footer {display: none !important;}
             if "attachments" in message and message["attachments"]:
                 st.caption(f"📎 첨부파일: {', '.join(message['attachments'])}")
 
-    # Chat Input Area (at bottom, in main flow, not floating)
+    # Chat Input Area (using st.chat_input for Enter key support)
     # Removed title as requested
     
-    with st.form(key="home_chat_form", clear_on_submit=True):
-        user_input = st.text_area(
-            "Message", 
-            height=100, 
-            placeholder="GPT 5.2에게 물어보기", 
-            label_visibility="collapsed"
-        )
-        
-        # Removed submit button as requested
-        # Auto-submit on Enter (Ctrl+Enter in text_area)
-        submit_button = st.form_submit_button("Submit", type="primary", use_container_width=False)
-        # Hide the button with CSS
-    
-    if submit_button and user_input:
-        prompt = user_input
+    if prompt := st.chat_input("GPT 5.2에게 물어보기"):
+        # ... proceed with chat logic ...
                 
-    # Logic adapter:
-    if 'prompt' in locals() and prompt:
+        # Logic: handle the prompt
         # Prepare content for user message
         user_content = [{"type": "text", "text": prompt}]
         attachments = []
