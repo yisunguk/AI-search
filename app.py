@@ -269,6 +269,10 @@ if menu == "홈":
     transition: bottom 0.3s ease-in-out;
     background: transparent !important;
 }
+/* Move the attachment button to follow the input */
+[data-testid="stMain"] [data-testid="stPopover"] {
+    bottom: calc(30vh + 70px) !important;
+}
 /* Hide the default footer decoration if visible */
 footer {display: none !important;}
 </style>
@@ -286,6 +290,49 @@ footer {display: none !important;}
         padding-bottom: 5vh;
         text-align: center;
     }}
+    .greeting-title {{
+        font-size: 3rem;
+        font-weight: 700;
+        background: -webkit-linear-gradient(45deg, #4285F4, #9B72CB, #D96570);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+        white-space: nowrap;
+    }}
+    .greeting-subtitle {{
+        font-size: 2rem;
+        font-weight: 600;
+        color: #5f6368;
+    }}
+    @media (prefers-color-scheme: dark) {{
+        .greeting-subtitle {{
+            color: #bdc1c6;
+        }}
+    }}
+    
+    /* Chat Message Styles */
+    .stChatMessage {{
+        background-color: transparent !important;
+    }}
+
+    /* Attachment Button Positioning (Default - Bottom) */
+    [data-testid="stMain"] [data-testid="stPopover"] {{
+        position: fixed !important;
+        bottom: 80px !important; /* Just above the standard input bar */
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 1000 !important;
+        transition: bottom 0.3s ease-in-out;
+    }}
+    
+    /* Adjust width of the popover button container if needed */
+    [data-testid="stMain"] [data-testid="stPopover"] > div {{
+        display: flex;
+        justify-content: center;
+    }}
+    </style>
+    {center_css}
+    """, unsafe_allow_html=True)
     .greeting-title {{
         font-size: 3rem;
         font-weight: 700;
