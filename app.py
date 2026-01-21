@@ -17,6 +17,10 @@ from chat_manager import AzureOpenAIChatManager
 from doc_intel_manager import DocumentIntelligenceManager
 import excel_manager
 
+# Authentication imports
+from utils.auth_manager import AuthManager
+from modules.login_page import render_login_page
+
 # -----------------------------
 # 설정 및 비밀 관리
 # -----------------------------
@@ -216,10 +220,46 @@ if "page" not in st.session_state:
 def change_page(page_name):
     st.session_state.page = page_name
 
+# Initialize AuthManager
+auth_manager = AuthManager()
+
+# Initialize login state
+if 'is_logged_in' not in st.session_state:
+    st.session_state.is_logged_in = False
+
+# Define role-based menu permissions
+ROLE_MENUS = {
+    'admin': ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"],
+    'user': ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "사용자 설정"],
+    'guest': ["홈", "사용자 설정"]
+}
+
+# Check if user is logged in
+if not st.session_state.is_logged_in:
+    render_login_page(auth_manager)
+    st.stop()
+
+# User is logged in - get their info
+user_info = st.session_state.get('user_info', {})
+user_role = user_info.get('role', 'guest')
+available_menus = ROLE_MENUS.get(user_role, ROLE_MENUS['guest'])
+
 with st.sidebar:
+    # User profile
+    st.markdown(f"### 👤 {user_info.get('name', 'User')}")
+    st.caption(f"**{user_info.get('email', '')}**")
+    st.caption(f"권한: {user_role.upper()}")
+    
+    if st.button("🚪 로그아웃", key="logout_btn", use_container_width=True):
+        st.session_state.is_logged_in = False
+        st.session_state.user_info = None
+        st.rerun()
+    
+    st.divider()
+    
     st.header("메뉴")
-    # key="page" binds the radio selection to st.session_state.page
-    menu = st.radio("이동", ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정"], key="page")
+    # Filter menu based on user role
+    menu = st.radio("이동", available_menus, key="page")
     
     st.divider()
     
@@ -1581,8 +1621,8 @@ if menu == "관리자 설정":
                 for warn in warnings:
                     st.warning(f"- {warn}")
 
-
-
-
+if menu == "사용자 설정":
+    from modules.user_settings_module import render_user_settings
+    render_user_settings(auth_manager)
 
 
