@@ -262,17 +262,17 @@ if menu == "홈":
     center_css = ""
     if not st.session_state.home_chat_messages:
         center_css = """
-        <style>
-        /* Move the bottom chat input container to the middle */
-        [data-testid="stBottom"] {
-            bottom: 45vh !important;
-            transition: bottom 0.3s ease-in-out;
-            background: transparent !important;
-        }
-        /* Hide the default footer decoration if visible */
-        footer {display: none !important;}
-        </style>
-        """
+<style>
+/* Move the bottom chat input container to the middle */
+[data-testid="stBottom"] {
+    bottom: 45vh !important;
+    transition: bottom 0.3s ease-in-out;
+    background: transparent !important;
+}
+/* Hide the default footer decoration if visible */
+footer {display: none !important;}
+</style>
+"""
     
     st.markdown(f"""
     <style>
