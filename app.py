@@ -317,6 +317,13 @@ footer {display: none !important;}
         display: flex;
         justify-content: center;
     }}
+    
+    /* Limit input area width to match greeting title */
+    div[data-testid="column"]:has(> div > div > div[data-testid="stFileUploader"]) {{
+        max-width: 650px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }}
     </style>
     {center_css}
     """, unsafe_allow_html=True)
