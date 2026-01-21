@@ -85,7 +85,7 @@ def _render_admin_panel(auth_manager: AuthManager):
                         key=f"role_{user['id']}"
                     )
                     
-                    if st.button("변경", key=f"btn_{user['id']}"):
+                    if st.button("권한 변경", key=f"btn_role_{user['id']}"):
                         if new_role != user['role']:
                             success, message = auth_manager.update_user_role(user['id'], new_role)
                             if success:
@@ -93,5 +93,33 @@ def _render_admin_panel(auth_manager: AuthManager):
                                 st.rerun()
                             else:
                                 st.error(message)
+                
+                st.divider()
+                
+                # Menu Permissions
+                st.markdown("#### 🔐 메뉴 접근 권한")
+                all_menus = ["번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성"]
+                
+                # Current permissions
+                current_perms = user.get('permissions', [])
+                # Ensure "홈" and "사용자 설정" are not in the selection list (they are mandatory)
+                default_selection = [m for m in current_perms if m in all_menus]
+                
+                selected_menus = st.multiselect(
+                    "허용할 메뉴 선택",
+                    options=all_menus,
+                    default=default_selection,
+                    key=f"perms_{user['id']}"
+                )
+                
+                if st.button("메뉴 권한 저장", key=f"btn_perms_{user['id']}"):
+                    # Always include mandatory menus
+                    final_permissions = ["홈", "사용자 설정"] + selected_menus
+                    success, message = auth_manager.update_user_permissions(user['id'], final_permissions)
+                    if success:
+                        st.success(message)
+                        st.rerun()
+                    else:
+                        st.error(message)
     else:
         st.info("등록된 사용자가 없습니다.")

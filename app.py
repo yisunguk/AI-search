@@ -227,12 +227,9 @@ auth_manager = AuthManager()
 if 'is_logged_in' not in st.session_state:
     st.session_state.is_logged_in = False
 
-# Define role-based menu permissions
-ROLE_MENUS = {
-    'admin': ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"],
-    'user': ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "사용자 설정"],
-    'guest': ["홈", "사용자 설정"]
-}
+# Define role-based menu permissions (Fallback / Admin)
+ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"]
+GUEST_MENUS = ["홈", "사용자 설정"]
 
 # Check if user is logged in
 if not st.session_state.is_logged_in:
@@ -242,7 +239,22 @@ if not st.session_state.is_logged_in:
 # User is logged in - get their info
 user_info = st.session_state.get('user_info', {})
 user_role = user_info.get('role', 'guest')
-available_menus = ROLE_MENUS.get(user_role, ROLE_MENUS['guest'])
+user_perms = user_info.get('permissions', [])
+
+if user_role == 'admin':
+    available_menus = ALL_MENUS
+else:
+    # Use assigned permissions, ensuring mandatory menus are present
+    available_menus = user_perms if user_perms else GUEST_MENUS
+    # Ensure "홈" and "사용자 설정" are always available
+    if "홈" not in available_menus:
+        available_menus.insert(0, "홈")
+    if "사용자 설정" not in available_menus:
+        available_menus.append("사용자 설정")
+    
+    # Remove "관리자 설정" if somehow present for non-admins
+    if "관리자 설정" in available_menus:
+        available_menus.remove("관리자 설정")
 
 with st.sidebar:
     # User profile

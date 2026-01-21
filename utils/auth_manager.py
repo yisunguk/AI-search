@@ -27,17 +27,24 @@ class AuthManager:
                 name TEXT NOT NULL,
                 role TEXT DEFAULT 'user',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                approved BOOLEAN DEFAULT 1
+                approved BOOLEAN DEFAULT 1,
+                permissions TEXT DEFAULT ''
             )
         ''')
+        
+        # Migration: Add permissions column if it doesn't exist
+        try:
+            cursor.execute('SELECT permissions FROM users LIMIT 1')
+        except sqlite3.OperationalError:
+            cursor.execute('ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT ""')
         
         # Create default admin user if no users exist
         cursor.execute('SELECT COUNT(*) FROM users')
         if cursor.fetchone()[0] == 0:
             admin_hash = self.hash_password('admin123')
             cursor.execute(
-                'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
-                ('admin@example.com', admin_hash, 'Administrator', 'admin')
+                'INSERT INTO users (email, password_hash, name, role, permissions) VALUES (?, ?, ?, ?, ?)',
+                ('admin@example.com', admin_hash, 'Administrator', 'admin', 'all')
             )
         
         conn.commit()
@@ -65,11 +72,12 @@ class AuthManager:
                 conn.close()
                 return False, "이미 등록된 이메일입니다."
             
-            # Insert new user
+            # Insert new user with default permissions
             password_hash = self.hash_password(password)
+            default_permissions = "홈,사용자 설정"
             cursor.execute(
-                'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
-                (email, password_hash, name, 'user')
+                'INSERT INTO users (email, password_hash, name, role, permissions) VALUES (?, ?, ?, ?, ?)',
+                (email, password_hash, name, 'user', default_permissions)
             )
             
             conn.commit()
@@ -92,7 +100,7 @@ class AuthManager:
             
             password_hash = self.hash_password(password)
             cursor.execute(
-                'SELECT id, email, name, role, approved FROM users WHERE email = ? AND password_hash = ?',
+                'SELECT id, email, name, role, approved, permissions FROM users WHERE email = ? AND password_hash = ?',
                 (email, password_hash)
             )
             
@@ -102,7 +110,7 @@ class AuthManager:
             if not result:
                 return False, None, "이메일 또는 비밀번호가 올바르지 않습니다."
             
-            user_id, email, name, role, approved = result
+            user_id, email, name, role, approved, permissions = result
             
             if not approved:
                 return False, None, "계정이 승인 대기 중입니다. 관리자에게 문의하세요."
@@ -111,7 +119,8 @@ class AuthManager:
                 'id': user_id,
                 'email': email,
                 'name': name,
-                'role': role
+                'role': role,
+                'permissions': permissions.split(',') if permissions else []
             }
             
             return True, user_info, f"환영합니다, {name}님!"
@@ -126,7 +135,7 @@ class AuthManager:
             cursor = conn.cursor()
             
             cursor.execute(
-                'SELECT id, email, name, role FROM users WHERE email = ?',
+                'SELECT id, email, name, role, permissions FROM users WHERE email = ?',
                 (email,)
             )
             
@@ -134,11 +143,13 @@ class AuthManager:
             conn.close()
             
             if result:
+                permissions = result[4]
                 return {
                     'id': result[0],
                     'email': result[1],
                     'name': result[2],
-                    'role': result[3]
+                    'role': result[3],
+                    'permissions': permissions.split(',') if permissions else []
                 }
             return None
             
@@ -182,19 +193,21 @@ class AuthManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            cursor.execute('SELECT id, email, name, role, created_at, approved FROM users')
+            cursor.execute('SELECT id, email, name, role, created_at, approved, permissions FROM users')
             results = cursor.fetchall()
             conn.close()
             
             users = []
             for row in results:
+                permissions = row[6]
                 users.append({
                     'id': row[0],
                     'email': row[1],
                     'name': row[2],
                     'role': row[3],
                     'created_at': row[4],
-                    'approved': row[5]
+                    'approved': row[5],
+                    'permissions': permissions.split(',') if permissions else []
                 })
             
             return users
@@ -216,3 +229,19 @@ class AuthManager:
             
         except Exception as e:
             return False, f"권한 변경 실패: {str(e)}"
+
+    def update_user_permissions(self, user_id: int, permissions: list) -> Tuple[bool, str]:
+        """Update user permissions (admin only)"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            permissions_str = ",".join(permissions)
+            cursor.execute('UPDATE users SET permissions = ? WHERE id = ?', (permissions_str, user_id))
+            conn.commit()
+            conn.close()
+            
+            return True, "메뉴 접근 권한이 업데이트되었습니다."
+            
+        except Exception as e:
+            return False, f"메뉴 권한 업데이트 실패: {str(e)}"
