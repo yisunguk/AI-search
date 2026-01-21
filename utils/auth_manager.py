@@ -25,9 +25,16 @@ class AuthManager:
         Authenticate user against secrets
         """
         # Iterate through users in secrets to find matching email
+        input_email = email.strip().lower()
+        
         for username, user_data in self.users.items():
-            if user_data.get("email") == email:
-                if user_data.get("password") == password:
+            stored_email = str(user_data.get("email", "")).strip().lower()
+            
+            if stored_email == input_email:
+                # Check password (exact match required)
+                # Handle both string and integer passwords from secrets
+                stored_password = str(user_data.get("password", ""))
+                if stored_password == str(password):
                     # Login Success
                     user_info = {
                         'id': username,  # Use key as ID

@@ -118,3 +118,9 @@ def _render_login_form(auth_manager: AuthManager):
             st.write("Secrets access failed")
     else:
         st.caption(f"Debug: {user_count} users loaded from secrets.")
+        # Show loaded emails for debugging
+        try:
+            emails = [str(u.get('email', 'No Email')) for u in auth_manager.users.values()]
+            st.code(f"Loaded Emails: {emails}")
+        except Exception as e:
+            st.caption(f"Error displaying emails: {e}")
