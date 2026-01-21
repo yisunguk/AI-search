@@ -317,6 +317,11 @@ footer {display: none !important;}
         display: flex;
         justify-content: center;
     }}
+    
+    /* Hide form submit button */
+    .stForm button[kind="primary"] {{
+        display: none !important;
+    }}
     </style>
     {center_css}
     """, unsafe_allow_html=True)
@@ -347,7 +352,7 @@ footer {display: none !important;}
                 st.caption(f"📎 첨부파일: {', '.join(message['attachments'])}")
 
     # File Upload Section (at top, like in the 도면/스펙 분석 page)
-    st.markdown("### 파일/이미지 첨부")
+    # Removed title as requested
     
     if "home_uploader_key" not in st.session_state:
         st.session_state.home_uploader_key = 0
@@ -362,7 +367,7 @@ footer {display: none !important;}
     if uploaded_file:
         st.success(f"✅ 첨부됨: {uploaded_file.name}")
     
-    st.divider()
+    # Removed divider as requested
     
     # Chat History Display
     for message in st.session_state.home_chat_messages:
@@ -382,19 +387,20 @@ footer {display: none !important;}
                 st.caption(f"📎 첨부파일: {', '.join(message['attachments'])}")
 
     # Chat Input Area (at bottom, in main flow, not floating)
-    st.markdown("### GPT 5.2에게 물어보기")
+    # Removed title as requested
     
     with st.form(key="home_chat_form", clear_on_submit=True):
         user_input = st.text_area(
             "Message", 
             height=100, 
-            placeholder="무엇을 도와드릴까요?", 
+            placeholder="GPT 5.2에게 물어보기", 
             label_visibility="collapsed"
         )
         
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            submit_button = st.form_submit_button("🚀 전송", use_container_width=True)
+        # Removed submit button as requested
+        # Auto-submit on Enter (Ctrl+Enter in text_area)
+        submit_button = st.form_submit_button("Submit", type="primary", use_container_width=False)
+        # Hide the button with CSS
     
     if submit_button and user_input:
         prompt = user_input
