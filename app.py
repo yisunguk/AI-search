@@ -250,7 +250,7 @@ if menu != "홈":
 
 if menu == "홈":
     # -----------------------------
-    # 랜딩 페이지 (Home) - Gemini Style Redesign (Round 2)
+    # 랜딩 페이지 (Home) - Gemini Style Redesign (Round 3)
     # -----------------------------
     
     # Custom CSS for Gemini-like UI
@@ -258,19 +258,24 @@ if menu == "홈":
     <style>
     /* Greeting Styles */
     .greeting-container {
-        padding: 2rem 0 1rem 0;
-        text-align: left;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 60vh; /* Center vertically */
+        text-align: center;
     }
     .greeting-title {
-        font-size: 3.5rem;
+        font-size: 3rem; /* Adjusted size */
         font-weight: 700;
         background: -webkit-linear-gradient(45deg, #4285F4, #9B72CB, #D96570);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.5rem;
+        white-space: nowrap; /* Force single line */
     }
     .greeting-subtitle {
-        font-size: 2.5rem;
+        font-size: 2rem;
         font-weight: 600;
         color: #5f6368; /* Dark gray for light mode */
     }
@@ -278,25 +283,6 @@ if menu == "홈":
         .greeting-subtitle {
             color: #bdc1c6;
         }
-    }
-    
-    /* Shortcut Pills Styles */
-    div.stButton > button {
-        border-radius: 24px !important;
-        padding: 0.5rem 1.5rem !important;
-        background-color: #1e1e1e !important; /* Dark background */
-        color: #e3e3e3 !important;
-        border: 1px solid #444 !important;
-        font-size: 1rem !important;
-        font-weight: 500 !important;
-        transition: all 0.3s ease !important;
-        height: auto !important;
-    }
-    div.stButton > button:hover {
-        background-color: #333 !important;
-        border-color: #8ab4f8 !important;
-        color: #8ab4f8 !important;
-        transform: translateY(-2px);
     }
     
     /* Chat Message Styles */
@@ -316,51 +302,6 @@ if menu == "홈":
         st.markdown('<div class="greeting-title">포스코이앤씨 사우님 안녕하세요</div>', unsafe_allow_html=True)
         st.markdown('<div class="greeting-subtitle">무엇을 도와드릴까요?</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.write("")
-        st.write("")
-
-        # 2. Shortcuts (Pills)
-        # Row 1
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            if st.button("🔍 검색 & AI 채팅", use_container_width=True):
-                change_page("검색 & AI 채팅")
-                st.rerun()
-        with c2:
-            if st.button("📐 도면/스펙 분석", use_container_width=True):
-                change_page("도면/스펙 분석")
-                st.rerun()
-        with c3:
-            if st.button("🌏 문서 번역", use_container_width=True):
-                change_page("번역하기")
-                st.rerun()
-        with c4:
-            if st.button("📂 파일 보관함", use_container_width=True):
-                change_page("파일 보관함")
-                st.rerun()
-        
-        # Row 2
-        c5, c6, c7, c8 = st.columns(4)
-        with c5:
-            if st.button("📊 엑셀데이터 자동추출", use_container_width=True):
-                change_page("엑셀데이터 자동추출")
-                st.rerun()
-        with c6:
-            if st.button("📸 사진대지 자동작성", use_container_width=True):
-                change_page("사진대지 자동작성")
-                st.rerun()
-        with c7:
-            if st.button("📅 작업계획/투입비", use_container_width=True):
-                change_page("작업계획 및 투입비 자동작성")
-                st.rerun()
-        with c8:
-            if st.button("⚙️ 관리자 설정", use_container_width=True):
-                change_page("관리자 설정")
-                st.rerun()
-                
-        st.write("")
-        st.write("")
 
     # 4. Chat Interface (Always visible at bottom, but history fills up)
     # Display Chat History
@@ -395,7 +336,7 @@ if menu == "홈":
                 st.info("파일이 선택되었습니다. 질문과 함께 전송됩니다.")
 
     # Chat Input
-    if prompt := st.chat_input("Gemini 3에게 물어보기"):
+    if prompt := st.chat_input("GPT 5.2에게 물어보기"):
         # Prepare content for user message
         user_content = [{"type": "text", "text": prompt}]
         attachments = []
@@ -479,7 +420,7 @@ if menu == "홈":
                     response = chat_manager.client.chat.completions.create(
                         model=chat_manager.deployment_name,
                         messages=api_messages,
-                        max_tokens=4096,
+                        max_completion_tokens=4096, # Fixed parameter name
                         temperature=0.7
                     )
                     
