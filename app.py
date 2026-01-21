@@ -265,14 +265,10 @@ if menu == "홈":
 <style>
 /* Move the bottom chat input container to the middle */
 [data-testid="stBottom"] {
-    bottom: 50vh !important;
+    bottom: 40vh !important; /* Adjusted to sit below the natural button position */
     transition: bottom 0.3s ease-in-out;
     background: transparent !important;
-    z-index: 10000 !important; /* Ensure input is on top but manageable */
-}
-/* Move the attachment button to BELOW the input when centered */
-[data-testid="stPopover"] {
-    bottom: 44vh !important;
+    z-index: 1000 !important;
 }
 /* Hide the default footer decoration if visible */
 footer {display: none !important;}
@@ -287,11 +283,9 @@ footer {display: none !important;}
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding-top: 10vh; /* Reduced padding to prevent push-off */
-        padding-bottom: 5vh;
+        padding-top: 10vh;
+        padding-bottom: 2rem;
         text-align: center;
-        position: relative;
-        z-index: 1; /* Ensure text is above background */
     }}
     .greeting-title {{
         font-size: 3rem;
@@ -306,7 +300,6 @@ footer {display: none !important;}
         font-size: 2rem;
         font-weight: 600;
         color: #5f6368;
-        display: block !important; /* Force display */
     }}
     @media (prefers-color-scheme: dark) {{
         .greeting-subtitle {{
@@ -318,19 +311,9 @@ footer {display: none !important;}
     .stChatMessage {{
         background-color: transparent !important;
     }}
-
-    /* Attachment Button Positioning (Default - Active State - ABOVE Input) */
-    [data-testid="stPopover"] {{
-        position: fixed !important;
-        bottom: 80px !important; /* Just above the standard input bar */
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        z-index: 999999 !important; /* Extremely high z-index to ensure visibility */
-        transition: bottom 0.3s ease-in-out;
-    }}
     
-    /* Adjust width of the popover button container if needed */
-    [data-testid="stPopover"] > div {{
+    /* Center the popover button in the main flow */
+    [data-testid="stPopover"] {{
         display: flex;
         justify-content: center;
     }}
@@ -373,15 +356,11 @@ footer {display: none !important;}
     # But since the greeting is 40vh, and input is at 45vh (from bottom), there is space.
     
     with st.container():
-        # Use a popover for "Tools"
-        # We use columns to center the button if we want, or keep it left.
-        # User asked for "+" button "inside". We can't do that, but we can make it look close.
-        
-        # If we are in "Centered" mode, we might want to center this button too?
-        # Let's keep it simple: Just the popover.
-        
-        with st.popover("➕ 파일 첨부", use_container_width=False):
-            st.markdown("### 파일/이미지 첨부")
+        # Use columns to center the button in the main flow
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            with st.popover("➕ 파일 첨부", use_container_width=True):
+                st.markdown("### 파일/이미지 첨부")
             st.caption("이미지를 복사(Ctrl+C) 후 아래 영역을 클릭하고 붙여넣기(Ctrl+V) 하세요.")
             uploaded_file = st.file_uploader("파일 선택 또는 붙여넣기", key="home_chat_upload")
             
