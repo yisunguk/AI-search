@@ -356,37 +356,42 @@ footer {display: none !important;}
     # But since the greeting is 40vh, and input is at 45vh (from bottom), there is space.
     
     with st.container():
-        # Use columns to center the uploader and chat input in the main flow
-        # Adjusted ratio to [1, 2, 1] for balanced width (approx 50%)
+        # Use columns to center the input box
+        # Ratio [1, 2, 1] seems to match the title width best based on previous feedback
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            # Removed the text label as requested
-            uploaded_file = st.file_uploader("파일 선택 또는 붙여넣기", key="home_chat_upload", label_visibility="collapsed")
-            
-            if uploaded_file:
-                st.info(f"선택됨: {uploaded_file.name}")
-            
-            # Chat Input (Placed directly here, not floating at bottom)
-            # Note: st.chat_input usually floats. To make it static, we might need a text_area + button approach
-            # OR we can try to override its CSS to be static if possible, but Streamlit forces it to bottom.
-            # However, the user wants it "like the index & debug tools position".
-            # If we can't force st.chat_input to be static easily, we will use a form with text_area.
-            # BUT, st.chat_input is preferred for the "chat" feel.
-            # Let's try to use st.chat_input but with CSS to force it into this container if possible?
-            # No, st.chat_input is strictly fixed-bottom.
-            
-            # ALTERNATIVE: Use a form for the "Search/Home" experience, similar to Google/Perplexity.
-            with st.form(key="home_search_form", clear_on_submit=True):
-                user_input = st.text_area("GPT 5.2에게 물어보기", height=100, placeholder="무엇을 도와드릴까요?", label_visibility="collapsed")
-                submit_col1, submit_col2 = st.columns([6, 1])
-                with submit_col2:
-                    submit_button = st.form_submit_button("🚀", use_container_width=True)
-            
+            # Create a "Unified" Input Box look using a container with border
+            with st.container(border=True):
+                # 1. Text Input Area
+                # Use a form to capture Enter (partial support) or just standard text area
+                # We use a simple text area for now.
+                user_input = st.text_area(
+                    "Query", 
+                    height=68, 
+                    placeholder="GPT 5.2에게 물어보기", 
+                    label_visibility="collapsed",
+                    key="home_user_input"
+                )
+                
+                # 2. Bottom Action Bar (Attachments left, Send right)
+                tool_col, gap_col, send_col = st.columns([1, 5, 1])
+                
+                with tool_col:
+                    # Attachment Button (Popover)
+                    with st.popover("➕", use_container_width=True):
+                        st.markdown("### 파일 첨부")
+                        uploaded_file = st.file_uploader("파일 선택", key="home_chat_upload", label_visibility="collapsed")
+                        if uploaded_file:
+                            st.success(f"선택됨: {uploaded_file.name}")
+
+                with send_col:
+                    # Send Button
+                    submit_button = st.button("🚀", use_container_width=True)
+
+            # Logic to handle submission
             if submit_button and user_input:
                 prompt = user_input
                 # ... proceed with chat logic ...
-                # We need to adapt the existing chat logic to work with this 'prompt' variable
-                # instead of the one from st.chat_input
                 
     # Logic adapter:
     if 'prompt' in locals() and prompt:
