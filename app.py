@@ -221,7 +221,7 @@ def change_page(page_name):
     st.session_state.page = page_name
 
 # Initialize AuthManager
-auth_manager = AuthManager()
+auth_manager = AuthManager(STORAGE_CONN_STR)
 
 # Initialize login state
 if 'is_logged_in' not in st.session_state:
