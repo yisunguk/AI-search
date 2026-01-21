@@ -45,7 +45,7 @@ class AuthManager:
     
     def hash_password(self, password: str) -> str:
         """Hash password using SHA-256"""
-        salt = b'현장똑똑AI_SALT'  # In production, use random salt per user
+        salt = '현장똑똑AI_SALT'.encode('utf-8')  # In production, use random salt per user
         return hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000).hex()
     
     def signup(self, email: str, password: str, name: str) -> Tuple[bool, str]:
