@@ -248,173 +248,252 @@ if menu != "홈":
     st.title("현장똑똑 AI")
     st.caption("검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.")
 
-if menu == "홈":
     # -----------------------------
-    # 랜딩 페이지 (Home)
+    # 랜딩 페이지 (Home) - Gemini Style Redesign (Round 2)
     # -----------------------------
     
-    # Custom CSS for Landing Page
+    # Custom CSS for Gemini-like UI
     st.markdown("""
     <style>
-    .hero-container {
-        padding: 0 0 1rem 0;
-        text-align: center;
-        margin-bottom: 1rem;
-        margin-top: -8rem; /* Moved up significantly */
+    /* Greeting Styles */
+    .greeting-container {
+        padding: 2rem 0 1rem 0;
+        text-align: left;
     }
-    .hero-title {
-        font-size: 2.5rem; /* Slightly smaller */
-        font-weight: 800;
-        margin-bottom: 0.5rem;
-        background: -webkit-linear-gradient(45deg, #3b82f6, #8b5cf6);
+    .greeting-title {
+        font-size: 3.5rem;
+        font-weight: 700;
+        background: -webkit-linear-gradient(45deg, #4285F4, #9B72CB, #D96570);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
     }
-    .hero-description {
-        font-size: 1rem;
-        color: #cbd5e1; /* Lighter text for description */
-        margin-top: 1.5rem;
-        line-height: 1.6;
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
-        background-color: rgba(30, 41, 59, 0.5); /* Semi-transparent background */
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid rgba(51, 65, 85, 0.5);
-    }
-    /* Card Container Styling */
-    .card-container {
-        background-color: #1e293b;
-        border-radius: 10px;
-        border: 1px solid #334155;
-        padding: 1rem; /* Reduced padding */
-        height: 150px; /* Reduced height by ~25-30% */
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        transition: transform 0.2s;
-    }
-    .card-container:hover {
-        transform: translateY(-3px);
-        border-color: #3b82f6;
-    }
-    .card-icon {
-        font-size: 1.5rem; /* Reduced icon size */
-        margin-bottom: 0.3rem;
-    }
-    .card-title {
-        font-size: 1rem; /* Reduced title size */
-        font-weight: 700;
-        color: #f8fafc;
-        margin-bottom: 0.3rem;
-    }
-    .card-desc {
-        font-size: 0.8rem; /* Reduced desc size */
-        color: #94a3b8;
-        line-height: 1.2;
-        flex-grow: 1;
-        overflow: hidden;
-    }
-    /* Streamlit Button Styling Override */
-    div.stButton > button {
-        width: 100%;
-        border-radius: 6px;
+    .greeting-subtitle {
+        font-size: 2.5rem;
         font-weight: 600;
-        margin-top: 3px;
-        padding: 0.1rem 0.5rem;
-        font-size: 0.8rem;
-        min-height: 0px;
-        height: 28px;
+        color: #5f6368; /* Dark gray for light mode */
+    }
+    @media (prefers-color-scheme: dark) {
+        .greeting-subtitle {
+            color: #bdc1c6;
+        }
+    }
+    
+    /* Shortcut Pills Styles */
+    div.stButton > button {
+        border-radius: 24px !important;
+        padding: 0.5rem 1.5rem !important;
+        background-color: #1e1e1e !important; /* Dark background */
+        color: #e3e3e3 !important;
+        border: 1px solid #444 !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
+        height: auto !important;
+    }
+    div.stButton > button:hover {
+        background-color: #333 !important;
+        border-color: #8ab4f8 !important;
+        color: #8ab4f8 !important;
+        transform: translateY(-2px);
+    }
+    
+    /* Chat Message Styles */
+    .stChatMessage {
+        background-color: transparent !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Hero Section
-    st.markdown('<div class="hero-container">', unsafe_allow_html=True)
-    st.markdown('<h1 class="hero-title">현장똑똑 AI</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.</p>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-description">현장똑똑 AI는 방대한 건설 현장의 데이터를 지능형으로 관리하는 차세대 EPC 업무 지원 솔루션입니다.</p>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
+    # Initialize Chat History for Home
+    if "home_chat_messages" not in st.session_state:
+        st.session_state.home_chat_messages = []
 
-    # Grid Layout for 4 Cards
-    col1, col2 = st.columns(2)
-    
-    # Card 1: 검색 & AI 채팅
-    with col1:
-        with st.container():
-            st.markdown("""
-            <div class="card-container">
-                <div>
-                    <div class="card-icon">🔍</div>
-                    <div class="card-title">검색 & AI 채팅</div>
-                    <div class="card-desc">
-                        방대한 기술 문서에서 필요한 정보를 즉시 찾아내고, AI와 대화하며 심층적인 분석 결과를 얻으세요.
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_search", use_container_width=True, on_click=change_page, args=("검색 & AI 채팅",)):
-                pass
+    # 1. Greeting Section (Only show if chat is empty or minimal)
+    if not st.session_state.home_chat_messages:
+        st.markdown('<div class="greeting-container">', unsafe_allow_html=True)
+        st.markdown('<div class="greeting-title">포스코이앤씨 사우님 안녕하세요</div>', unsafe_allow_html=True)
+        st.markdown('<div class="greeting-subtitle">무엇을 도와드릴까요?</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.write("")
+        st.write("")
 
-    # Card 2: 도면/스펙 분석
-    with col2:
-        with st.container():
-            st.markdown("""
-            <div class="card-container">
-                <div>
-                    <div class="card-icon">📐</div>
-                    <div class="card-title">도면/스펙 분석</div>
-                    <div class="card-desc">
-                        복잡한 도면과 스펙 문서를 AI가 정밀하게 분석하여 설계 데이터와 요구사항을 자동으로 추출합니다.
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_analysis", use_container_width=True, on_click=change_page, args=("도면/스펙 분석",)):
-                pass
+        # 2. Shortcuts (Pills)
+        # Row 1
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            if st.button("🔍 검색 & AI 채팅", use_container_width=True):
+                change_page("검색 & AI 채팅")
+                st.rerun()
+        with c2:
+            if st.button("📐 도면/스펙 분석", use_container_width=True):
+                change_page("도면/스펙 분석")
+                st.rerun()
+        with c3:
+            if st.button("🌏 문서 번역", use_container_width=True):
+                change_page("번역하기")
+                st.rerun()
+        with c4:
+            if st.button("📂 파일 보관함", use_container_width=True):
+                change_page("파일 보관함")
+                st.rerun()
+        
+        # Row 2
+        c5, c6, c7, c8 = st.columns(4)
+        with c5:
+            if st.button("📊 엑셀데이터 자동추출", use_container_width=True):
+                change_page("엑셀데이터 자동추출")
+                st.rerun()
+        with c6:
+            if st.button("📸 사진대지 자동작성", use_container_width=True):
+                change_page("사진대지 자동작성")
+                st.rerun()
+        with c7:
+            if st.button("📅 작업계획/투입비", use_container_width=True):
+                change_page("작업계획 및 투입비 자동작성")
+                st.rerun()
+        with c8:
+            if st.button("⚙️ 관리자 설정", use_container_width=True):
+                change_page("관리자 설정")
+                st.rerun()
+                
+        st.write("")
+        st.write("")
 
-    st.write("") # Spacer Row
+    # 4. Chat Interface (Always visible at bottom, but history fills up)
+    # Display Chat History
+    for message in st.session_state.home_chat_messages:
+        with st.chat_message(message["role"]):
+            # Check if content is a tuple (text, images) or just text
+            if isinstance(message["content"], list):
+                # Multimodal content
+                for item in message["content"]:
+                    if item["type"] == "text":
+                        st.markdown(item["text"])
+                    elif item["type"] == "image_url":
+                        st.image(item["image_url"]["url"], width=300)
+            else:
+                st.markdown(message["content"])
+                
+            if "attachments" in message and message["attachments"]:
+                st.caption(f"📎 첨부파일: {', '.join(message['attachments'])}")
 
-    col3, col4 = st.columns(2)
+    # Tools / Attachments (Popover)
+    # Placed above chat input (conceptually)
+    with st.container():
+        # Use a popover for "Tools"
+        with st.popover("➕ 도구 / 파일 첨부", use_container_width=False):
+            st.markdown("### 파일 첨부 (저장되지 않음)")
+            uploaded_file = st.file_uploader("문서 또는 이미지 업로드", key="home_chat_upload")
+            
+            st.markdown("### 카메라")
+            camera_img = st.camera_input("사진 촬영", key="home_chat_camera")
+            
+            if uploaded_file or camera_img:
+                st.info("파일이 선택되었습니다. 질문과 함께 전송됩니다.")
 
-    # Card 3: 문서 번역 (번역하기)
-    with col3:
-        with st.container():
-            st.markdown("""
-            <div class="card-container">
-                <div>
-                    <div class="card-icon">🌏</div>
-                    <div class="card-title">문서 번역</div>
-                    <div class="card-desc">
-                        해외 기술 문서를 레이아웃 파괴 없이 다국어로 즉시 번역하여 글로벌 협업 속도를 높입니다.
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_translate", use_container_width=True, on_click=change_page, args=("번역하기",)):
-                pass
+    # Chat Input
+    if prompt := st.chat_input("Gemini 3에게 물어보기"):
+        # Prepare content for user message
+        user_content = [{"type": "text", "text": prompt}]
+        attachments = []
+        
+        # Handle Image (Camera or Uploaded Image)
+        image_data = None
+        if camera_img:
+            import base64
+            image_bytes = camera_img.getvalue()
+            base64_image = base64.b64encode(image_bytes).decode('utf-8')
+            image_data = f"data:image/jpeg;base64,{base64_image}"
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": image_data}
+            })
+            attachments.append("카메라 사진")
+            
+        elif uploaded_file and uploaded_file.type.startswith('image/'):
+            import base64
+            image_bytes = uploaded_file.getvalue()
+            base64_image = base64.b64encode(image_bytes).decode('utf-8')
+            image_data = f"data:{uploaded_file.type};base64,{base64_image}"
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": image_data}
+            })
+            attachments.append(uploaded_file.name)
+            
+        # Handle Text File (Context Injection)
+        elif uploaded_file:
+            try:
+                # Simple text reading for now
+                if uploaded_file.type == "text/plain":
+                    text_content = uploaded_file.getvalue().decode("utf-8")
+                    user_content[0]["text"] += f"\n\n[첨부 파일 내용 ({uploaded_file.name})]:\n{text_content}"
+                    attachments.append(uploaded_file.name)
+                elif uploaded_file.type == "application/pdf":
+                     # PDF handling (Basic text extraction if possible, else placeholder)
+                     # Since we can't easily install new libs without user permission, we'll try basic approach or warn
+                     # For now, just append a note that file was attached but content might not be fully read without OCR
+                     user_content[0]["text"] += f"\n\n[첨부 파일 ({uploaded_file.name})이 전송되었습니다. (PDF 텍스트 추출은 현재 제한적일 수 있습니다)]"
+                     attachments.append(uploaded_file.name)
+                else:
+                    user_content[0]["text"] += f"\n\n[첨부 파일 ({uploaded_file.name})이 전송되었습니다.]"
+                    attachments.append(uploaded_file.name)
+            except Exception as e:
+                st.error(f"파일 읽기 실패: {e}")
 
-    # Card 4: 파일 보관함
-    with col4:
-        with st.container():
-            st.markdown("""
-            <div class="card-container">
-                <div>
-                    <div class="card-icon">📂</div>
-                    <div class="card-title">파일 보관함</div>
-                    <div class="card-desc">
-                        프로젝트의 중요 자산을 안전하게 클라우드에 보관하고, 언제 어디서나 팀원들과 공유하세요.
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("바로가기", key="btn_archive", use_container_width=True, on_click=change_page, args=("파일 보관함",)):
-                pass
-    
-    st.markdown("---")
+        # Add user message to state
+        st.session_state.home_chat_messages.append({
+            "role": "user", 
+            "content": user_content,
+            "attachments": attachments
+        })
+        
+        # Display immediately
+        with st.chat_message("user"):
+            st.markdown(prompt)
+            if image_data:
+                st.image(image_data, width=300)
+            if attachments:
+                st.caption(f"📎 {', '.join(attachments)}")
+            
+        # Assistant Response
+        with st.chat_message("assistant"):
+            with st.spinner("생각 중..."):
+                try:
+                    chat_manager = get_chat_manager()
+                    
+                    # Prepare messages for API
+                    # We need to convert our session state format to OpenAI format
+                    api_messages = []
+                    for msg in st.session_state.home_chat_messages:
+                        api_messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"]
+                        })
+                    
+                    # Direct Client Call (Bypassing RAG Search for Home Chat as requested "No DB")
+                    # Using the client from chat_manager
+                    response = chat_manager.client.chat.completions.create(
+                        model=chat_manager.deployment_name,
+                        messages=api_messages,
+                        max_tokens=4096,
+                        temperature=0.7
+                    )
+                    
+                    response_text = response.choices[0].message.content
+                    
+                    st.markdown(response_text)
+                    
+                    # Save to history
+                    st.session_state.home_chat_messages.append({
+                        "role": "assistant",
+                        "content": response_text
+                    })
+                    
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {e}")
 
 if menu == "번역하기":
     if "translate_uploader_key" not in st.session_state:
