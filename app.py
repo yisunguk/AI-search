@@ -317,13 +317,6 @@ footer {display: none !important;}
         display: flex;
         justify-content: center;
     }}
-    
-    /* Limit input area width to match greeting title */
-    div[data-testid="column"]:has(> div > div > div[data-testid="stFileUploader"]) {{
-        max-width: 650px !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-    }}
     </style>
     {center_css}
     """, unsafe_allow_html=True)
@@ -364,8 +357,8 @@ footer {display: none !important;}
     
     with st.container():
         # Use columns to center the uploader and chat input in the main flow
-        # Adjusted ratio to [2, 2, 2] to constrain width to match greeting title
-        col1, col2, col3 = st.columns([2, 2, 2])
+        # Adjusted ratio to [1, 2, 1] for balanced width (approx 50%)
+        col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             # Removed the text label as requested
             uploaded_file = st.file_uploader("파일 선택 또는 붙여넣기", key="home_chat_upload", label_visibility="collapsed")
