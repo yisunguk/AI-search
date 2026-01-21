@@ -265,7 +265,7 @@ if menu == "홈":
 <style>
 /* Move the bottom chat input container to the middle */
 [data-testid="stBottom"] {
-    bottom: 45vh !important;
+    bottom: 30vh !important;
     transition: bottom 0.3s ease-in-out;
     background: transparent !important;
 }
@@ -282,7 +282,8 @@ footer {display: none !important;}
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        height: 40vh; /* Adjusted to sit above the centered input */
+        padding-top: 10vh;
+        padding-bottom: 5vh;
         text-align: center;
     }}
     .greeting-title {{
