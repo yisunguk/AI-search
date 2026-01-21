@@ -333,33 +333,6 @@ footer {display: none !important;}
     </style>
     {center_css}
     """, unsafe_allow_html=True)
-    .greeting-title {{
-        font-size: 3rem;
-        font-weight: 700;
-        background: -webkit-linear-gradient(45deg, #4285F4, #9B72CB, #D96570);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
-        white-space: nowrap;
-    }}
-    .greeting-subtitle {{
-        font-size: 2rem;
-        font-weight: 600;
-        color: #5f6368;
-    }}
-    @media (prefers-color-scheme: dark) {{
-        .greeting-subtitle {{
-            color: #bdc1c6;
-        }}
-    }}
-    
-    /* Chat Message Styles */
-    .stChatMessage {{
-        background-color: transparent !important;
-    }}
-    </style>
-    {center_css}
-    """, unsafe_allow_html=True)
 
     # 1. Greeting Section (Only show if chat is empty or minimal)
     if not st.session_state.home_chat_messages:
