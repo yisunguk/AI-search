@@ -1,0 +1,210 @@
+"""
+Home Chat Module with Function Calling
+Provides a clean chat interface with web search capability
+"""
+
+import streamlit as st
+import json
+from web_search import perform_web_search
+
+def render_home_chat(chat_manager):
+    """
+    Render the home chat interface with function calling support
+    
+    Args:
+        chat_manager: ChatManager instance for API calls
+    """
+    
+    # Initialize Chat History for Home
+    if "home_chat_messages" not in st.session_state:
+        st.session_state.home_chat_messages = []
+
+    # Custom CSS for Gemini-like UI & Centering
+    center_css = ""
+    if not st.session_state.home_chat_messages:
+        center_css = """
+<style>
+/* Move the bottom chat input container to the middle */
+[data-testid="stBottom"] {
+    bottom: 40vh !important;
+    transition: bottom 0.3s ease-in-out;
+    background: transparent !important;
+    z-index: 1000 !important;
+}
+/* Hide the default footer decoration if visible */
+footer {display: none !important;}
+</style>
+"""
+    
+    st.markdown(f"""
+    <style>
+    /* Greeting Styles */
+    .greeting-container {{
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding-top: 10vh;
+        padding-bottom: 2rem;
+        text-align: center;
+    }}
+    .greeting-title {{
+        font-size: 3rem;
+        font-weight: 700;
+        background: -webkit-linear-gradient(45deg, #4285F4, #9B72CB, #D96570);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+        white-space: nowrap;
+    }}
+    .greeting-subtitle {{
+        font-size: 2rem;
+        font-weight: 600;
+        color: #5f6368;
+    }}
+    @media (prefers-color-scheme: dark) {{
+        .greeting-subtitle {{
+            color: #bdc1c6;
+        }}
+    }}
+    
+    /* Chat Message Styles */
+    .stChatMessage {{
+        background-color: transparent !important;
+    }}
+    </style>
+    {center_css}
+    """, unsafe_allow_html=True)
+
+    # Greeting Section (Only show if chat is empty)
+    if not st.session_state.home_chat_messages:
+        st.markdown('<div class="greeting-container">', unsafe_allow_html=True)
+        st.markdown('<div class="greeting-title">포스코이앤씨 사우님 안녕하세요</div>', unsafe_allow_html=True)
+        st.markdown('<div class="greeting-subtitle">무엇을 도와드릴까요?</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Display Chat History
+    for message in st.session_state.home_chat_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Chat Input Area
+    if prompt := st.chat_input("GPT 5.2에게 물어보기"):
+        # Add user message to state
+        st.session_state.home_chat_messages.append({
+            "role": "user", 
+            "content": prompt
+        })
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+            
+        # Assistant Response with Function Calling
+        with st.chat_message("assistant"):
+            with st.spinner("생각 중..."):
+                try:
+                    # Define web search function tool
+                    tools = [{
+                        "type": "function",
+                        "function": {
+                            "name": "web_search",
+                            "description": "인터넷에서 최신 정보를 검색합니다. 실시간 정보, 뉴스, 최신 데이터가 필요할 때 사용하세요.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "query": {
+                                        "type": "string",
+                                        "description": "검색할 키워드 또는 질문"
+                                    }
+                                },
+                                "required": ["query"]
+                            }
+                        }
+                    }]
+                    
+                    # Prepare messages for API
+                    api_messages = []
+                    for msg in st.session_state.home_chat_messages:
+                        api_messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"]
+                        })
+                    
+                    # Initial API call with function calling
+                    response = chat_manager.client.chat.completions.create(
+                        model=chat_manager.deployment_name,
+                        messages=api_messages,
+                        tools=tools,
+                        tool_choice="auto",
+                        max_completion_tokens=4096,
+                        temperature=0.7
+                    )
+                    
+                    response_message = response.choices[0].message
+                    
+                    # Check if function call is requested
+                    if response_message.tool_calls:
+                        tool_call = response_message.tool_calls[0]
+                        function_name = tool_call.function.name
+                        
+                        if function_name == "web_search":
+                            function_args = json.loads(tool_call.function.arguments)
+                            search_query = function_args.get("query")
+                            
+                            # Display search indication
+                            st.info(f"🔍 웹 검색 중: {search_query}")
+                            
+                            # Perform web search
+                            search_results = perform_web_search(search_query)
+                            
+                            # Add assistant's tool call to messages
+                            api_messages.append({
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [{
+                                    "id": tool_call.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": function_name,
+                                        "arguments": tool_call.function.arguments
+                                    }
+                                }]
+                            })
+                            
+                            # Add tool response to messages
+                            api_messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": search_results
+                            })
+                            
+                            # Get final response with search results
+                            final_response = chat_manager.client.chat.completions.create(
+                                model=chat_manager.deployment_name,
+                                messages=api_messages,
+                                max_completion_tokens=4096,
+                                temperature=0.7
+                            )
+                            
+                            response_text = final_response.choices[0].message.content
+                    else:
+                        # No function call, use direct response
+                        response_text = response_message.content
+                    
+                    # Display response
+                    st.markdown(response_text)
+                    
+                    # Save to history
+                    st.session_state.home_chat_messages.append({
+                        "role": "assistant",
+                        "content": response_text
+                    })
+                    
+                    # Rerun to update UI
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
