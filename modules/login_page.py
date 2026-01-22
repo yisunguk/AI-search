@@ -5,13 +5,15 @@ Renders login UI
 
 import streamlit as st
 from utils.auth_manager import AuthManager
+from datetime import datetime, timedelta
 
-def render_login_page(auth_manager: AuthManager):
+def render_login_page(auth_manager: AuthManager, cookie_manager):
     """
     Render login page
     
     Args:
         auth_manager: AuthManager instance
+        cookie_manager: CookieManager instance
     """
     # Custom CSS for login page
     st.markdown("""
@@ -79,10 +81,10 @@ def render_login_page(auth_manager: AuthManager):
     
     # Main container
     with st.container():
-        _render_login_form(auth_manager)
+        _render_login_form(auth_manager, cookie_manager)
 
 
-def _render_login_form(auth_manager: AuthManager):
+def _render_login_form(auth_manager: AuthManager, cookie_manager):
     """Render login form"""
     st.markdown("<h3 style='text-align: center; margin-bottom: 30px;'>로그인</h3>", unsafe_allow_html=True)
     
@@ -101,6 +103,11 @@ def _render_login_form(auth_manager: AuthManager):
                 if success:
                     st.session_state.is_logged_in = True
                     st.session_state.user_info = user_info
+                    
+                    # Set cookie (expires in 7 days)
+                    expires = datetime.now() + timedelta(days=7)
+                    cookie_manager.set("auth_email", email, expires_at=expires)
+                    
                     st.success(message)
                     st.rerun()
                 else:

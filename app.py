@@ -20,6 +20,7 @@ import excel_manager
 # Authentication imports
 from utils.auth_manager import AuthManager
 from modules.login_page import render_login_page
+import extra_streamlit_components as stx
 
 # -----------------------------
 # 설정 및 비밀 관리
@@ -223,17 +224,30 @@ def change_page(page_name):
 # Initialize AuthManager
 auth_manager = AuthManager(STORAGE_CONN_STR)
 
+# Initialize Cookie Manager
+cookie_manager = stx.CookieManager()
+
 # Initialize login state
 if 'is_logged_in' not in st.session_state:
     st.session_state.is_logged_in = False
 
-# Define role-based menu permissions (Fallback / Admin)
-ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"]
-GUEST_MENUS = ["홈", "사용자 설정"]
+# Check for existing session cookie (Auto-login)
+if not st.session_state.is_logged_in:
+    try:
+        auth_email = cookie_manager.get(cookie="auth_email")
+        if auth_email:
+            # Validate email exists in auth_manager
+            user = auth_manager.get_user_by_email(auth_email)
+            if user:
+                st.session_state.is_logged_in = True
+                st.session_state.user_info = user
+                st.toast(f"자동 로그인되었습니다: {user.get('name')}")
+    except Exception as e:
+        print(f"Cookie check failed: {e}")
 
 # Check if user is logged in
 if not st.session_state.is_logged_in:
-    render_login_page(auth_manager)
+    render_login_page(auth_manager, cookie_manager)
     st.stop()
 
 # User is logged in - get their info
@@ -275,6 +289,8 @@ with st.sidebar:
     if st.button("🚪 로그아웃", key="logout_btn", use_container_width=True):
         st.session_state.is_logged_in = False
         st.session_state.user_info = None
+        # Delete cookie
+        cookie_manager.delete("auth_email")
         st.rerun()
     
     st.divider()
