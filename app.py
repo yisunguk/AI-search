@@ -356,7 +356,7 @@ if menu == "번역하기":
                     # 파일명 유니크하게 처리 (UUID 제거, 덮어쓰기 허용)
                     # file_uuid = str(uuid.uuid4())[:8] 
                     original_filename = uploaded_file.name
-                    input_blob_name = f"{user_folder}/documents/{original_filename}"
+                    input_blob_name = f"{user_folder}/original/{original_filename}"
                     
                     # 업로드
                     blob_client = container_client.get_blob_client(input_blob_name)
