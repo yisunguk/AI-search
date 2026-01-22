@@ -9,4 +9,5 @@ azure-identity>=1.15.0
 openai>=1.0.0
 azure-ai-formrecognizer>=3.3.0
 pandas
-openpyxlextra-streamlit-components
+openpyxl
+extra-streamlit-components
