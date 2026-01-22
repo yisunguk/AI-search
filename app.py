@@ -265,6 +265,10 @@ def get_user_folder_name(user_info):
 
 user_folder = get_user_folder_name(user_info)
 
+# Define role-based menu permissions (Fallback / Admin)
+ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"]
+GUEST_MENUS = ["홈", "사용자 설정"]
+
 if user_role == 'admin':
     available_menus = ALL_MENUS
 else:
