@@ -20,65 +20,9 @@ def render_home_chat(chat_manager):
     if "home_chat_messages" not in st.session_state:
         st.session_state.home_chat_messages = []
 
-    # Custom CSS for Gemini-like UI & Centering
-    center_css = ""
-    if not st.session_state.home_chat_messages:
-        center_css = """
-<style>
-/* Hide the default footer decoration if visible */
-footer {display: none !important;}
-</style>
-"""
-    
-    st.markdown(f"""
-    <style>
-    /* Greeting Styles */
-    .greeting-container {{
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        padding-top: 10vh;
-        padding-bottom: 2rem;
-        text-align: center;
-    }}
-    .greeting-title {{
-        font-size: 3rem;
-        font-weight: 700;
-        background: -webkit-linear-gradient(45deg, #4285F4, #9B72CB, #D96570);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
-        white-space: nowrap;
-    }}
-    .greeting-subtitle {{
-        font-size: 2rem;
-        font-weight: 600;
-        color: #5f6368;
-    }}
-    @media (prefers-color-scheme: dark) {{
-        .greeting-subtitle {{
-            color: #bdc1c6;
-        }}
-    }}
-    
-    /* Chat Message Styles */
-    .stChatMessage {{
-        background-color: transparent !important;
-    }}
-    </style>
-    {center_css}
-    """, unsafe_allow_html=True)
-
-    # Greeting Section (Only show if chat is empty)
-    if not st.session_state.home_chat_messages:
-        user_info = st.session_state.get('user_info', {})
-        user_name = user_info.get('name', '사우')
-        
-        st.markdown('<div class="greeting-container">', unsafe_allow_html=True)
-        st.markdown(f'<div class="greeting-title">{user_name}님 안녕하세요</div>', unsafe_allow_html=True)
-        st.markdown('<div class="greeting-subtitle">무엇을 도와드릴까요?</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Standard Header (Matches Search & AI Chat layout)
+    st.subheader("🤖 AI 홈 (GPT-5.2)")
+    st.caption("파일을 업로드하거나 질문을 입력하세요.")
 
     # Display Chat History
     for message in st.session_state.home_chat_messages:
@@ -93,19 +37,22 @@ footer {display: none !important;}
             else:
                 st.markdown(message["content"])
 
-    # File Upload Section (above chat input)
+    # File Upload Section (Wrapped in Expander, similar to Search Options)
     if "home_uploader_key" not in st.session_state:
         st.session_state.home_uploader_key = 0
     
-    uploaded_file = st.file_uploader(
-        "Drag and drop files here",
-        type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'tif'],
-        key=f"home_upload_{st.session_state.home_uploader_key}",
-        help="Limit 200MB per file • PDF, PNG, JPG, JPEG, TIFF, BMP, TIF"
-    )
-    
-    if uploaded_file:
-        st.success(f"✅ 첨부됨: {uploaded_file.name}")
+    # Place uploader in expander at the bottom of content
+    with st.expander("📤 파일 업로드", expanded=True):
+        uploaded_file = st.file_uploader(
+            "파일 선택",
+            type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'tif'],
+            key=f"home_upload_{st.session_state.home_uploader_key}",
+            help="Limit 200MB per file • PDF, PNG, JPG, JPEG, TIFF, BMP, TIF",
+            label_visibility="collapsed"
+        )
+        
+        if uploaded_file:
+            st.success(f"✅ 첨부됨: {uploaded_file.name}")
 
     # Chat Input Area
     if prompt := st.chat_input("GPT 5.2에게 물어보기"):
