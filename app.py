@@ -225,7 +225,7 @@ def change_page(page_name):
 auth_manager = AuthManager(STORAGE_CONN_STR)
 
 # Initialize Cookie Manager
-@st.cache_resource(experimental_allow_widgets=True)
+@st.cache_resource
 def get_manager():
     return stx.CookieManager()
 
