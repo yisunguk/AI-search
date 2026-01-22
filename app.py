@@ -536,27 +536,6 @@ if menu == "번역하기":
 elif menu == "파일 보관함":
     # st.subheader("📂 클라우드 파일 보관함") - Removed to avoid duplication
     
-    # -----------------------------
-    # 1. 파일 직접 업로드 (Save)
-    # -----------------------------
-    with st.expander("📤 파일 직접 업로드 (번역 없이 저장)", expanded=False):
-        upload_archive = st.file_uploader("보관함에 저장할 파일 선택", key="archive_upload")
-        if st.button("저장하기", disabled=not upload_archive):
-            try:
-                blob_service_client = get_blob_service_client()
-                container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-                
-                # file_uuid = str(uuid.uuid4())[:8]
-                # Upload to {user_folder}/documents/ (Flat structure)
-                blob_name = f"{user_folder}/documents/{upload_archive.name}"
-                blob_client = container_client.get_blob_client(blob_name)
-                blob_client.upload_blob(upload_archive, overwrite=True)
-                st.success(f"'{upload_archive.name}' 업로드 완료!")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"업로드 실패: {e}")
-
     st.divider()
     
     if st.button("🔄 목록 새로고침"):
