@@ -353,10 +353,10 @@ if menu == "번역하기":
                         else:
                             raise e
 
-                    # 파일명 유니크하게 처리
-                    file_uuid = str(uuid.uuid4())[:8]
+                    # 파일명 유니크하게 처리 (UUID 제거, 덮어쓰기 허용)
+                    # file_uuid = str(uuid.uuid4())[:8] 
                     original_filename = uploaded_file.name
-                    input_blob_name = f"input/{file_uuid}/{original_filename}"
+                    input_blob_name = f"{user_folder}/documents/{original_filename}"
                     
                     # 업로드
                     blob_client = container_client.get_blob_client(input_blob_name)
@@ -370,8 +370,10 @@ if menu == "번역하기":
                     # Target URL 설정
                     target_base_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}"
                     # Target URL은 컨테이너 또는 폴더 경로여야 함 (파일 경로 불가)
-                    # 파일명 보존을 위해 폴더 경로 끝에 '/'를 반드시 붙여야 함
-                    target_output_url = f"{target_base_url}/output/{file_uuid}/?{generate_sas_url(blob_service_client, CONTAINER_NAME).split('?')[1]}"
+                    # 사용자별 translated 폴더로 설정
+                    # URL 인코딩 필요
+                    encoded_user_folder = urllib.parse.quote(user_folder)
+                    target_output_url = f"{target_base_url}/{encoded_user_folder}/translated/?{generate_sas_url(blob_service_client, CONTAINER_NAME).split('?')[1]}"
                     
                 except Exception as e:
                     st.error(f"업로드/SAS 생성 실패: {e}")
@@ -408,16 +410,26 @@ if menu == "번역하기":
                     
                     # 결과 파일 찾기
                     time.sleep(2)
-                    output_prefix_search = f"output/{file_uuid}"
+                    # UUID 폴더가 없으므로 translated 폴더 전체에서 해당 파일명 검색
+                    output_prefix_search = f"{user_folder}/translated/"
                     output_blobs = list(container_client.list_blobs(name_starts_with=output_prefix_search))
                     
-                    if not output_blobs:
-                        all_output = list(container_client.list_blobs(name_starts_with="output/"))
-                        debug_msg = "\n".join([b.name for b in all_output[:10]])
-                        st.error(f"결과 파일을 찾을 수 없습니다. (검색 경로: {output_prefix_search})\n현재 output 폴더 파일 목록:\n{debug_msg}")
+                    # 방금 번역된 파일 찾기 (파일명 매칭)
+                    # Azure 번역은 원본 파일명을 유지하거나 언어 코드를 붙임
+                    target_blobs = []
+                    for blob in output_blobs:
+                        if original_filename in blob.name:
+                            target_blobs.append(blob)
+                    
+                    if not target_blobs:
+                        st.warning(f"결과 파일을 찾는 중입니다... (경로: {output_prefix_search})")
+                        # Fallback: list all to debug
+                        # all_output = list(container_client.list_blobs(name_starts_with=output_prefix_search))
+                        # debug_msg = "\n".join([b.name for b in all_output[:10]])
+                        # st.error(f"결과 파일을 찾을 수 없습니다.\n현재 폴더 파일 목록:\n{debug_msg}")
                     else:
                         st.subheader("다운로드")
-                        for blob in output_blobs:
+                        for blob in target_blobs:
                             blob_name = blob.name
                             file_name = blob_name.split("/")[-1]
                             
@@ -428,7 +440,7 @@ if menu == "번역하기":
                             # 이미 접미사가 있는지 확인 (혹시 모를 중복 방지)
                             if not name_part.endswith(f"_{suffix}"):
                                 new_file_name = f"{name_part}_{suffix}{ext_part}"
-                                new_blob_name = f"output/{file_uuid}/{new_file_name}"
+                                new_blob_name = f"{user_folder}/translated/{new_file_name}"
                                 
                                 try:
                                     # Rename: Copy to new name -> Delete old
@@ -461,7 +473,7 @@ if menu == "번역하기":
                                     from pptx import Presentation
                                     
                                     # 임시 파일로 다운로드
-                                    temp_pptx = f"temp_{file_uuid}.pptx"
+                                    temp_pptx = f"temp_{original_filename}"
                                     blob_client_temp = container_client.get_blob_client(blob_name)
                                     with open(temp_pptx, "wb") as f:
                                         data = blob_client_temp.download_blob().readall()
@@ -534,9 +546,9 @@ elif menu == "파일 보관함":
                 blob_service_client = get_blob_service_client()
                 container_client = blob_service_client.get_container_client(CONTAINER_NAME)
                 
-                file_uuid = str(uuid.uuid4())[:8]
-                # Upload to {user_folder}/documents/
-                blob_name = f"{user_folder}/documents/{file_uuid}/{upload_archive.name}"
+                # file_uuid = str(uuid.uuid4())[:8]
+                # Upload to {user_folder}/documents/ (Flat structure)
+                blob_name = f"{user_folder}/documents/{upload_archive.name}"
                 blob_client = container_client.get_blob_client(blob_name)
                 blob_client.upload_blob(upload_archive, overwrite=True)
                 st.success(f"'{upload_archive.name}' 업로드 완료!")
@@ -650,9 +662,9 @@ elif menu == "검색 & AI 채팅":
                     blob_service_client = get_blob_service_client()
                     container_client = blob_service_client.get_container_client(CONTAINER_NAME)
                     
-                    file_uuid = str(uuid.uuid4())[:8]
-                    # Upload to {user_folder}/documents/
-                    blob_name = f"{user_folder}/documents/{file_uuid}/{doc_upload.name}"
+                    # file_uuid = str(uuid.uuid4())[:8]
+                    # Upload to {user_folder}/documents/ (Flat structure)
+                    blob_name = f"{user_folder}/documents/{doc_upload.name}"
                     blob_client = container_client.get_blob_client(blob_name)
                     blob_client.upload_blob(doc_upload, overwrite=True)
                     st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
