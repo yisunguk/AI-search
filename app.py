@@ -286,17 +286,17 @@ else:
         available_menus.remove("관리자 설정")
 
 with st.sidebar:
+    # User profile
+    st.markdown(f"### 👤 {user_info.get('name', 'User')}")
+    st.caption(f"**{user_info.get('email', '')}**")
+    st.caption(f"권한: {user_role.upper()}")
+    
     if st.button("🚪 로그아웃", key="logout_btn", use_container_width=True):
         st.session_state.is_logged_in = False
         st.session_state.user_info = None
         # Delete cookie
         cookie_manager.delete("auth_email")
         st.rerun()
-
-    # User profile
-    st.markdown(f"### 👤 {user_info.get('name', 'User')}")
-    st.caption(f"**{user_info.get('email', '')}**")
-    st.caption(f"권한: {user_role.upper()}")
     
     st.divider()
     
