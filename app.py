@@ -639,7 +639,7 @@ elif menu == "검색 & AI 채팅":
     tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
     
     with tab1:
-    with tab1:
+
         st.subheader("🔍 PDF 문서 검색")
         
         # File Uploader for Document Search
