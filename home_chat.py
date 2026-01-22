@@ -25,6 +25,13 @@ def render_home_chat(chat_manager):
     if not st.session_state.home_chat_messages:
         center_css = """
 <style>
+/* Make the chat input relative so it sits right below the content */
+[data-testid="stBottom"] {
+    position: relative !important;
+    bottom: auto !important;
+    background: transparent !important;
+    padding-top: 2rem;
+}
 /* Hide the default footer decoration if visible */
 footer {display: none !important;}
 </style>
