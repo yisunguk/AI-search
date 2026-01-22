@@ -241,6 +241,16 @@ user_info = st.session_state.get('user_info', {})
 user_role = user_info.get('role', 'guest')
 user_perms = user_info.get('permissions', [])
 
+def get_user_folder_name(user_info):
+    """Get sanitized user folder name"""
+    if not user_info:
+        return "guest"
+    # Use name but fallback to ID if empty
+    name = user_info.get('name', user_info.get('id', 'guest'))
+    return name.strip()
+
+user_folder = get_user_folder_name(user_info)
+
 if user_role == 'admin':
     available_menus = ALL_MENUS
 else:
@@ -525,7 +535,8 @@ elif menu == "파일 보관함":
                 container_client = blob_service_client.get_container_client(CONTAINER_NAME)
                 
                 file_uuid = str(uuid.uuid4())[:8]
-                blob_name = f"input/{file_uuid}/{upload_archive.name}"
+                # Upload to {user_folder}/documents/
+                blob_name = f"{user_folder}/documents/{file_uuid}/{upload_archive.name}"
                 blob_client = container_client.get_blob_client(blob_name)
                 blob_client.upload_blob(upload_archive, overwrite=True)
                 st.success(f"'{upload_archive.name}' 업로드 완료!")
@@ -572,15 +583,10 @@ elif menu == "파일 보관함":
                             new_name = st.text_input("새 파일명", value=file_name, key=f"rename_{prefix}_{i}")
                             if st.button("이름 변경", key=f"btn_rename_{prefix}_{i}"):
                                 try:
-                                    # 새 경로 생성 (UUID 폴더 구조 유지)
+                                    # 새 경로 생성 (기존 폴더 구조 유지)
                                     path_parts = blob.name.split("/")
-                                    # path_parts = ['input', 'uuid', 'filename']
-                                    if len(path_parts) >= 3:
-                                        new_blob_name = f"{path_parts[0]}/{path_parts[1]}/{new_name}"
-                                    else:
-                                        # 폴더 구조가 다를 경우 그냥 같은 폴더에
-                                        folder = "/".join(path_parts[:-1])
-                                        new_blob_name = f"{folder}/{new_name}"
+                                    folder = "/".join(path_parts[:-1])
+                                    new_blob_name = f"{folder}/{new_name}"
                                     
                                     # 복사 (Rename은 Copy + Delete)
                                     source_blob = container_client.get_blob_client(blob.name)
@@ -620,10 +626,10 @@ elif menu == "파일 보관함":
                     st.divider()
 
         with tab1:
-            render_file_list("input/", "원본 문서")
+            render_file_list(f"{user_folder}/documents/", "내 문서 (Documents)")
             
         with tab2:
-            render_file_list("output/", "번역된 문서")
+            render_file_list(f"{user_folder}/translated/", "번역된 문서")
                 
     except Exception as e:
         st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
@@ -633,7 +639,25 @@ elif menu == "검색 & AI 채팅":
     tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
     
     with tab1:
+    with tab1:
         st.subheader("🔍 PDF 문서 검색")
+        
+        # File Uploader for Document Search
+        with st.expander("📤 문서 업로드 (내 문서)", expanded=False):
+            doc_upload = st.file_uploader("검색할 문서 업로드", type=['pdf', 'docx', 'txt', 'pptx'], key="doc_search_upload")
+            if doc_upload and st.button("업로드", key="btn_doc_upload"):
+                try:
+                    blob_service_client = get_blob_service_client()
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    
+                    file_uuid = str(uuid.uuid4())[:8]
+                    # Upload to {user_folder}/documents/
+                    blob_name = f"{user_folder}/documents/{file_uuid}/{doc_upload.name}"
+                    blob_client = container_client.get_blob_client(blob_name)
+                    blob_client.upload_blob(doc_upload, overwrite=True)
+                    st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
+                except Exception as e:
+                    st.error(f"업로드 실패: {e}")
         
         # Search Input
         query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
@@ -651,7 +675,22 @@ elif menu == "검색 & AI 채팅":
         if query:
             with st.spinner("검색 중..."):
                 search_manager = get_search_manager()
-                results = search_manager.search(query, use_semantic_ranker=use_semantic, search_mode=search_mode)
+                
+                # Filter by user folder
+                # Construct prefix URL: https://{account}.blob.core.windows.net/{container}/{user_folder}/
+                account_name = get_blob_service_client().account_name
+                # Need to handle spaces in user_folder for URL
+                encoded_user_folder = urllib.parse.quote(user_folder)
+                prefix_url = f"https://{account_name}.blob.core.windows.net/{CONTAINER_NAME}/{encoded_user_folder}/"
+                
+                # OData filter: startswith(metadata_storage_path, 'prefix_url')
+                # Also allow 'all' access for admin if needed, but user requested isolation.
+                # Assuming strict isolation.
+                filter_expr = f"search.ismatch('{encoded_user_folder}/*', 'metadata_storage_path') or startswith(metadata_storage_path, '{prefix_url}')"
+                # Note: search.ismatch might not work on SimpleField. startswith is safer for path.
+                filter_expr = f"startswith(metadata_storage_path, '{prefix_url}')"
+                
+                results = search_manager.search(query, filter_expr=filter_expr, use_semantic_ranker=use_semantic, search_mode=search_mode)
                 
                 if not results:
                     st.info("검색 결과가 없습니다.")
@@ -855,7 +894,7 @@ elif menu == "도면/스펙 분석":
     tab1, tab2 = st.tabs(["📤 문서 업로드 및 분석", "💬 분석 문서 채팅"])
     
     with tab1:
-        st.markdown("### 1. 분석할 문서 업로드 (drawings 폴더)")
+        st.markdown(f"### 1. 분석할 문서 업로드 ({user_folder}/drawings 폴더)")
         
         if "drawing_uploader_key" not in st.session_state:
             st.session_state.drawing_uploader_key = 0
@@ -882,7 +921,7 @@ elif menu == "도면/스펙 분석":
                         
                         status_text.text(f"처리 중 ({idx+1}/{total_files}): {safe_filename}")
                         
-                        blob_path = f"drawings/{safe_filename}"
+                        blob_path = f"{user_folder}/drawings/{safe_filename}"
                         # 2. Upload to Azure Blob Storage
                         status_text.text(f"업로드 중 ({idx+1}/{total_files}): {file.name}...")
                         blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=blob_path)
@@ -970,13 +1009,14 @@ elif menu == "도면/스펙 분석":
             blob_service_client = get_blob_service_client()
             container_client = blob_service_client.get_container_client(CONTAINER_NAME)
             
-            # List files in drawings folder
-            blobs = container_client.list_blobs(name_starts_with="drawings/")
+            # List files in user's drawings folder
+            prefix = f"{user_folder}/drawings/"
+            blobs = container_client.list_blobs(name_starts_with=prefix)
             blob_list = []
             available_filenames = []
             for blob in blobs:
                 if not blob.name.endswith('/'):  # Skip folder markers
-                    filename = blob.name.replace('drawings/', '')
+                    filename = blob.name.replace(prefix, '')
                     blob_list.append({
                         'name': filename,
                         'size': blob.size,
