@@ -308,7 +308,7 @@ with st.sidebar:
 # Common Header for non-Home pages
 if menu != "홈":
     st.title(menu)
-    st.caption("검색부터 문서 자동화까지, 현장의 모든 텍스트를 지능으로 연결합니다.")
+
 
 if menu == "홈":
     # Use the new home_chat module with function calling support
