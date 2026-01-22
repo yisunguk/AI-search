@@ -225,7 +225,11 @@ def change_page(page_name):
 auth_manager = AuthManager(STORAGE_CONN_STR)
 
 # Initialize Cookie Manager
-cookie_manager = stx.CookieManager()
+@st.cache_resource(experimental_allow_widgets=True)
+def get_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_manager()
 
 # Initialize login state
 if 'is_logged_in' not in st.session_state:

@@ -109,6 +109,8 @@ def _render_login_form(auth_manager: AuthManager, cookie_manager):
                     cookie_manager.set("auth_email", email, expires_at=expires)
                     
                     st.success(message)
+                    import time
+                    time.sleep(0.5)
                     st.rerun()
                 else:
                     st.error(message)
