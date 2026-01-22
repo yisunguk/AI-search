@@ -24,7 +24,7 @@ from modules.login_page import render_login_page
 # -----------------------------
 # 설정 및 비밀 관리
 # -----------------------------
-st.set_page_config(page_title="현장똑똑 AI", page_icon="�️", layout="centered")
+st.set_page_config(page_title="인텔리전트 다큐먼트", page_icon="🏗️", layout="centered")
 
 # Custom CSS for larger tab labels
 st.markdown("""

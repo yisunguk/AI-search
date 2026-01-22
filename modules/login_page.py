@@ -72,7 +72,7 @@ def render_login_page(auth_manager: AuthManager):
     # Logo and Title
     st.markdown("""
     <div class="login-header">
-        <h1 style="font-size: 24px; margin: 0;">🏗️ 현장똑똑 AI</h1>
+        <h1 style="font-size: 24px; margin: 0;">🏗️ 인텔리전트 다큐먼트</h1>
         <p class="login-subtitle">RAG 기반 시스템</p>
     </div>
     """, unsafe_allow_html=True)
