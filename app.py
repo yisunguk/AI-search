@@ -569,8 +569,15 @@ elif menu == "파일 보관함":
         # 탭으로 Input/Output 구분
         tab1, tab2 = st.tabs(["원본 문서 (Input)", "번역된 문서 (Output)"])
         
-        def render_file_list(prefix, tab_name):
-            blobs = list(container_client.list_blobs(name_starts_with=prefix))
+        def render_file_list(prefixes, tab_name):
+            all_blobs = []
+            for prefix in prefixes:
+                blobs = list(container_client.list_blobs(name_starts_with=prefix))
+                all_blobs.extend(blobs)
+            
+            # 중복 제거 (혹시 모를 경우 대비)
+            unique_blobs = {b.name: b for b in all_blobs}.values()
+            blobs = list(unique_blobs)
             blobs.sort(key=lambda x: x.creation_time, reverse=True)
             
             if not blobs:
@@ -581,19 +588,22 @@ elif menu == "파일 보관함":
                 file_name = blob.name.split("/")[-1]
                 creation_time = blob.creation_time.strftime('%Y-%m-%d %H:%M')
                 
+                # 폴더 경로 표시 (관리자 편의)
+                folder_path = "/".join(blob.name.split("/")[:-1])
+                
                 with st.container():
                     col1, col2, col3 = st.columns([6, 2, 2])
                     
                     with col1:
                         sas_url = generate_sas_url(blob_service_client, CONTAINER_NAME, blob.name)
                         st.markdown(f"**[{file_name}]({sas_url})**")
-                        st.caption(f"📅 {creation_time} | 📦 {blob.size / 1024:.1f} KB")
+                        st.caption(f"📂 {folder_path} | 📅 {creation_time} | 📦 {blob.size / 1024:.1f} KB")
                     
                     with col2:
                         # 수정 (이름 변경)
                         with st.popover("수정"):
-                            new_name = st.text_input("새 파일명", value=file_name, key=f"rename_{prefix}_{i}")
-                            if st.button("이름 변경", key=f"btn_rename_{prefix}_{i}"):
+                            new_name = st.text_input("새 파일명", value=file_name, key=f"rename_{i}_{blob.name}")
+                            if st.button("이름 변경", key=f"btn_rename_{i}_{blob.name}"):
                                 try:
                                     # 새 경로 생성 (기존 폴더 구조 유지)
                                     path_parts = blob.name.split("/")
@@ -638,10 +648,16 @@ elif menu == "파일 보관함":
                     st.divider()
 
         with tab1:
-            render_file_list(f"{user_folder}/documents/", "내 문서 (Documents)")
+            input_prefixes = [f"{user_folder}/documents/"]
+            if user_role == 'admin':
+                input_prefixes.extend(["input/", "gulflng/"])
+            render_file_list(input_prefixes, "내 문서 (Documents)")
             
         with tab2:
-            render_file_list(f"{user_folder}/translated/", "번역된 문서")
+            output_prefixes = [f"{user_folder}/translated/"]
+            if user_role == 'admin':
+                output_prefixes.extend(["output/"])
+            render_file_list(output_prefixes, "번역된 문서")
                 
     except Exception as e:
         st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
@@ -697,10 +713,13 @@ elif menu == "검색 & AI 채팅":
                 
                 # OData filter: startswith(metadata_storage_path, 'prefix_url')
                 # Also allow 'all' access for admin if needed, but user requested isolation.
-                # Assuming strict isolation.
-                filter_expr = f"search.ismatch('{encoded_user_folder}/*', 'metadata_storage_path') or startswith(metadata_storage_path, '{prefix_url}')"
-                # Note: search.ismatch might not work on SimpleField. startswith is safer for path.
-                filter_expr = f"startswith(metadata_storage_path, '{prefix_url}')"
+                # Search Filter Logic
+                if user_role == 'admin':
+                    # Admin can search everything
+                    filter_expr = None
+                else:
+                    # Regular users are restricted to their folder
+                    filter_expr = f"startswith(metadata_storage_path, '{prefix_url}')"
                 
                 results = search_manager.search(query, filter_expr=filter_expr, use_semantic_ranker=use_semantic, search_mode=search_mode)
                 
@@ -1021,16 +1040,26 @@ elif menu == "도면/스펙 분석":
             blob_service_client = get_blob_service_client()
             container_client = blob_service_client.get_container_client(CONTAINER_NAME)
             
-            # List files in user's drawings folder
-            prefix = f"{user_folder}/drawings/"
-            blobs = container_client.list_blobs(name_starts_with=prefix)
+            # List files in user's drawings folder + Admin access to root drawings
+            blobs = []
+            # User folder
+            blobs.extend(list(container_client.list_blobs(name_starts_with=f"{user_folder}/drawings/")))
+            
+            if user_role == 'admin':
+                # Admin root folder
+                blobs.extend(list(container_client.list_blobs(name_starts_with="drawings/")))
+            
+            # Deduplicate
+            unique_blobs = {b.name: b for b in blobs}.values()
+            
             blob_list = []
             available_filenames = []
-            for blob in blobs:
+            for blob in unique_blobs:
                 if not blob.name.endswith('/'):  # Skip folder markers
-                    filename = blob.name.replace(prefix, '')
+                    filename = blob.name.split('/')[-1]
                     blob_list.append({
                         'name': filename,
+                        'full_name': blob.name,
                         'size': blob.size,
                         'modified': blob.last_modified
                     })
