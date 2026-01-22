@@ -25,13 +25,6 @@ def render_home_chat(chat_manager):
     if not st.session_state.home_chat_messages:
         center_css = """
 <style>
-/* Move the bottom chat input container to the middle */
-[data-testid="stBottom"] {
-    bottom: 40vh !important;
-    transition: bottom 0.3s ease-in-out;
-    background: transparent !important;
-    z-index: 1000 !important;
-}
 /* Hide the default footer decoration if visible */
 footer {display: none !important;}
 </style>
