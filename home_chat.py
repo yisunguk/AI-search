@@ -83,7 +83,7 @@ footer {display: none !important;}
         user_name = user_info.get('name', '사우')
         
         st.markdown('<div class="greeting-container">', unsafe_allow_html=True)
-        st.markdown(f'<div class="greeting-title">포스코이앤씨 {user_name}님 안녕하세요</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="greeting-title">{user_name}님 안녕하세요</div>', unsafe_allow_html=True)
         st.markdown('<div class="greeting-subtitle">무엇을 도와드릴까요?</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
