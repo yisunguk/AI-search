@@ -478,7 +478,6 @@ class AzureSearchManager:
                     if '/drawings/' in doc.get('metadata_storage_path', '')
                 ]
             
-            documents = list(results)
             # Sort by page number if possible, or just name
             documents.sort(key=lambda x: x.get('metadata_storage_name', ''))
             
