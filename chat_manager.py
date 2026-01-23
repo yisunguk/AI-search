@@ -153,7 +153,7 @@ Convert the user's natural language question into a keyword-based search query.
             print(f"DEBUG: Query rewriting failed: {e}")
             return user_message
 
-    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None):
+    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None, user_folder=None):
         """
         Get chat response with client-side RAG
         """
@@ -217,6 +217,14 @@ Convert the user's natural language question into a keyword-based search query.
                 use_semantic_ranker=use_semantic_ranker,
                 search_mode=search_mode
             )
+            
+            # Filter by user_folder (Python-side enforcement)
+            if user_folder and search_results:
+                from urllib.parse import unquote
+                search_results = [
+                    doc for doc in search_results 
+                    if f"/{user_folder}/" in unquote(doc.get('metadata_storage_path', ''))
+                ]
             
             # Debug: Check search results
             print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
@@ -303,6 +311,14 @@ Convert the user's natural language question into a keyword-based search query.
                             search_mode="any" # Relax to 'any' to ensure we find it even if tokenization is tricky
                         )
                         
+                        # Filter forced results by user_folder
+                        if user_folder and forced_results:
+                            from urllib.parse import unquote
+                            forced_results = [
+                                doc for doc in forced_results 
+                                if f"/{user_folder}/" in unquote(doc.get('metadata_storage_path', ''))
+                            ]
+                        
                         # Fallback: Try without extension if full name fails
                         if not forced_results:
                             name_no_ext = os.path.splitext(target_file)[0]
@@ -313,6 +329,14 @@ Convert the user's natural language question into a keyword-based search query.
                                 use_semantic_ranker=False,
                                 search_mode="any"
                             )
+                            
+                            # Filter forced results by user_folder
+                            if user_folder and forced_results:
+                                from urllib.parse import unquote
+                                forced_results = [
+                                    doc for doc in forced_results 
+                                    if f"/{user_folder}/" in unquote(doc.get('metadata_storage_path', ''))
+                                ]
                         
                         # If query yielded nothing for this file, just get the first few pages (Introduction/Summary)
                         if not forced_results:
