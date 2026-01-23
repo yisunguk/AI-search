@@ -225,10 +225,16 @@ Convert the user's natural language question into a keyword-based search query.
             # Filter by user_folder (Python-side enforcement)
             if user_folder and search_results:
                 from urllib.parse import unquote
-                search_results = [
+                original_count = len(search_results)
+                filtered_results = [
                     doc for doc in search_results 
-                    if f"/{user_folder}/" in unquote(doc.get('metadata_storage_path', ''))
+                    if user_folder in unquote(doc.get('metadata_storage_path', ''))
                 ]
+                if filtered_results:
+                    search_results = filtered_results
+                    print(f"DEBUG: User folder filter: {original_count} -> {len(search_results)}")
+                else:
+                    print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
             
             # Debug: Check search results
             print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
@@ -251,6 +257,20 @@ Convert the user's natural language question into a keyword-based search query.
                     use_semantic_ranker=use_semantic_ranker,
                     search_mode=search_mode
                 )
+                
+                # Filter by user_folder
+                if user_folder and search_results:
+                    from urllib.parse import unquote
+                    original_count = len(search_results)
+                    filtered_results = [
+                        doc for doc in search_results 
+                        if user_folder in unquote(doc.get('metadata_storage_path', ''))
+                    ]
+                    if filtered_results:
+                        search_results = filtered_results
+                        print(f"DEBUG: User folder filter (fallback 1): {original_count} -> {len(search_results)}")
+                    else:
+                        print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
 
             # Fallback 2: If user selected files (scope_filter) but keywords didn't match,
             # fetch the content of the selected files directly.
@@ -270,6 +290,20 @@ Convert the user's natural language question into a keyword-based search query.
                     use_semantic_ranker=use_semantic_ranker,
                     search_mode=search_mode
                 )
+                
+                # Filter by user_folder
+                if user_folder and search_results:
+                    from urllib.parse import unquote
+                    original_count = len(search_results)
+                    filtered_results = [
+                        doc for doc in search_results 
+                        if user_folder in unquote(doc.get('metadata_storage_path', ''))
+                    ]
+                    if filtered_results:
+                        search_results = filtered_results
+                        print(f"DEBUG: User folder filter (fallback 2): {original_count} -> {len(search_results)}")
+                    else:
+                        print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
 
             # 4. Force Inclusion of Selected Files (CRITICAL for Comparison)
             # If user selected files but they didn't appear in the top results, force fetch them.
@@ -334,10 +368,16 @@ Convert the user's natural language question into a keyword-based search query.
                         # Filter forced results by user_folder
                         if user_folder and forced_results:
                             from urllib.parse import unquote
-                            forced_results = [
+                            original_count = len(forced_results)
+                            filtered_results = [
                                 doc for doc in forced_results 
-                                if f"/{user_folder}/" in unquote(doc.get('metadata_storage_path', ''))
+                                if user_folder in unquote(doc.get('metadata_storage_path', ''))
                             ]
+                            if filtered_results:
+                                forced_results = filtered_results
+                                print(f"DEBUG: User folder filter (forced): {original_count} -> {len(forced_results)}")
+                            else:
+                                print(f"DEBUG: User folder filter would remove all {original_count} forced results, SKIPPING filter")
                         
                         # Fallback: Try without extension if full name fails
                         if not forced_results:
@@ -353,10 +393,16 @@ Convert the user's natural language question into a keyword-based search query.
                             # Filter forced results by user_folder
                             if user_folder and forced_results:
                                 from urllib.parse import unquote
-                                forced_results = [
+                                original_count = len(forced_results)
+                                filtered_results = [
                                     doc for doc in forced_results 
-                                    if f"/{user_folder}/" in unquote(doc.get('metadata_storage_path', ''))
+                                    if user_folder in unquote(doc.get('metadata_storage_path', ''))
                                 ]
+                                if filtered_results:
+                                    forced_results = filtered_results
+                                    print(f"DEBUG: User folder filter (forced fallback): {original_count} -> {len(forced_results)}")
+                                else:
+                                    print(f"DEBUG: User folder filter would remove all {original_count} forced results, SKIPPING filter")
                         
                         # If query yielded nothing for this file, just get the first few pages (Introduction/Summary)
                         if not forced_results:
