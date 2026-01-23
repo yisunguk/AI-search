@@ -1271,21 +1271,35 @@ elif menu == "도면/스펙 비교":
                                     import unicodedata
                                     safe_filename = unicodedata.normalize('NFC', blob_info['name'])
                                     
-                                    # Clean up index
-                                    results = search_manager.search_client.search(
-                                        search_text="*",
-                                        filter=f"project eq 'drawings_analysis'",
-                                        select=["id", "metadata_storage_name"]
-                                    )
-                                    
+                                    # Clean up index (Find ALL pages)
                                     ids_to_delete = []
-                                    
-                                    for doc in results:
-                                        if doc['metadata_storage_name'].startswith(safe_filename):
-                                            ids_to_delete.append({"id": doc['id']})
-                                    
-                                    if ids_to_delete:
-                                        search_manager.search_client.delete_documents(documents=ids_to_delete)
+                                    while True:
+                                        results = search_manager.search_client.search(
+                                            search_text="*",
+                                            filter=f"project eq 'drawings_analysis'",
+                                            select=["id", "metadata_storage_name"],
+                                            top=1000
+                                        )
+                                        
+                                        batch_ids = []
+                                        for doc in results:
+                                            # Use NFC normalization for comparison
+                                            doc_name = unicodedata.normalize('NFC', doc['metadata_storage_name'])
+                                            if doc_name.startswith(safe_filename):
+                                                batch_ids.append({"id": doc['id']})
+                                        
+                                        if not batch_ids:
+                                            break
+                                            
+                                        search_manager.search_client.delete_documents(documents=batch_ids)
+                                        ids_to_delete.extend(batch_ids)
+                                        
+                                        # If we found less than 1000, we might be done, but to be safe we continue 
+                                        # until a search returns no matches for our file.
+                                        # Actually, if we delete them, the next search will return different docs.
+                                        # So we continue until no more docs match.
+                                        if len(batch_ids) == 0:
+                                            break
                                     
                                     # Clear JSON state if exists
                                     json_key = f"json_data_{blob_info['name']}"
@@ -1588,12 +1602,17 @@ elif menu == "도면/스펙 비교":
             st.write("### ⚠️ 인덱스 초기화")
             if st.button("🗑️ 모든 도면 데이터 삭제 (Index & Blob)", type="primary"):
                 try:
-                    # 1. Delete all blobs in drawings/
+                    # 1. Delete all blobs in any drawings/ folder (Global reset)
                     blob_service_client = get_blob_service_client()
                     container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-                    blobs = container_client.list_blobs(name_starts_with="drawings/")
+                    
+                    # List all blobs and filter for drawings
+                    blobs = container_client.list_blobs()
+                    deleted_blobs = 0
                     for blob in blobs:
-                        container_client.delete_blob(blob.name)
+                        if '/drawings/' in blob.name or blob.name.startswith('drawings/'):
+                            container_client.delete_blob(blob.name)
+                            deleted_blobs += 1
                     
                     # 2. Delete all docs in index with project='drawings_analysis'
                     search_manager = get_search_manager()
