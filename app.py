@@ -1277,6 +1277,9 @@ elif menu == "도면/스펙 비교":
         
         st.divider()
         
+        # DEBUG: Show selected files
+        st.write(f"DEBUG: Selected Files ({len(selected_filenames)}): {selected_filenames}")
+        
         # Chat Interface (Similar to main chat but focused)
         if "rag_chat_messages" not in st.session_state:
             st.session_state.rag_chat_messages = []
