@@ -453,58 +453,57 @@ class AzureSearchManager:
         try:
             import unicodedata
             import urllib.parse
+            import re
             # Ensure NFC normalization for consistent matching
             filename = unicodedata.normalize('NFC', filename)
-            safe_filename = filename.replace("'", "''")
             
-            # Method 1: Path-based filtering (Most robust for exact file matching)
-            # We search for documents whose path starts with the expected blob URL prefix
-            # This avoids issues with special characters in searchable fields
+            # Escape for OData filter (single quotes)
+            safe_filename_odata = filename.replace("'", "''")
+            # Escape for Lucene/Search query (special chars)
+            escaped_filename_search = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', filename)
             
-            # We don't have the full path here, but we can search for the filename in metadata_storage_name
-            # and then verify the project tag.
+            print(f"DEBUG: Fetching JSON for {filename}")
+            print(f"DEBUG: Escaped search term: {escaped_filename_search}")
             
-            # Try with project filter first
+            # Method 1: Search by text (Most reliable for searchable fields with special chars)
+            # We search for the filename as a phrase and filter by project
             results = self.search_client.search(
-                search_text="*",
-                filter=f"project eq 'drawings_analysis' and search.ismatch('\"{safe_filename}*\"', 'metadata_storage_name')",
+                search_text=f"\"{escaped_filename_search}\"",
+                filter="project eq 'drawings_analysis'",
                 select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
                 top=1000
             )
             documents = list(results)
             
-            # Fallback: If no results with project tag, try searching by name and filter path in Python
+            # Method 2: search.ismatch fallback
             if not documents:
-                print(f"DEBUG: No docs found with project tag for {filename}. Retrying with name-only filter...")
+                print(f"DEBUG: No docs found with search_text. Trying search.ismatch...")
                 results = self.search_client.search(
                     search_text="*",
-                    filter=f"search.ismatch('\"{safe_filename}*\"', 'metadata_storage_name')",
+                    filter=f"project eq 'drawings_analysis' and search.ismatch('\"{escaped_filename_search}*\"', 'metadata_storage_name')",
                     select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
                     top=1000
                 )
-                # Filter by path in Python
-                documents = [
-                    doc for doc in results 
-                    if '/drawings/' in doc.get('metadata_storage_path', '')
-                ]
+                documents = list(results)
             
-            # Final Fallback: If still nothing, try a broad path search
+            # Method 3: Broad search and Python filter (Last resort)
             if not documents:
-                print(f"DEBUG: Still no docs found for {filename}. Trying broad path search...")
+                print(f"DEBUG: Still no docs found. Trying broad search and Python filtering...")
+                # Search for any part of the filename
+                search_term = filename.split()[0] if ' ' in filename else filename
                 results = self.search_client.search(
-                    search_text="*",
-                    filter="startswith(metadata_storage_path, 'https://')",
+                    search_text=search_term,
+                    filter="project eq 'drawings_analysis'",
                     select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
                     top=1000
                 )
-                # Filter by filename in path in Python
-                encoded_filename = urllib.parse.quote(filename)
-                documents = [
-                    doc for doc in results 
-                    if (filename in doc.get('metadata_storage_path', '') or encoded_filename in doc.get('metadata_storage_path', ''))
-                    and '/drawings/' in doc.get('metadata_storage_path', '')
-                ]
-
+                for doc in results:
+                    doc_name = unicodedata.normalize('NFC', doc.get('metadata_storage_name', ''))
+                    if filename in doc_name:
+                        documents.append(doc)
+            
+            print(f"DEBUG: Found {len(documents)} documents for {filename}")
+            
             # Sort by page number if possible, or just name
             documents.sort(key=lambda x: x.get('metadata_storage_name', ''))
             

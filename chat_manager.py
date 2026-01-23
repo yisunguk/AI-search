@@ -117,8 +117,14 @@ You must interpret the provided text as if you are looking at an engineering dia
             matched_file = unicodedata.normalize('NFC', matched_file)
             # Escape single quotes for OData
             safe_filename = matched_file.replace("'", "''")
-            # Use search.ismatch for searchable fields (startswith is for non-searchable filterable fields)
-            return f"search.ismatch('\"{safe_filename}*\"', 'metadata_storage_name')"
+            # Escape special characters for Lucene/Simple query syntax
+            # Special chars: + - && || ! ( ) { } [ ] ^ " ~ * ? : \ /
+            import re
+            escaped_filename = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_filename)
+            
+            # Use search.ismatch with escaped filename and wildcard
+            # We use 'simple' query type which is default, but we ensure the phrase is handled
+            return f"search.ismatch('\"{escaped_filename}*\"', 'metadata_storage_name')"
             
         return None
 
@@ -184,7 +190,9 @@ Convert the user's natural language question into a keyword-based search query.
                  for f in normalized_files:
                      # Escape single quotes for OData filter
                      safe_f = f.replace("'", "''")
-                     conditions.append(f"search.ismatch('\"{safe_f}*\"', 'metadata_storage_name')")
+                     import re
+                     escaped_f = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_f)
+                     conditions.append(f"search.ismatch('\"{escaped_f}*\"', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
@@ -340,7 +348,9 @@ Convert the user's natural language question into a keyword-based search query.
                     safe_target = target_file.replace("'", "''")
                     
                     # CRITICAL: Use the final_filter (which includes project/scope) to ensure strict filtering
-                    file_specific_filter = f"search.ismatch('\"{safe_target}*\"', 'metadata_storage_name')"
+                    import re
+                    escaped_target = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_target)
+                    file_specific_filter = f"search.ismatch('\"{escaped_target}*\"', 'metadata_storage_name')"
                     if final_filter:
                         file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
                     
