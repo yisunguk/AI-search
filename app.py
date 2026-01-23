@@ -1674,24 +1674,44 @@ elif menu == "도면/스펙 비교":
             if st.button("📋 인덱스 전체 목록 덤프 (최근 50개)", help="인덱스에 저장된 실제 파일명과 태그를 직접 확인합니다."):
                 try:
                     search_manager = get_search_manager()
+                    
+                    # Add search input for specific file diagnosis
+                    diag_query = st.text_input("진단할 파일명 검색 (선택 사항)", value="", key="diag_query")
+                    diag_path_filter = st.checkbox("'/drawings/' 경로만 보기", value=False, key="diag_path_filter")
+                    
+                    filter_parts = []
+                    if diag_path_filter:
+                        filter_parts.append("startswith(metadata_storage_path, 'https://')") # Dummy to allow path check in Python or use searchable path if possible
+                    
+                    # Since metadata_storage_path is now filterable, we can use startswith if we know the prefix, 
+                    # but for general contains check, we still need Python or search.ismatch if supported.
+                    # Let's just fetch top 100 and filter in Python for maximum reliability during diagnosis.
+                    
                     results = search_manager.search_client.search(
-                        search_text="*",
+                        search_text=diag_query if diag_query else "*",
                         select=["metadata_storage_name", "project", "metadata_storage_path"],
-                        top=50
+                        top=100
                     )
                     
                     dump_data = []
                     for doc in results:
+                        name = doc.get('metadata_storage_name', '')
+                        path = doc.get('metadata_storage_path', '')
+                        
+                        if diag_path_filter and '/drawings/' not in path:
+                            continue
+                            
                         dump_data.append({
-                            "Name": doc.get('metadata_storage_name'),
+                            "Name": name,
                             "Project": doc.get('project'),
-                            "Path": doc.get('metadata_storage_path')
+                            "Path": path
                         })
                     
                     if dump_data:
+                        st.write(f"Found {len(dump_data)} documents matching criteria.")
                         st.table(dump_data)
                     else:
-                        st.warning("인덱스가 비어있습니다.")
+                        st.warning("검색 결과가 없습니다.")
                 except Exception as e:
                     st.error(f"덤프 중 오류 발생: {e}")
             with st.expander("📊 선택된 파일 토큰 분석 (Token Analyzer)", expanded=False):
