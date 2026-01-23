@@ -8,7 +8,7 @@ def generate_password():
 
 users = [
     {"id": "piere", "email": "piere@poscoenc.com", "name": "이성욱", "role": "admin", "permissions": ["all"], "password": "ER2312"},
-    {"id": "user1", "email": "kim.minsoo@example.com", "name": "고은경", "role": "user", "permissions": ["번역하기", "파일 보관함"], "password": "NU1763"},
+    {"id": "user1", "email": "kobari@poscoenc.com", "name": "고은경", "role": "user", "permissions": ["번역하기", "파일 보관함"], "password": "NU1763"},
     {"id": "user2", "email": "lee.jieun@example.com", "name": "이지은", "role": "user", "permissions": ["검색 & AI 채팅", "도면/스펙 분석"], "password": "VX8661"},
     {"id": "user3", "email": "park.junho@example.com", "name": "박준호", "role": "user", "permissions": ["엑셀데이터 자동추출", "사진대지 자동작성"], "password": "PF4413"},
     {"id": "user4", "email": "choi.yuna@example.com", "name": "최유나", "role": "user", "permissions": ["작업계획 및 투입비 자동작성", "번역하기"], "password": "DT5081"},
