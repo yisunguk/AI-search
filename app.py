@@ -1481,13 +1481,20 @@ elif menu == "도면/스펙 비교":
                     results = client.search(search_text="*", filter="project eq 'drawings_analysis'", select=["id", "metadata_storage_name", "project"], top=20)
                     
                     docs = list(results)
-                    st.write(f"총 {len(docs)}개의 문서가 발견되었습니다.")
+                    st.write(f"Found {len(docs)} docs with project='drawings_analysis'")
                     
                     if docs:
                         for doc in docs:
-                            st.code(f"ID: {doc['id']}\\nName: {doc['metadata_storage_name']}\\nProject: {doc['project']}")
-                    else:
-                        st.error("인덱스에 'drawings_analysis' 프로젝트 문서가 없습니다!")
+                            st.code(f"ID: {doc['id']}\nName: {doc['metadata_storage_name']}\nProject: {doc['project']}")
+                    
+                    st.write("---")
+                    st.write("### 1-B. 인덱스 문서 확인 (전체 - 필터 없음)")
+                    results_all = client.search(search_text="*", select=["id", "metadata_storage_name", "project"], top=20)
+                    docs_all = list(results_all)
+                    st.write(f"Found {len(docs_all)} docs in total (top 20)")
+                    for doc in docs_all:
+                        proj = doc.get('project', 'None')
+                        st.code(f"Name: {doc['metadata_storage_name']}\nProject: {proj}")
                     
                     st.write("---")
                     st.write("### 2. 키워드 검색 테스트 ('foundation loading data')")
