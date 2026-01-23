@@ -291,12 +291,28 @@ Convert the user's natural language question into a keyword-based search query.
                         # We try to use the original query first restricted to this file
                         force_query = search_query if search_query and search_query != "*" else "*"
                         
+                        # Use search_text matching which is more robust (analyzed) than strict OData filter
+                        # We search for the filename in the metadata_storage_name field specifically if possible, 
+                        # but the search method is general. We'll rely on the search engine finding it.
+                        print(f"DEBUG: Force fetching with search_text='{target_file}'")
+                        
                         forced_results = self.search_manager.search(
-                            force_query,
-                            filter_expr=f"startswith(metadata_storage_name, '{safe_target}')",
-                            use_semantic_ranker=False, # Speed up
-                            search_mode=search_mode
+                            target_file, # Use filename as query
+                            filter_expr=None, # Remove strict filter, rely on search relevance
+                            use_semantic_ranker=False,
+                            search_mode="any" # Relax to 'any' to ensure we find it even if tokenization is tricky
                         )
+                        
+                        # Fallback: Try without extension if full name fails
+                        if not forced_results:
+                            name_no_ext = os.path.splitext(target_file)[0]
+                            print(f"DEBUG: Force fetching fallback with search_text='{name_no_ext}'")
+                            forced_results = self.search_manager.search(
+                                name_no_ext,
+                                filter_expr=None,
+                                use_semantic_ranker=False,
+                                search_mode="any"
+                            )
                         
                         # If query yielded nothing for this file, just get the first few pages (Introduction/Summary)
                         if not forced_results:

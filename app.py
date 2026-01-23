@@ -1073,9 +1073,9 @@ elif menu == "도면/스펙 비교":
                 # Add "Select All" checkbox
                 def toggle_all():
                     new_state = st.session_state.select_all_files
-                    for key in st.session_state.keys():
-                        if key.startswith("chk_"):
-                            st.session_state[key] = new_state
+                    # Update state for ALL files in the list, not just existing keys
+                    for b in blob_list:
+                        st.session_state[f"chk_{b['name']}"] = new_state
 
                 select_all = st.checkbox("전체 선택", value=True, key="select_all_files", on_change=toggle_all)
                 
@@ -1085,7 +1085,12 @@ elif menu == "도면/스펙 비교":
                         col0, col1, col2, col3 = st.columns([0.5, 4, 1.2, 1])
                         with col0:
                             # Checkbox for selection
-                            is_selected = st.checkbox(f"select_{idx}", value=select_all, key=f"chk_{blob_info['name']}", label_visibility="collapsed")
+                            # Initialize state if missing
+                            chk_key = f"chk_{blob_info['name']}"
+                            if chk_key not in st.session_state:
+                                st.session_state[chk_key] = True # Default to True (Select All default)
+                                
+                            is_selected = st.checkbox(f"select_{idx}", key=chk_key, label_visibility="collapsed")
                             if is_selected:
                                 selected_filenames.append(blob_info['name'])
                         
@@ -1461,6 +1466,26 @@ elif menu == "도면/스펙 비교":
                     st.error(f"진단 중 오류 발생: {str(e)}")
                     st.code(str(e))
             
+            st.write("---")
+            st.write("### 🔍 인덱스 데이터 확인")
+            if st.button("📑 인덱스된 모든 파일명 보기"):
+                with st.spinner("인덱스 조회 중..."):
+                    try:
+                        search_manager = get_search_manager()
+                        # Get all docs (limit to top 1000 to be safe)
+                        results = search_manager.search("*", select=["metadata_storage_name"], top=1000)
+                        indexed_files = set()
+                        for res in results:
+                            # Remove page suffix (p.N) to get base filename
+                            name = res['metadata_storage_name']
+                            base_name = name.split(' (p.')[0]
+                            indexed_files.add(base_name)
+                        
+                        st.write(f"총 {len(indexed_files)}개의 파일이 인덱스에서 발견되었습니다.")
+                        st.dataframe(list(indexed_files), use_container_width=True)
+                    except Exception as e:
+                        st.error(f"조회 실패: {e}")
+
             st.write("---")
             st.write("### 🧪 사용자 지정 검색 테스트")
             debug_query = st.text_input("검색어 입력 (예: filter element)", key="debug_query")
