@@ -117,7 +117,7 @@ def get_doc_intel_manager():
         st.stop()
     return DocumentIntelligenceManager(AZURE_DOC_INTEL_ENDPOINT, AZURE_DOC_INTEL_KEY)
 
-def generate_sas_url(blob_service_client, container_name, blob_name=None, permission="r", expiry_hours=1):
+def generate_sas_url(blob_service_client, container_name, blob_name=None, permission="r", expiry_hours=1, content_disposition=None):
     """
     Blob 또는 Container에 대한 SAS URL 생성
     blob_name이 있으면 Blob SAS, 없으면 Container SAS (Write용)
@@ -1094,22 +1094,30 @@ elif menu == "도면/스펙 비교":
                             st.markdown(f"**{blob_info['name']}** ({size_mb:.2f} MB)")
                         
                         with col2:
-                            # 1. Download Button
-                            try:
-                                sas_url = generate_sas_url(
-                                    blob_service_client, 
-                                    CONTAINER_NAME, 
-                                    blob_info['full_name'], 
-                                    content_disposition="attachment"
-                                )
-                                st.markdown(f'<a href="{sas_url}" download="{blob_info["name"]}" style="text-decoration:none; font-size:1.2em;">📥</a>', unsafe_allow_html=True)
-                            except:
-                                st.write("❌")
+                            # Use sub-columns to align icons horizontally
+                            sub_c1, sub_c2 = st.columns([1, 1])
+                            
+                            with sub_c1:
+                                # 1. Download Button
+                                try:
+                                    sas_url = generate_sas_url(
+                                        blob_service_client, 
+                                        CONTAINER_NAME, 
+                                        blob_info['full_name'], 
+                                        content_disposition="attachment"
+                                    )
+                                    # Use a button-like link or just an icon
+                                    st.markdown(f'<div style="text-align:center;"><a href="{sas_url}" download="{blob_info["name"]}" style="text-decoration:none; font-size:1.5em;" title="다운로드">📥</a></div>', unsafe_allow_html=True)
+                                except Exception as e:
+                                    st.error(f"Err: {e}")
 
-                            # 2. Rename Button (Popover)
-                            with st.popover("✏️"):
-                                new_name_input = st.text_input("새 파일명", value=blob_info['name'], key=f"ren_{blob_info['name']}")
-                                if st.button("이름 변경", key=f"btn_ren_{blob_info['name']}"):
+                            with sub_c2:
+                                # 2. Rename Button (Popover)
+                                # Popover button is wide by default, try to make it compact?
+                                # Streamlit buttons expand to column width.
+                                with st.popover("✏️", use_container_width=True):
+                                    new_name_input = st.text_input("새 파일명", value=blob_info['name'], key=f"ren_{blob_info['name']}")
+                                    if st.button("이름 변경", key=f"btn_ren_{blob_info['name']}"):
                                     if new_name_input != blob_info['name']:
                                         try:
                                             with st.spinner("이름 변경 및 인덱스 업데이트 중..."):
