@@ -1351,8 +1351,8 @@ elif menu == "도면/스펙 비교":
                         # Actually, let's default to all if none selected? No, user explicitly deselected.
                         # Let's pass the list as is.
                         
-                        # Note: selected_filenames comes from the UI loop above
-                        current_files = locals().get('selected_filenames', [])
+                        # Note: selected_filenames is defined in the outer scope of the tab
+                        current_files = selected_filenames
                         
                         # Construct robust filter expression
                         base_filter = "project eq 'drawings_analysis'"

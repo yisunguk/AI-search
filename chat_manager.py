@@ -194,22 +194,19 @@ Convert the user's natural language question into a keyword-based search query.
             # We still pass available_files to help detection, but the scope_filter enforces the selection
             specific_file_filter = self._extract_filename_filter(user_message, available_files)
             
-            final_filter = filter_expr
+            # 2. Construct OData Filter
+            # Combine base filter, scope filter (selected files), and specific file filter
+            filters = []
+            if filter_expr:
+                filters.append(f"({filter_expr})")
             
-            # Apply Scope Filter (Selected Documents)
             if scope_filter:
-                if final_filter:
-                    final_filter = f"({final_filter}) and {scope_filter}"
-                else:
-                    final_filter = scope_filter
-            
-            # Apply Specific File Filter (User Mentioned)
+                filters.append(f"{scope_filter}")
+                
             if specific_file_filter:
-                if final_filter:
-                    final_filter = f"({final_filter}) and ({specific_file_filter})"
-                else:
-                    final_filter = specific_file_filter
-                print(f"DEBUG: Applied specific file filter: {specific_file_filter}")
+                filters.append(f"({specific_file_filter})")
+            
+            final_filter = " and ".join(filters) if filters else None
             
             print(f"DEBUG: Final OData Filter: {final_filter}")
 
@@ -338,7 +335,11 @@ Convert the user's natural language question into a keyword-based search query.
                     # This ensures we don't miss the P&ID List just because the title page was found.
                     print(f"DEBUG: Essential context fetch for '{target_file}' (is_found={is_found})")
                     safe_target = target_file.replace("'", "''")
-                    file_specific_filter = f"({filter_expr}) and startswith(metadata_storage_name, '{safe_target}')"
+                    
+                    # CRITICAL: Use the final_filter (which includes project/scope) to ensure strict filtering
+                    file_specific_filter = f"startswith(metadata_storage_name, '{safe_target}')"
+                    if final_filter:
+                        file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
                     
                     # 1. Fetch first 10 pages (likely to contain Index/TOC)
                     print(f"DEBUG: Fetching first 10 pages for '{target_file}'...")
