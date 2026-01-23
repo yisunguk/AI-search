@@ -24,10 +24,10 @@ class DocumentIntelligenceManager:
                 "prebuilt-layout", 
                 document_url, 
                 pages="1-2000",
-                output_content_format="markdown",
-                features=["highResolution"]
+                output_content_format="markdown"
             )
-            result = poller.result()
+            # Set a generous timeout (10 minutes) for large documents
+            result = poller.result(timeout=600)
 
             # Process each page separately
             page_chunks = []
