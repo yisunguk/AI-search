@@ -254,7 +254,58 @@ Convert the user's natural language question into a keyword-based search query.
                     search_mode=search_mode
                 )
 
-            # 4. Page-Aware Context Grouping
+            # 4. Force Inclusion of Selected Files (CRITICAL for Comparison)
+            # If user selected files but they didn't appear in the top results, force fetch them.
+            if available_files:
+                # Get set of filenames already in results
+                # Normalize: remove extension, lower case for comparison
+                found_filenames = set()
+                for res in search_results:
+                    fname = res.get('metadata_storage_name', '')
+                    found_filenames.add(fname)
+                
+                # Check for missing files
+                for target_file in available_files:
+                    # We check if the target file is "represented" in the results
+                    # The result filename might have (p.N) suffix or be exact match
+                    is_found = False
+                    for found in found_filenames:
+                        if found.startswith(target_file):
+                            is_found = True
+                            break
+                    
+                    if not is_found:
+                        print(f"DEBUG: Selected file '{target_file}' missing from results. Force fetching...")
+                        # Force fetch top chunks for this file
+                        safe_target = target_file.replace("'", "''")
+                        
+                        # Use a broad search for this file to get relevant chunks if possible, 
+                        # otherwise just get any chunks (using *)
+                        # We try to use the original query first restricted to this file
+                        force_query = search_query if search_query and search_query != "*" else "*"
+                        
+                        forced_results = self.search_manager.search(
+                            force_query,
+                            filter_expr=f"startswith(metadata_storage_name, '{safe_target}')",
+                            use_semantic_ranker=False, # Speed up
+                            search_mode=search_mode
+                        )
+                        
+                        # If query yielded nothing for this file, just get the first few pages (Introduction/Summary)
+                        if not forced_results:
+                             forced_results = self.search_manager.search(
+                                "*",
+                                filter_expr=f"startswith(metadata_storage_name, '{safe_target}')",
+                                use_semantic_ranker=False,
+                                search_mode="all"
+                            )
+                        
+                        # Take top 3 chunks from this file to ensure it's represented
+                        if forced_results:
+                            print(f"DEBUG: Force fetched {len(forced_results[:3])} chunks for '{target_file}'")
+                            search_results.extend(forced_results[:3])
+
+            # 5. Page-Aware Context Grouping
             # Group chunks by (Filename, Page)
             grouped_context = {} # Key: (filename, page), Value: list of chunks
             citations_map = {} # Key: (filename, page), Value: citation info
