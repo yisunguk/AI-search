@@ -18,11 +18,14 @@ class DocumentIntelligenceManager:
             List of dicts with keys: 'content', 'page_number', 'tables'
         """
         try:
-            # Use prebuilt-layout to extract text and tables
+            # Use prebuilt-layout with v4.0 features (Markdown, HighResolution)
             # Explicitly request pages 1-2000 to ensure all pages are processed
-            # (Requires Azure Form Recognizer Standard Tier for >2 pages)
             poller = self.client.begin_analyze_document_from_url(
-                "prebuilt-layout", document_url, pages="1-2000"
+                "prebuilt-layout", 
+                document_url, 
+                pages="1-2000",
+                output_content_format="markdown",
+                features=["highResolution"]
             )
             result = poller.result()
 

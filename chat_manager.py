@@ -170,6 +170,53 @@ Convert the user's natural language question into a keyword-based search query.
             print(f"DEBUG: Query rewriting failed: {e}")
             return user_message
 
+    def _get_direct_context_from_json(self, filename, user_folder=None):
+        """
+        Fetch analysis JSON directly from Blob Storage to bypass AI Search
+        """
+        try:
+            blob_service_client = BlobServiceClient.from_connection_string(self.storage_connection_string)
+            container_client = blob_service_client.get_container_client(self.container_name)
+            
+            # Construct JSON path
+            # We assume the JSON is stored in 'json/' folder with the same name + .json
+            # Or if it's in a subfolder (user_folder), we check there.
+            
+            json_blob_name = f"json/{filename}.json"
+            if user_folder:
+                # Try with user_folder prefix if provided
+                json_blob_name = f"{user_folder.strip('/')}/json/{filename}.json"
+            
+            print(f"DEBUG: Attempting direct JSON fetch: {json_blob_name}")
+            blob_client = container_client.get_blob_client(json_blob_name)
+            
+            if not blob_client.exists():
+                # Try fallback without user_folder if it failed
+                json_blob_name = f"json/{filename}.json"
+                blob_client = container_client.get_blob_client(json_blob_name)
+                if not blob_client.exists():
+                    print(f"DEBUG: Direct JSON fetch failed - blob not found: {json_blob_name}")
+                    return []
+
+            import json
+            data = json.loads(blob_client.download_blob().readall())
+            
+            # Convert JSON chunks to search-result-like objects
+            results = []
+            for chunk in data:
+                results.append({
+                    'metadata_storage_name': f"{filename} (p.{chunk.get('page_number', 1)})",
+                    'content': chunk.get('content', ''),
+                    'metadata_storage_path': f"https://direct_fetch/{filename}#page={chunk.get('page_number', 1)}",
+                    'project': 'drawings_analysis'
+                })
+            
+            print(f"DEBUG: Direct JSON fetch success: {len(results)} pages for {filename}")
+            return results
+        except Exception as e:
+            print(f"DEBUG: Direct JSON fetch error for {filename}: {e}")
+            return []
+
     def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None, user_folder=None):
         """
         Get chat response with client-side RAG
@@ -224,6 +271,19 @@ Convert the user's natural language question into a keyword-based search query.
             
             print(f"DEBUG: Final OData Filter: {final_filter}")
 
+            # 1.5 DIRECT CONTEXT RETRIEVAL (Bypass Search for Selected Files)
+            direct_results = []
+            if available_files:
+                print(f"DEBUG: Using Direct Context Retrieval for {len(available_files)} files")
+                for f in available_files:
+                    f_results = self._get_direct_context_from_json(f, user_folder)
+                    if f_results:
+                        direct_results.extend(f_results)
+            
+            # If we have direct results, we can either skip search or combine them.
+            # For "도면/스펙 비교" tab, we usually want EXACTLY these files.
+            # But let's combine to allow for keyword-based ranking within the files.
+            
             # 2. Query Rewriting
             search_query = self._rewrite_query(user_message)
             
@@ -234,6 +294,17 @@ Convert the user's natural language question into a keyword-based search query.
                 use_semantic_ranker=use_semantic_ranker,
                 search_mode=search_mode
             )
+            
+            # Combine with direct results (avoid duplicates)
+            if direct_results:
+                # Add direct results that aren't already in search_results
+                existing_paths = {res.get('metadata_storage_path') for res in search_results}
+                added_count = 0
+                for res in direct_results:
+                    if res.get('metadata_storage_path') not in existing_paths:
+                        search_results.append(res)
+                        added_count += 1
+                print(f"DEBUG: Combined search results with {added_count} direct results. Total: {len(search_results)}")
             
             # Filter by user_folder (Python-side enforcement)
             if user_folder and search_results:
