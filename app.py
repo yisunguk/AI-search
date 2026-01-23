@@ -1354,12 +1354,26 @@ elif menu == "도면/스펙 비교":
                         # Note: selected_filenames comes from the UI loop above
                         current_files = locals().get('selected_filenames', [])
                         
+                        # Construct robust filter expression
+                        base_filter = "project eq 'drawings_analysis'"
+                        
+                        # Add user scope filter to prevent cross-user data leakage
+                        # We filter by metadata_storage_path containing the user's folder
+                        if user_folder:
+                            import urllib.parse
+                            # Encode user folder for URL matching
+                            encoded_user_folder = urllib.parse.quote(user_folder)
+                            # Match path pattern: */{encoded_user_folder}/drawings/*
+                            # We use search.ismatch with wildcard
+                            path_pattern = f"*/{encoded_user_folder}/drawings/*"
+                            base_filter += f" and search.ismatch('{path_pattern}', 'metadata_storage_path')"
+                        
                         response_text, citations, context = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history,
-                            search_mode="any",  # Changed from 'all' to 'any' for better recall
-                            use_semantic_ranker=False,  # Disable semantic ranker if using Basic tier
-                            filter_expr="project eq 'drawings_analysis'",  # Only search drawings documents
+                            search_mode="any",
+                            use_semantic_ranker=False,
+                            filter_expr=base_filter,
                             available_files=current_files
                         )
                         

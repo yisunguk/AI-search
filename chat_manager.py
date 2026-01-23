@@ -298,7 +298,7 @@ Convert the user's natural language question into a keyword-based search query.
                         
                         forced_results = self.search_manager.search(
                             target_file, # Use filename as query
-                            filter_expr=None, # Remove strict filter, rely on search relevance
+                            filter_expr=filter_expr, # Restore filter to enforce project/user scope
                             use_semantic_ranker=False,
                             search_mode="any" # Relax to 'any' to ensure we find it even if tokenization is tricky
                         )
@@ -309,7 +309,7 @@ Convert the user's natural language question into a keyword-based search query.
                             print(f"DEBUG: Force fetching fallback with search_text='{name_no_ext}'")
                             forced_results = self.search_manager.search(
                                 name_no_ext,
-                                filter_expr=None,
+                                filter_expr=filter_expr, # Restore filter
                                 use_semantic_ranker=False,
                                 search_mode="any"
                             )
