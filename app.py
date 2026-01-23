@@ -275,6 +275,12 @@ if user_role == 'admin':
 else:
     # Use assigned permissions, ensuring mandatory menus are present
     available_menus = user_perms if user_perms else GUEST_MENUS
+    
+    # Map old menu names to new names (Migration fix)
+    available_menus = [
+        "도면/스펙 비교" if menu == "도면/스펙 분석" else menu 
+        for menu in available_menus
+    ]
     # Ensure "홈" and "사용자 설정" are always available
     if "홈" not in available_menus:
         available_menus.insert(0, "홈")
