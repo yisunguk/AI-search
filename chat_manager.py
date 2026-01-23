@@ -122,9 +122,10 @@ You must interpret the provided text as if you are looking at an engineering dia
             import re
             escaped_filename = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_filename)
             
-            # Use search.ismatch with escaped filename and wildcard
-            # We use 'simple' query type which is default, but we ensure the phrase is handled
-            return f"search.ismatch('\"{escaped_filename}*\"', 'metadata_storage_name')"
+            # Use search.ismatch with escaped filename as a phrase
+            # We remove the * because it's interpreted literally inside quotes
+            # The phrase match will still find "filename (p.N)" because "filename" is a prefix phrase
+            return f"search.ismatch('\"{escaped_filename}\"', 'metadata_storage_name')"
             
         return None
 
@@ -190,9 +191,9 @@ Convert the user's natural language question into a keyword-based search query.
                  for f in normalized_files:
                      # Escape single quotes for OData filter
                      safe_f = f.replace("'", "''")
-                     import re
                      escaped_f = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_f)
-                     conditions.append(f"search.ismatch('\"{escaped_f}*\"', 'metadata_storage_name')")
+                     # Remove * for phrase matching
+                     conditions.append(f"search.ismatch('\"{escaped_f}\"', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
@@ -347,10 +348,10 @@ Convert the user's natural language question into a keyword-based search query.
                     print(f"DEBUG: Essential context fetch for '{target_file}' (is_found={is_found})")
                     safe_target = target_file.replace("'", "''")
                     
-                    # CRITICAL: Use the final_filter (which includes project/scope) to ensure strict filtering
                     import re
                     escaped_target = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_target)
-                    file_specific_filter = f"search.ismatch('\"{escaped_target}*\"', 'metadata_storage_name')"
+                    # Remove * for phrase matching
+                    file_specific_filter = f"search.ismatch('\"{escaped_target}\"', 'metadata_storage_name')"
                     if final_filter:
                         file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
                     
@@ -508,7 +509,8 @@ Convert the user's natural language question into a keyword-based search query.
                 
                 # Clean content
                 page_content = page_content.replace("AutoCAD SHX Text", "").replace("%%C", "Ø")
-                if len(page_content) > 2000: page_content = page_content[:2000] + "..."
+                # Increased limit to 8000 to allow for more context per page
+                if len(page_content) > 8000: page_content = page_content[:8000] + "..."
                 
                 context_parts.append(f"[Document: {filename}, Page: {page}]\n{page_content}\n")
                 citations.append(citations_map[key])
@@ -520,6 +522,8 @@ Convert the user's natural language question into a keyword-based search query.
                 return f"검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.{debug_msg}", [], ""
 
             context = "\n" + "="*50 + "\n".join(context_parts) if context_parts else "(No new documents found. Use conversation history.)"
+            print(f"DEBUG: Context length: {len(context)} chars")
+            print(f"DEBUG: Context snippet: {context[:500]}...")
             
             # 6. Build Prompt
             full_prompt = f"""{self.system_prompt}
