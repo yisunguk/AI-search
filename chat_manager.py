@@ -122,10 +122,9 @@ You must interpret the provided text as if you are looking at an engineering dia
             import re
             escaped_filename = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_filename)
             
-            # Use search.ismatch with escaped filename as a phrase
-            # We remove the * because it's interpreted literally inside quotes
-            # The phrase match will still find "filename (p.N)" because "filename" is a prefix phrase
-            return f"search.ismatch('\"{escaped_filename}\"', 'metadata_storage_name')"
+            # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
+            # We match the prefix because the indexed name might be "filename (p.N)"
+            return f"(metadata_storage_name eq '{safe_filename}' or startswith(metadata_storage_name, '{safe_filename} (p.'))"
             
         return None
 
@@ -191,9 +190,9 @@ Convert the user's natural language question into a keyword-based search query.
                  for f in normalized_files:
                      # Escape single quotes for OData filter
                      safe_f = f.replace("'", "''")
-                     escaped_f = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_f)
-                     # Remove * for phrase matching
-                     conditions.append(f"search.ismatch('\"{escaped_f}\"', 'metadata_storage_name')")
+                     # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
+                     # We match the prefix because the indexed name might be "filename (p.N)"
+                     conditions.append(f"(metadata_storage_name eq '{safe_f}' or startswith(metadata_storage_name, '{safe_f} (p.'))")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
@@ -348,10 +347,9 @@ Convert the user's natural language question into a keyword-based search query.
                     print(f"DEBUG: Essential context fetch for '{target_file}' (is_found={is_found})")
                     safe_target = target_file.replace("'", "''")
                     
-                    import re
-                    escaped_target = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_target)
-                    # Remove * for phrase matching
-                    file_specific_filter = f"search.ismatch('\"{escaped_target}\"', 'metadata_storage_name')"
+                    # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
+                    # We match the prefix because the indexed name might be "filename (p.N)"
+                    file_specific_filter = f"(metadata_storage_name eq '{safe_target}' or startswith(metadata_storage_name, '{safe_target} (p.'))"
                     if final_filter:
                         file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
                     
@@ -519,7 +517,7 @@ Convert the user's natural language question into a keyword-based search query.
                 debug_msg = ""
                 if scope_filter:
                     debug_msg = f"\n\n(Debug: Filter applied: {scope_filter})"
-                return f"검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.{debug_msg}", [], ""
+                return f"검색된 문서가 없습니다. 다른 검색어를 시도해 보세요.{debug_msg}", [], "", final_filter, []
 
             context = "\n" + "="*50 + "\n".join(context_parts) if context_parts else "(No new documents found. Use conversation history.)"
             print(f"DEBUG: Context length: {len(context)} chars")
