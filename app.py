@@ -233,7 +233,7 @@ if 'is_logged_in' not in st.session_state:
     st.session_state.is_logged_in = False
 
 # Check for existing session cookie (Auto-login)
-if not st.session_state.is_logged_in:
+if not st.session_state.is_logged_in and not st.session_state.get('just_logged_out', False):
     try:
         auth_email = cookie_manager.get(cookie="auth_email")
         if auth_email:
@@ -294,6 +294,7 @@ with st.sidebar:
     if st.button("🚪 로그아웃", key="logout_btn", use_container_width=True):
         st.session_state.is_logged_in = False
         st.session_state.user_info = None
+        st.session_state.just_logged_out = True # Prevent immediate auto-login
         # Delete cookie
         cookie_manager.delete("auth_email")
         st.rerun()
