@@ -333,108 +333,38 @@ Convert the user's natural language question into a keyword-based search query.
                             is_found = True
                             break
                     
-                    if not is_found:
-                        print(f"DEBUG: Selected file '{target_file}' missing from results. Force fetching...")
-                        # Force fetch top chunks for this file
-                        safe_target = target_file.replace("'", "''")
-                        
-                        # Use a broad search for this file to get relevant chunks if possible, 
-                        # otherwise just get any chunks (using *)
-                        # We try to use the original query first restricted to this file
-                        force_query = search_query if search_query and search_query != "*" else "*"
-                        
-                        # Use search_text matching which is more robust (analyzed) than strict OData filter
-                        # We search for the filename in the metadata_storage_name field specifically if possible, 
-                        # but the search method is general. We'll rely on the search engine finding it.
-                        print(f"DEBUG: Force fetching with search_text='{target_file}'")
-                        
-                        # Strategy 1: Search for the USER QUERY within this specific file
-                        # This ensures we get the relevant page (e.g. P&ID List) if it exists
-                        # We use startswith because metadata_storage_name has page suffix (e.g. "file.pdf (p.1)")
-                        file_specific_filter = f"({filter_expr}) and startswith(metadata_storage_name, '{safe_target}')"
-                        
-                        print(f"DEBUG: Force fetching '{target_file}' with query='{search_query}'")
-                        forced_results = self.search_manager.search(
-                            search_query,
+                    # CRITICAL: Even if found, we ALWAYS fetch the first few pages (Index/Summary) 
+                    # and specifically search for LIST pages if the query suggests it.
+                    # This ensures we don't miss the P&ID List just because the title page was found.
+                    print(f"DEBUG: Essential context fetch for '{target_file}' (is_found={is_found})")
+                    safe_target = target_file.replace("'", "''")
+                    file_specific_filter = f"({filter_expr}) and startswith(metadata_storage_name, '{safe_target}')"
+                    
+                    # 1. Fetch first 10 pages (likely to contain Index/TOC)
+                    print(f"DEBUG: Fetching first 10 pages for '{target_file}'...")
+                    index_pages = self.search_manager.search(
+                        "*",
+                        filter_expr=file_specific_filter,
+                        top=10,
+                        search_mode="all"
+                    )
+                    if index_pages:
+                        search_results.extend(index_pages)
+                        print(f"DEBUG: Added {len(index_pages)} initial pages for '{target_file}'")
+
+                    # 2. If query is list-related, specifically search for LIST pages
+                    if any(keyword in search_query.upper() for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록", "비교", "COMPARE"]):
+                        print(f"DEBUG: List-specific search for '{target_file}'...")
+                        list_query = "PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE DRAWING LIST 도면 목록 리스트"
+                        list_results = self.search_manager.search(
+                            list_query,
                             filter_expr=file_specific_filter,
-                            use_semantic_ranker=use_semantic_ranker,
-                            search_mode=search_mode
+                            top=10,
+                            search_mode="any"
                         )
-
-                        # Strategy 1.5: If query search failed, try searching for "LIST" pages explicitly
-                        if not forced_results and any(keyword in search_query.upper() for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록"]):
-                            print(f"DEBUG: Trying LIST-specific search for '{target_file}'...")
-                            forced_results = self.search_manager.search(
-                                "PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE",
-                                filter_expr=file_specific_filter,
-                                use_semantic_ranker=False,
-                                search_mode="any"
-                            )
-
-                        # Strategy 2: If specific query fails, fallback to filename search (to get at least title page)
-                        if not forced_results:
-                            print(f"DEBUG: Query specific search failed for '{target_file}'. Fallback to filename search...")
-                            forced_results = self.search_manager.search(
-                                target_file, # Use filename as query
-                                filter_expr=filter_expr, # Restore filter to enforce project/user scope
-                                use_semantic_ranker=False,
-                                search_mode="any" # Relax to 'any' to ensure we find it even if tokenization is tricky
-                            )
-                        
-                        # Filter forced results by user_folder
-                        if user_folder and forced_results:
-                            from urllib.parse import unquote
-                            original_count = len(forced_results)
-                            filtered_results = [
-                                doc for doc in forced_results 
-                                if user_folder in unquote(doc.get('metadata_storage_path', ''))
-                            ]
-                            if filtered_results:
-                                forced_results = filtered_results
-                                print(f"DEBUG: User folder filter (forced): {original_count} -> {len(forced_results)}")
-                            else:
-                                print(f"DEBUG: User folder filter would remove all {original_count} forced results, SKIPPING filter")
-                        
-                        # Fallback: Try without extension if full name fails
-                        if not forced_results:
-                            name_no_ext = os.path.splitext(target_file)[0]
-                            print(f"DEBUG: Force fetching fallback with search_text='{name_no_ext}'")
-                            forced_results = self.search_manager.search(
-                                name_no_ext,
-                                filter_expr=filter_expr, # Restore filter
-                                use_semantic_ranker=False,
-                                search_mode="any"
-                            )
-                            
-                            # Filter forced results by user_folder
-                            if user_folder and forced_results:
-                                from urllib.parse import unquote
-                                original_count = len(forced_results)
-                                filtered_results = [
-                                    doc for doc in forced_results 
-                                    if user_folder in unquote(doc.get('metadata_storage_path', ''))
-                                ]
-                                if filtered_results:
-                                    forced_results = filtered_results
-                                    print(f"DEBUG: User folder filter (forced fallback): {original_count} -> {len(forced_results)}")
-                                else:
-                                    print(f"DEBUG: User folder filter would remove all {original_count} forced results, SKIPPING filter")
-                        
-                        # If query yielded nothing for this file, just get the first few pages (Introduction/Summary)
-                        if not forced_results:
-                             forced_results = self.search_manager.search(
-                                "*",
-                                filter_expr=f"startswith(metadata_storage_name, '{safe_target}')",
-                                use_semantic_ranker=False,
-                                search_mode="all"
-                            )
-                        
-                        # Take top 3 chunks from this file to ensure it's represented
-                        if forced_results:
-                            print(f"DEBUG: Force fetched {len(forced_results[:3])} chunks for '{target_file}'")
-                            for res in forced_results[:3]:
-                                print(f"  - {res.get('metadata_storage_name', 'Unknown')}")
-                            search_results.extend(forced_results[:3])
+                        if list_results:
+                            search_results.extend(list_results)
+                            print(f"DEBUG: Added {len(list_results)} list-specific pages for '{target_file}'")
 
             # 5. Page-Aware Context Grouping
             # Group chunks by (Filename, Page)
@@ -454,14 +384,22 @@ Convert the user's natural language question into a keyword-based search query.
                 
                 filename = unquote(filename)
                 
-                # Try to get page from path
+                # Try to get page from path first
                 if path:
                     page_match = re.search(r'#page=(\d+)', path)
                     if page_match:
                         page = int(page_match.group(1))
                 
-                # CRITICAL: If page is None, this is a "rogue" document (whole file indexed without page splitting).
-                # We used to skip it, but now we default to Page 1 to ensure we don't miss data.
+                # If not in path, try to extract from filename (e.g. "file.pdf (p.7)")
+                if page is None:
+                    page_match = re.search(r'\(p\.(\d+)\)', filename)
+                    if page_match:
+                        page = int(page_match.group(1))
+                        # Clean filename by removing the suffix
+                        filename = filename.split(' (p.')[0]
+                
+                # CRITICAL: If page is still None, this is a "rogue" document (whole file indexed without page splitting).
+                # We default to Page 1 to ensure we don't miss data.
                 if page is None:
                     print(f"DEBUG: Rogue document found (no page number), defaulting to Page 1: {filename}")
                     page = 1
@@ -504,7 +442,9 @@ Convert the user's natural language question into a keyword-based search query.
                         'page': page
                     }
                 
-                grouped_context[key].append(content)
+                # Avoid duplicate chunks for the same page
+                if content not in grouped_context[key]:
+                    grouped_context[key].append(content)
 
             # 5. Construct Context String
             context_parts = []
