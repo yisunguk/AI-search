@@ -1,0 +1,33 @@
+DEBUG: chat_manager.py loaded (Version: Startswith Fix v2)
+
+--- Running Retrieval Test ---
+DEBUG: Scope filter (Selected files): 1 files
+DEBUG: Final OData Filter: (startswith(metadata_storage_name, '제4권 도면(청주).pdf'))
+DEBUG: Query expansion triggered for P&ID List: 'P&ID 리스트 보여 주세요' -> 'P&ID 리스트 보여 주세요 PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX TABLE'
+MOCK SEARCH: query='P&ID 리스트 보여 주세요 PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX TABLE', filter='(startswith(metadata_storage_name, '제4권 도면(청주).pdf'))'
+DEBUG: Search query='P&ID 리스트 보여 주세요 PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX TABLE', Results count=1
+DEBUG: Top 10 search results pages:
+  1. 제4권 도면(청주).pdf (p.7)
+DEBUG: Essential context fetch for '제4권 도면(청주).pdf' (is_found=True)
+DEBUG: Fetching first 10 pages for '제4권 도면(청주).pdf'...
+MOCK SEARCH: query='*', filter='(None) and startswith(metadata_storage_name, '제4권 도면(청주).pdf')'
+DEBUG: Added 10 initial pages for '제4권 도면(청주).pdf'
+DEBUG: List-specific search for '제4권 도면(청주).pdf'...
+MOCK SEARCH: query='PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE DRAWING LIST 도면 목록 리스트', filter='(None) and startswith(metadata_storage_name, '제4권 도면(청주).pdf')'
+DEBUG: Added 1 list-specific pages for '제4권 도면(청주).pdf'
+DEBUG: Context construction - 10 documents, max 1 pages each
+DEBUG: Calling Azure OpenAI...
+
+--- Context Summary ---
+==================================================[Document: 제4권 도면(청주).pdf (p.1), Page: 1]
+[Document: 제4권 도면(청주).pdf (p.10), Page: 10]
+[Document: 제4권 도면(청주).pdf (p.2), Page: 2]
+[Document: 제4권 도면(청주).pdf (p.3), Page: 3]
+[Document: 제4권 도면(청주).pdf (p.4), Page: 4]
+[Document: 제4권 도면(청주).pdf (p.5), Page: 5]
+[Document: 제4권 도면(청주).pdf (p.6), Page: 6]
+[Document: 제4권 도면(청주).pdf (p.7), Page: 7]
+[Document: 제4권 도면(청주).pdf (p.8), Page: 8]
+[Document: 제4권 도면(청주).pdf (p.9), Page: 9]
+
+SUCCESS: Page 7 was found and included in the context!

@@ -1,0 +1,33 @@
+5735089 - 2026-01-23 20:43:12 +0900 : Restore user_folder logic and fix TypeError in get_chat_response
+393cc1d - 2026-01-23 20:37:11 +0900 : Rollback to working morning version (d93b0a5) with simple improvements: increase forced chunks to 10 and context to 20 pages
+ba80a52 - 2026-01-23 20:18:55 +0900 : Fix list page priority: Prepend list search results instead of appending to ensure they are included in context
+ede8fa4 - 2026-01-23 20:07:24 +0900 : Fix SyntaxError: Remove duplicate keyword argument in search call
+3f84682 - 2026-01-23 20:04:14 +0900 : Restore robust search.ismatch logic from morning version while keeping new list search strategy
+8b1728b - 2026-01-23 19:51:22 +0900 : Fix search regression: Always run list-specific search strategy when keywords are present
+20928b1 - 2026-01-23 19:46:02 +0900 : Enhance search logic for multi-document comparison: add list-specific strategy and increase context
+2b9ef93 - 2026-01-23 19:19:05 +0900 : Fix indentation error at line 421
+18fa829 - 2026-01-23 19:15:09 +0900 : ROOT CAUSE FIX: Force Inclusion now ALWAYS fetches best pages for selected files, not just when missing
+af2c2a1 - 2026-01-23 18:51:43 +0900 : Add comprehensive debug logging to trace page 7 filtering
+3296747 - 2026-01-23 18:26:12 +0900 : Upgrade debug tools in app with comprehensive page 7 search diagnostics
+ac9100c - 2026-01-23 17:59:13 +0900 : Fix overly strict user folder filtering (root cause of missing page 7)
+00e4b20 - 2026-01-23 17:49:29 +0900 : Add debug script for page content inspection
+2ca16ae - 2026-01-23 17:39:26 +0900 : Fix debug tool crash: Allow arbitrary kwargs in search method
+a8ef4b1 - 2026-01-23 17:34:18 +0900 : Fix Force Inclusion to search for user query first (Root Cause Fix)
+890d265 - 2026-01-23 17:28:51 +0900 : Increase context limit to 25 pages to capture lists/tables
+127c030 - 2026-01-23 14:48:14 +0900 : Fix search scope: Use Python-side filtering for user folder to avoid OData issues
+727941e - 2026-01-23 14:40:52 +0900 : Fix index scope issue: Enforce user folder filter in search
+fe31a2e - 2026-01-23 14:32:17 +0900 : Enhance Force Inclusion with fallback search (retry)
+d23a5ad - 2026-01-23 12:48:52 +0900 : Force reload chat_manager.py
+790d901 - 2026-01-23 11:39:52 +0900 : Add debug prints for file selection logic
+d93b0a5 - 2026-01-23 11:08:33 +0900 : Fix document comparison by forcing inclusion of selected files
+c962d86 - 2026-01-23 10:38:00 +0900 : Update download button to use st.link_button for consistent UI
+8fe4da9 - 2026-01-23 10:28:49 +0900 : Fix indentation error and generate_sas_url signature
+23bbdbf - 2026-01-23 10:26:57 +0900 : Fix download button error and align icons horizontally
+d410612 - 2026-01-23 10:26:17 +0900 : Fix download button error and align icons horizontally
+fcd726f - 2026-01-23 10:23:55 +0900 : Enhance file management: Download, Rename, Delete, JSON restriction
+34f4a8e - 2026-01-23 10:18:35 +0900 : Fix menu name mapping for non-admin users
+23b7191 - 2026-01-23 10:11:57 +0900 : Fix auto-login loop on logout
+835ae49 - 2026-01-23 10:06:34 +0900 : Remove chat header text
+e044f1c - 2026-01-23 10:03:04 +0900 : Update UI text and visibility settings
+b591f86 - 2026-01-23 09:46:44 +0900 : Enforce dark mode and set primary color
+d2b1687 - 2026-01-23 09:43:09 +0900 : Remove file upload box and center chat UI

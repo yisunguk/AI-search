@@ -14,7 +14,6 @@ class AzureOpenAIChatManager:
             api_key=api_key,
             api_version=api_version
         )
-        print("DEBUG: chat_manager.py loaded (Version: Startswith Fix v2)")
         self.deployment_name = deployment_name
         self.search_manager = search_manager
         self.storage_connection_string = storage_connection_string
@@ -129,12 +128,6 @@ You must interpret the provided text as if you are looking at an engineering dia
             if "전기부하리스트" in user_message or "Load List" in user_message:
                 return f"{user_message} Electrical Load List Motor Heater kW HP Tag No Rating"
             
-            # Rule for P&ID List
-            if any(x in user_message.upper() for x in ["P&ID", "PID", "피앤아이디"]) and any(x in user_message for x in ["리스트", "목록", "LIST", "INDEX", "비교"]):
-                expanded = f"{user_message} PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX TABLE"
-                print(f"DEBUG: Query expansion triggered for P&ID List: '{user_message}' -> '{expanded}'")
-                return expanded
-            
             # Use LLM for complex rewriting
             system_prompt = """You are a search query optimizer for technical documents.
 Convert the user's natural language question into a keyword-based search query.
@@ -159,7 +152,7 @@ Convert the user's natural language question into a keyword-based search query.
             print(f"DEBUG: Query rewriting failed: {e}")
             return user_message
 
-    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None, user_folder=None):
+    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None):
         """
         Get chat response with client-side RAG
         """
@@ -169,24 +162,20 @@ Convert the user's natural language question into a keyword-based search query.
             # 0. Construct Scope Filter from available_files (if provided, treat as selected files)
             # This ensures we ONLY search within the files the user has selected in the UI
             scope_filter = None
-            import unicodedata
-            
             if available_files:
-                 # Normalize filenames to NFC to match index
-                 normalized_files = [unicodedata.normalize('NFC', f) for f in available_files]
-                 
-                 # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
-                 # We match the prefix because the indexed name might be "filename (p.N)"
+                 # Use search.ismatch for more robust matching (handles tokenization and minor differences)
+                 # We use a phrase search ("...") to ensure the filename sequence matches
+                 # search.ismatch('"{filename}"', 'metadata_storage_name')
                  conditions = []
-                 for f in normalized_files:
-                     # Escape single quotes for OData filter
-                     safe_f = f.replace("'", "''")
-                     conditions.append(f"startswith(metadata_storage_name, '{safe_f}')")
+                 for f in available_files:
+                     # Escape double quotes for the search query
+                     safe_f = f.replace('"', '\\"')
+                     conditions.append(f"search.ismatch('\"{safe_f}\"', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
-                    print(f"DEBUG: Scope filter (Selected files): {len(normalized_files)} files")
-                    # print(f"DEBUG: Scope filter string: {scope_filter}")
+                    print(f"DEBUG: Scope filter (Selected files): {len(available_files)} files")
+                    print(f"DEBUG: Scope filter string: {scope_filter}")
             else:
                 print("DEBUG: No available_files passed (or empty list)")
 
@@ -194,19 +183,22 @@ Convert the user's natural language question into a keyword-based search query.
             # We still pass available_files to help detection, but the scope_filter enforces the selection
             specific_file_filter = self._extract_filename_filter(user_message, available_files)
             
-            # 2. Construct OData Filter
-            # Combine base filter, scope filter (selected files), and specific file filter
-            filters = []
-            if filter_expr:
-                filters.append(f"({filter_expr})")
+            final_filter = filter_expr
             
+            # Apply Scope Filter (Selected Documents)
             if scope_filter:
-                filters.append(f"{scope_filter}")
-                
-            if specific_file_filter:
-                filters.append(f"({specific_file_filter})")
+                if final_filter:
+                    final_filter = f"({final_filter}) and {scope_filter}"
+                else:
+                    final_filter = scope_filter
             
-            final_filter = " and ".join(filters) if filters else None
+            # Apply Specific File Filter (User Mentioned)
+            if specific_file_filter:
+                if final_filter:
+                    final_filter = f"({final_filter}) and ({specific_file_filter})"
+                else:
+                    final_filter = specific_file_filter
+                print(f"DEBUG: Applied specific file filter: {specific_file_filter}")
             
             print(f"DEBUG: Final OData Filter: {final_filter}")
 
@@ -221,26 +213,8 @@ Convert the user's natural language question into a keyword-based search query.
                 search_mode=search_mode
             )
             
-            # Filter by user_folder (Python-side enforcement)
-            if user_folder and search_results:
-                from urllib.parse import unquote
-                original_count = len(search_results)
-                filtered_results = [
-                    doc for doc in search_results 
-                    if user_folder in unquote(doc.get('metadata_storage_path', ''))
-                ]
-                if filtered_results:
-                    search_results = filtered_results
-                    print(f"DEBUG: User folder filter: {original_count} -> {len(search_results)}")
-                else:
-                    print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
-            
             # Debug: Check search results
             print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
-            if search_results:
-                print(f"DEBUG: Top 10 search results pages:")
-                for i, res in enumerate(search_results[:10]):
-                    print(f"  {i+1}. {res.get('metadata_storage_name', 'Unknown')}")
             
             # Fallback: If specific file search failed, try without file filter (maybe user got name wrong)
             if not search_results and specific_file_filter:
@@ -260,20 +234,6 @@ Convert the user's natural language question into a keyword-based search query.
                     use_semantic_ranker=use_semantic_ranker,
                     search_mode=search_mode
                 )
-                
-                # Filter by user_folder
-                if user_folder and search_results:
-                    from urllib.parse import unquote
-                    original_count = len(search_results)
-                    filtered_results = [
-                        doc for doc in search_results 
-                        if user_folder in unquote(doc.get('metadata_storage_path', ''))
-                    ]
-                    if filtered_results:
-                        search_results = filtered_results
-                        print(f"DEBUG: User folder filter (fallback 1): {original_count} -> {len(search_results)}")
-                    else:
-                        print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
 
             # Fallback 2: If user selected files (scope_filter) but keywords didn't match,
             # fetch the content of the selected files directly.
@@ -293,79 +253,57 @@ Convert the user's natural language question into a keyword-based search query.
                     use_semantic_ranker=use_semantic_ranker,
                     search_mode=search_mode
                 )
-                
-                # Filter by user_folder
-                if user_folder and search_results:
-                    from urllib.parse import unquote
-                    original_count = len(search_results)
-                    filtered_results = [
-                        doc for doc in search_results 
-                        if user_folder in unquote(doc.get('metadata_storage_path', ''))
-                    ]
-                    if filtered_results:
-                        search_results = filtered_results
-                        print(f"DEBUG: User folder filter (fallback 2): {original_count} -> {len(search_results)}")
-                    else:
-                        print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
 
             # 4. Force Inclusion of Selected Files (CRITICAL for Comparison)
             # If user selected files but they didn't appear in the top results, force fetch them.
             if available_files:
-                # Normalize available_files again just to be safe (though we did it above, let's use the local var)
-                normalized_files = [unicodedata.normalize('NFC', f) for f in available_files]
-                
                 # Get set of filenames already in results
+                # Normalize: remove extension, lower case for comparison
                 found_filenames = set()
                 for res in search_results:
                     fname = res.get('metadata_storage_name', '')
-                    # Normalize found filenames too
-                    found_filenames.add(unicodedata.normalize('NFC', fname))
+                    found_filenames.add(fname)
                 
                 # Check for missing files
-                for target_file in normalized_files:
+                for target_file in available_files:
                     # We check if the target file is "represented" in the results
+                    # The result filename might have (p.N) suffix or be exact match
                     is_found = False
                     for found in found_filenames:
                         if found.startswith(target_file):
                             is_found = True
                             break
                     
-                    # CRITICAL: Even if found, we ALWAYS fetch the first few pages (Index/Summary) 
-                    # and specifically search for LIST pages if the query suggests it.
-                    # This ensures we don't miss the P&ID List just because the title page was found.
-                    print(f"DEBUG: Essential context fetch for '{target_file}' (is_found={is_found})")
-                    safe_target = target_file.replace("'", "''")
-                    
-                    # CRITICAL: Use the final_filter (which includes project/scope) to ensure strict filtering
-                    file_specific_filter = f"startswith(metadata_storage_name, '{safe_target}')"
-                    if final_filter:
-                        file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
-                    
-                    # 1. Fetch first 10 pages (likely to contain Index/TOC)
-                    print(f"DEBUG: Fetching first 10 pages for '{target_file}'...")
-                    index_pages = self.search_manager.search(
-                        "*",
-                        filter_expr=file_specific_filter,
-                        top=10,
-                        search_mode="all"
-                    )
-                    if index_pages:
-                        search_results.extend(index_pages)
-                        print(f"DEBUG: Added {len(index_pages)} initial pages for '{target_file}'")
-
-                    # 2. If query is list-related, specifically search for LIST pages
-                    if any(keyword in search_query.upper() for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록", "비교", "COMPARE"]):
-                        print(f"DEBUG: List-specific search for '{target_file}'...")
-                        list_query = "PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE DRAWING LIST 도면 목록 리스트"
-                        list_results = self.search_manager.search(
-                            list_query,
-                            filter_expr=file_specific_filter,
-                            top=10,
-                            search_mode="any"
+                    if not is_found:
+                        print(f"DEBUG: Selected file '{target_file}' missing from results. Force fetching...")
+                        # Force fetch top chunks for this file
+                        safe_target = target_file.replace("'", "''")
+                        
+                        # Use a broad search for this file to get relevant chunks if possible, 
+                        # otherwise just get any chunks (using *)
+                        # We try to use the original query first restricted to this file
+                        force_query = search_query if search_query and search_query != "*" else "*"
+                        
+                        forced_results = self.search_manager.search(
+                            force_query,
+                            filter_expr=f"startswith(metadata_storage_name, '{safe_target}')",
+                            use_semantic_ranker=False, # Speed up
+                            search_mode=search_mode
                         )
-                        if list_results:
-                            search_results.extend(list_results)
-                            print(f"DEBUG: Added {len(list_results)} list-specific pages for '{target_file}'")
+                        
+                        # If query yielded nothing for this file, just get the first few pages (Introduction/Summary)
+                        if not forced_results:
+                             forced_results = self.search_manager.search(
+                                "*",
+                                filter_expr=f"startswith(metadata_storage_name, '{safe_target}')",
+                                use_semantic_ranker=False,
+                                search_mode="all"
+                            )
+                        
+                        # Take top 3 chunks from this file to ensure it's represented
+                        if forced_results:
+                            print(f"DEBUG: Force fetched {len(forced_results[:3])} chunks for '{target_file}'")
+                            search_results.extend(forced_results[:3])
 
             # 5. Page-Aware Context Grouping
             # Group chunks by (Filename, Page)
@@ -385,22 +323,14 @@ Convert the user's natural language question into a keyword-based search query.
                 
                 filename = unquote(filename)
                 
-                # Try to get page from path first
+                # Try to get page from path
                 if path:
                     page_match = re.search(r'#page=(\d+)', path)
                     if page_match:
                         page = int(page_match.group(1))
                 
-                # If not in path, try to extract from filename (e.g. "file.pdf (p.7)")
-                if page is None:
-                    page_match = re.search(r'\(p\.(\d+)\)', filename)
-                    if page_match:
-                        page = int(page_match.group(1))
-                        # Clean filename by removing the suffix
-                        filename = filename.split(' (p.')[0]
-                
-                # CRITICAL: If page is still None, this is a "rogue" document (whole file indexed without page splitting).
-                # We default to Page 1 to ensure we don't miss data.
+                # CRITICAL: If page is None, this is a "rogue" document (whole file indexed without page splitting).
+                # We used to skip it, but now we default to Page 1 to ensure we don't miss data.
                 if page is None:
                     print(f"DEBUG: Rogue document found (no page number), defaulting to Page 1: {filename}")
                     page = 1
@@ -408,19 +338,10 @@ Convert the user's natural language question into a keyword-based search query.
                 key = (filename, page)
                 
                 # Track the best rank for this page
-                # BOOST ranking for pages with "LIST", "INDEX", "TABLE" keywords
-                boost = 0
-                content_upper = content.upper()
-                if any(keyword in content_upper for keyword in ["PIPING AND INSTRUMENT DIAGRAM", "P&I DIAGRAM", "P & I DIAGRAM"]):
-                    if any(list_keyword in content_upper for list_keyword in ["LIST", "INDEX", "TABLE OF CONTENTS"]):
-                        boost = -100  # Strong boost for list pages
-                        print(f"DEBUG: BOOSTING page {key} (contains LIST/INDEX)")
-                
-                adjusted_rank = rank + boost
                 if key not in page_ranks:
-                    page_ranks[key] = adjusted_rank
+                    page_ranks[key] = rank
                 else:
-                    page_ranks[key] = min(page_ranks[key], adjusted_rank)
+                    page_ranks[key] = min(page_ranks[key], rank)
                 
                 if key not in grouped_context:
                     grouped_context[key] = []
@@ -443,9 +364,7 @@ Convert the user's natural language question into a keyword-based search query.
                         'page': page
                     }
                 
-                # Avoid duplicate chunks for the same page
-                if content not in grouped_context[key]:
-                    grouped_context[key].append(content)
+                grouped_context[key].append(content)
 
             # 5. Construct Context String
             context_parts = []
@@ -472,7 +391,6 @@ Convert the user's natural language question into a keyword-based search query.
             max_pages_per_doc = max(len(p) for p in docs_map.values()) if docs_map else 0
             
             sorted_filenames = sorted(docs_map.keys())
-            print(f"DEBUG: Context construction - {len(sorted_filenames)} documents, max {max_pages_per_doc} pages each")
             
             for i in range(max_pages_per_doc):
                 for fname in sorted_filenames:
@@ -483,9 +401,7 @@ Convert the user's natural language question into a keyword-based search query.
             # Increased to 20 to allow for more context when comparing multiple documents
             # Limit total pages
             # Reduced to 10 to prevent token overflow (finish_reason='length')
-            # Limit total pages
-            # Increased to 25 to ensure we capture lists/tables that might be ranked lower
-            context_limit = 25
+            context_limit = 10
             
             for key in sorted_keys[:context_limit]:
                 filename, page = key
@@ -569,11 +485,11 @@ USER QUESTION:
                 print(f"DEBUG: LLM call failed: {e}")
                 return f"LLM 호출 중 오류가 발생했습니다: {str(e)}\n\n(컨텍스트 길이: {len(context)} 자)", citations, context
 
-            return response_text, citations, context, final_filter, search_results
+            return response_text, citations, context
 
         except Exception as e:
             print(f"Error in get_chat_response: {e}")
-            return f"오류가 발생했습니다: {str(e)}", [], "", None, []
+            return f"오류가 발생했습니다: {str(e)}", [], ""
     
     def generate_sas_url(self, blob_name):
         """

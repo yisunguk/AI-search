@@ -1,0 +1,30 @@
+DEBUG: chat_manager.py loaded (Version: Startswith Fix v2)
+
+--- Running Scope Filter Test (Selected: ['10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf']) ---
+DEBUG: Scope filter (Selected files): 1 files
+DEBUG: Final OData Filter: (project eq 'drawings_analysis') and (startswith(metadata_storage_name, '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf'))
+DEBUG: Rewritten query: '필터 엘리먼트 재료 알려 주세요' -> '<MagicMock name='mock().choices.__getitem__().message.content.strip()' id='2067228236688'>'
+MOCK SEARCH: query='<MagicMock name='mock().choices.__getitem__().message.content.strip()' id='2067228236688'>', filter='(project eq 'drawings_analysis') and (startswith(metadata_storage_name, '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf'))'
+DEBUG: Search query='<MagicMock name='mock().choices.__getitem__().message.content.strip()' id='2067228236688'>', Results count=0
+DEBUG: No results with query but files selected. Retrying with '*'...
+MOCK SEARCH: query='*', filter='(project eq 'drawings_analysis') and (startswith(metadata_storage_name, '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf'))'
+DEBUG: Essential context fetch for '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf' (is_found=False)
+DEBUG: Fetching first 10 pages for '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf'...
+MOCK SEARCH: query='*', filter='((project eq 'drawings_analysis') and (startswith(metadata_storage_name, '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf'))) and (startswith(metadata_storage_name, '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf'))'
+DEBUG: Added 10 initial pages for '10-24000-OM-171-200_GENERAL ASSEMBLY DRAWING FOR LAST CHANCE FILTER AB WITH FOUNDATION LOADING (FUEL GAS)_REV.A.pdf'
+DEBUG: Context construction - 1 documents, max 10 pages each
+DEBUG: Calling Azure OpenAI...
+
+--- Context Summary ---
+==================================================[Document: 제4권 도면(청주).pdf, Page: 1]
+[Document: 제4권 도면(청주).pdf, Page: 2]
+[Document: 제4권 도면(청주).pdf, Page: 3]
+[Document: 제4권 도면(청주).pdf, Page: 4]
+[Document: 제4권 도면(청주).pdf, Page: 5]
+[Document: 제4권 도면(청주).pdf, Page: 6]
+[Document: 제4권 도면(청주).pdf, Page: 7]
+[Document: 제4권 도면(청주).pdf, Page: 8]
+[Document: 제4권 도면(청주).pdf, Page: 9]
+[Document: 제4권 도면(청주).pdf, Page: 10]
+
+FAILURE: Unselected files were found in the context!

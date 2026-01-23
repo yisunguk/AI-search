@@ -872,7 +872,7 @@ elif menu == "검색 & AI 채팅":
                         ]
                         
                         # Pass the selected search options to the chat manager
-                        response_text, citations, context = chat_manager.get_chat_response(
+                        response_text, citations, context, final_filter, search_results = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history, 
                             search_mode=chat_search_mode, 
@@ -904,8 +904,16 @@ elif menu == "검색 & AI 채팅":
                         st.session_state.chat_messages.append({
                             "role": "assistant",
                             "content": response_text,
-                            "citations": citations
+                            "citations": citations,
+                            "context": context,
+                            "debug_filter": final_filter
                         })
+                        
+                        # Debug: Show Context
+                        with st.expander("🔍 검색된 컨텍스트 확인 (Debug Context)", expanded=False):
+                            if final_filter:
+                                st.caption(f"**OData Filter:** `{final_filter}`")
+                            st.text_area("LLM에게 전달된 원문 데이터", value=context, height=300)
                         
                     except Exception as e:
                         st.error(f"오류가 발생했습니다: {str(e)}")
@@ -1360,7 +1368,7 @@ elif menu == "도면/스펙 비교":
                         # Note: We used to filter by path here, but OData encoding issues caused 0 results.
                         # Now we pass user_folder to chat_manager for Python-side filtering.
 
-                        response_text, citations, context = chat_manager.get_chat_response(
+                        response_text, citations, context, final_filter, search_results = chat_manager.get_chat_response(
                             prompt, 
                             conversation_history,
                             search_mode="any",
@@ -1409,6 +1417,10 @@ elif menu == "도면/스펙 비교":
                         
                         # Debug: Show Context
                         with st.expander("🔍 검색된 컨텍스트 확인 (Debug Context)", expanded=False):
+                            if final_filter:
+                                st.caption(f"**OData Filter:** `{final_filter}`")
+                            if search_results:
+                                st.caption(f"**Search Results:** {len(search_results)} chunks found")
                             st.text_area("LLM에게 전달된 원문 데이터", value=context, height=300)
 
                         st.session_state.rag_chat_messages.append({
@@ -1431,6 +1443,34 @@ elif menu == "도면/스펙 비교":
     if user_role == 'admin':
         with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=False):
             st.warning("이 도구는 검색 문제를 진단하기 위한 것입니다.")
+            
+            # Secret Inspector
+            st.write("### 🔐 자격 증명 확인 (Secret Inspector)")
+            def mask_secret(s):
+                if not s: return "Not Set"
+                if len(s) <= 8: return "*" * len(s)
+                return s[:4] + "*" * (len(s)-8) + s[-4:]
+            
+            secrets_to_check = {
+                "AZURE_STORAGE_CONNECTION_STRING": STORAGE_CONN_STR,
+                "AZURE_BLOB_CONTAINER_NAME": CONTAINER_NAME,
+                "AZURE_OPENAI_ENDPOINT": AZURE_OPENAI_ENDPOINT,
+                "AZURE_OPENAI_KEY": AZURE_OPENAI_KEY,
+                "AZURE_SEARCH_ENDPOINT": AZURE_SEARCH_ENDPOINT,
+                "AZURE_SEARCH_KEY": SEARCH_KEY,
+                "AZURE_TRANSLATOR_KEY": TRANSLATOR_KEY,
+                "AZURE_DOC_INTEL_ENDPOINT": AZURE_DOC_INTEL_ENDPOINT,
+                "AZURE_DOC_INTEL_KEY": AZURE_DOC_INTEL_KEY
+            }
+            
+            import pandas as pd
+            secret_data = []
+            for k, v in secrets_to_check.items():
+                secret_data.append({"Secret Key": k, "Status": "✅ Loaded" if v else "❌ Missing", "Value (Masked)": mask_secret(v)})
+            
+            st.table(pd.DataFrame(secret_data))
+            
+            st.write("---")
             
             if st.button("🔍 인덱스 상태 및 검색 테스트 실행"):
                 try:
