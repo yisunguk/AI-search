@@ -308,12 +308,28 @@ Convert the user's natural language question into a keyword-based search query.
                         # but the search method is general. We'll rely on the search engine finding it.
                         print(f"DEBUG: Force fetching with search_text='{target_file}'")
                         
+                        # Strategy 1: Search for the USER QUERY within this specific file
+                        # This ensures we get the relevant page (e.g. P&ID List) if it exists
+                        # We use startswith because metadata_storage_name has page suffix (e.g. "file.pdf (p.1)")
+                        file_specific_filter = f"({filter_expr}) and startswith(metadata_storage_name, '{safe_target}')"
+                        
+                        print(f"DEBUG: Force fetching '{target_file}' with query='{search_query}'")
                         forced_results = self.search_manager.search(
-                            target_file, # Use filename as query
-                            filter_expr=filter_expr, # Restore filter to enforce project/user scope
-                            use_semantic_ranker=False,
-                            search_mode="any" # Relax to 'any' to ensure we find it even if tokenization is tricky
+                            search_query,
+                            filter_expr=file_specific_filter,
+                            use_semantic_ranker=use_semantic_ranker,
+                            search_mode=search_mode
                         )
+
+                        # Strategy 2: If specific query fails, fallback to filename search (to get at least title page)
+                        if not forced_results:
+                            print(f"DEBUG: Query specific search failed for '{target_file}'. Fallback to filename search...")
+                            forced_results = self.search_manager.search(
+                                target_file, # Use filename as query
+                                filter_expr=filter_expr, # Restore filter to enforce project/user scope
+                                use_semantic_ranker=False,
+                                search_mode="any" # Relax to 'any' to ensure we find it even if tokenization is tricky
+                            )
                         
                         # Filter forced results by user_folder
                         if user_folder and forced_results:
