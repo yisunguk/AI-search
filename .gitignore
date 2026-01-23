@@ -1,2 +1,5 @@
 .streamlit/secrets.toml
 backup
+temp_secrets.txt
+*.env
+__pycache__/

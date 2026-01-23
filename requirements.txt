@@ -7,7 +7,7 @@ python-pptx>=0.6.21
 azure-search-documents>=11.4.0
 azure-identity>=1.15.0
 openai>=1.0.0
-azure-ai-formrecognizer>=3.3.0
+azure-ai-documentintelligence>=1.0.0b1
 pandas
 openpyxl
 extra-streamlit-components

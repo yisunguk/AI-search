@@ -2,6 +2,7 @@ import os
 from openai import AzureOpenAI
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
 from datetime import datetime, timedelta
+import urllib.parse
 
 class AzureOpenAIChatManager:
     def __init__(self, endpoint, api_key, deployment_name, api_version, 
@@ -19,6 +20,25 @@ class AzureOpenAIChatManager:
         self.search_manager = search_manager
         self.storage_connection_string = storage_connection_string
         self.container_name = container_name
+        
+    def generate_sas_url(self, blob_name):
+        """
+        Generate a SAS URL for a specific blob
+        """
+        try:
+            blob_service_client = BlobServiceClient.from_connection_string(self.storage_connection_string)
+            sas_token = generate_blob_sas(
+                account_name=blob_service_client.account_name,
+                container_name=self.container_name,
+                blob_name=blob_name,
+                account_key=blob_service_client.credential.account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=datetime.utcnow() + timedelta(hours=1)
+            )
+            return f"https://{blob_service_client.account_name}.blob.core.windows.net/{self.container_name}/{urllib.parse.quote(blob_name)}?{sas_token}"
+        except Exception as e:
+            print(f"Error generating SAS URL: {e}")
+            return "#"
         
         # System prompt optimized for technical accuracy and table interpretation
         self.system_prompt = """You are an expert EPC (Engineering, Procurement, and Construction) project assistant with deep knowledge in interpreting technical drawings and documents.

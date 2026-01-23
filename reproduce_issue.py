@@ -8,9 +8,9 @@ import unicodedata
 load_dotenv()
 
 # Hardcoded keys for debugging
-service_endpoint = "https://ai-search-s1.search.windows.net"
+service_endpoint = os.environ.get("AZURE_SEARCH_ENDPOINT")
 index_name = "pdf-search-index"
-key = "3B... (truncated for security, but I will use the full key from previous step)" 
+key = os.environ.get("AZURE_SEARCH_KEY")
 # Wait, I need the full key. I will use the key found in temp_secrets.txt or similar.
 # Actually, I don't have the full key in the logs. I saw "LZ5470" but that looks like a password.
 # I need to find the actual key.

@@ -120,6 +120,10 @@ class AzureSearchManager:
                 SimpleField(name="metadata_storage_content_type", type=SearchFieldDataType.String, filterable=True),
                 # 추가 메타데이터 필드
                 SearchableField(name="project", type=SearchFieldDataType.String, filterable=True, sortable=True),
+                
+                # 페이지 단위 필드 (추가)
+                SimpleField(name="page_number", type=SearchFieldDataType.Int32, filterable=True, sortable=True),
+                SearchableField(name="filename", type=SearchFieldDataType.String, filterable=True, sortable=True, analyzer_name=tag_analyzer_name),
             ]
 
             cors_options = CorsOptions(allowed_origins=["*"], max_age_in_seconds=60)
@@ -420,6 +424,13 @@ class AzureSearchManager:
                     "query_caption": "extractive",
                     "query_language": "ko-kr"
                 })
+
+            # Add highlighting support
+            search_params.update({
+                "highlight_fields": "content",
+                "highlight_pre_tag": "<b>",
+                "highlight_post_tag": "</b>"
+            })
 
             results = self.search_client.search(**search_params)
             return list(results)

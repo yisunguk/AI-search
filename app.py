@@ -8,6 +8,7 @@ from azure.ai.translation.document import DocumentTranslationClient, DocumentTra
 from azure.core.credentials import AzureKeyCredential
 import urllib.parse
 import requests
+import fitz # PyMuPDF for page count
 
 # Search Manager Import
 from search_manager import AzureSearchManager
@@ -935,9 +936,15 @@ elif menu == "도면/스펙 비교":
         if "drawing_uploader_key" not in st.session_state:
             st.session_state.drawing_uploader_key = 0
             
+        # High Resolution OCR Toggle
+        use_high_res = st.toggle("고해상도 OCR 적용 (도면 미세 글자 추출용)", value=False, help="복잡한 도면의 작은 글씨를 더 정확하게 읽습니다. 분석 시간이 더 오래 걸릴 수 있습니다.")
+        
         uploaded_files = st.file_uploader("PDF 도면, 스펙, 사양서 등을 업로드하세요", accept_multiple_files=True, type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'], key=f"drawing_{st.session_state.drawing_uploader_key}")
         
         if uploaded_files:
+            if "analysis_status" not in st.session_state:
+                st.session_state.analysis_status = {}
+                
             if st.button("업로드 및 분석 시작"):
                 blob_service_client = get_blob_service_client()
                 container_client = blob_service_client.get_container_client(CONTAINER_NAME)
@@ -954,6 +961,15 @@ elif menu == "도면/스펙 비교":
                         # Normalize filename to NFC (to match search query logic)
                         import unicodedata
                         safe_filename = unicodedata.normalize('NFC', file.name)
+                        
+                        # Initialize status
+                        st.session_state.analysis_status[safe_filename] = {
+                            "status": "Extracting",
+                            "total_pages": 0,
+                            "processed_pages": 0,
+                            "chunks": {},
+                            "error": None
+                        }
                         
                         status_text.text(f"처리 중 ({idx+1}/{total_files}): {safe_filename}")
                         
@@ -984,14 +1000,45 @@ elif menu == "도면/스펙 비교":
                         )
                         blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
                         
-                        # 3. Analyze with Document Intelligence
-                        status_text.text(f"분석 중 ({idx+1}/{total_files}): {file.name} - Document Intelligence Layout 모델 실행...")
-                        page_chunks = doc_intel_manager.analyze_document(blob_url)
+                        # 3. Analyze with Document Intelligence (Chunked)
+                        file.seek(0)
+                        pdf_data = file.read()
+                        doc = fitz.open(stream=pdf_data, filetype="pdf")
+                        total_pages = doc.page_count
+                        file.seek(0)
                         
-                        # 4. Indexing (Push to Search) - One document per page
-                        # 4. Indexing (Push to Search) - One document per page
-                        detected_pages = [chunk['page_number'] for chunk in page_chunks]
-                        status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {safe_filename} - {len(page_chunks)} 페이지 발견 (Pages: {detected_pages})")
+                        status_text.text(f"분석 준비 중 ({idx+1}/{total_files}): {file.name} (총 {total_pages} 페이지)")
+                        
+                        st.session_state.analysis_status[safe_filename]["total_pages"] = total_pages
+                        
+                        chunk_size = 50
+                        page_chunks = []
+                        
+                        for start_page in range(1, total_pages + 1, chunk_size):
+                            end_page = min(start_page + chunk_size - 1, total_pages)
+                            page_range = f"{start_page}-{end_page}"
+                            
+                            st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Extracting"
+                            status_text.text(f"분석 중 ({idx+1}/{total_files}): {file.name} - 페이지 {page_range} 분석 중...")
+                            
+                            # Retry logic for each chunk
+                            max_retries = 3
+                            for retry in range(max_retries):
+                                try:
+                                    chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=use_high_res)
+                                    page_chunks.extend(chunks)
+                                    st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
+                                    st.session_state.analysis_status[safe_filename]["processed_pages"] += len(chunks)
+                                    break
+                                except Exception as e:
+                                    if retry == max_retries - 1:
+                                        st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Failed"
+                                        st.session_state.analysis_status[safe_filename]["error"] = str(e)
+                                        raise e
+                                    time.sleep(5)
+                        
+                        # 4. Indexing
+                        st.session_state.analysis_status[safe_filename]["status"] = "Indexing"
                         
                         if len(page_chunks) == 0:
                             st.warning(f"⚠️ 경고: '{file.name}'에서 페이지를 찾을 수 없습니다.")
@@ -1013,7 +1060,9 @@ elif menu == "도면/스펙 비교":
                                 "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
                                 "metadata_storage_size": file.size,
                                 "metadata_storage_content_type": file.type,
-                                "project": "drawings_analysis"  # Tag for filtering
+                                "project": "drawings_analysis",  # Tag for filtering
+                                "page_number": page_chunk['page_number'],
+                                "filename": safe_filename
                             }
                             documents_to_index.append(document)
                         
@@ -1033,6 +1082,7 @@ elif menu == "도면/스펙 비교":
                             status_text.text(f"분석 결과 저장 중 ({idx+1}/{total_files}): {safe_filename}...")
                             search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
                         
+                        st.session_state.analysis_status[safe_filename]["status"] = "Ready"
                         progress_bar.progress((idx + 1) / total_files)
                         
                     except Exception as e:
@@ -1045,6 +1095,40 @@ elif menu == "도면/스펙 비교":
                 st.session_state.drawing_uploader_key += 1
                 time.sleep(2)
                 st.rerun()
+
+        # 📊 분석 모니터링 대시보드
+        if "analysis_status" in st.session_state and st.session_state.analysis_status:
+            st.divider()
+            st.markdown("#### 📊 분석 모니터링 대시보드")
+            for filename, info in st.session_state.analysis_status.items():
+                status_color = "green" if info['status'] == "Ready" else "orange" if info['status'] != "Failed" else "red"
+                with st.expander(f":{status_color}[{filename}] - {info['status']}", expanded=(info['status'] != "Ready")):
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"**전체 상태:** {info['status']}")
+                        progress = info['processed_pages'] / info['total_pages'] if info['total_pages'] > 0 else 0
+                        st.progress(progress)
+                        st.write(f"**진행도:** {info['processed_pages']} / {info['total_pages']} 페이지 완료")
+                    
+                    if info['error']:
+                        st.error(f"**최근 오류:** {info['error']}")
+                    
+                    # 세부 청크 상태
+                    if info['chunks']:
+                        st.markdown("---")
+                        st.caption("🧩 **페이지 청크별 상태**")
+                        chunk_cols = st.columns(4)
+                        for i, (chunk_range, chunk_status) in enumerate(info['chunks'].items()):
+                            with chunk_cols[i % 4]:
+                                if chunk_status == "Ready":
+                                    st.success(f"✅ {chunk_range}")
+                                elif chunk_status == "Failed":
+                                    st.error(f"❌ {chunk_range}")
+                                    # 재시도 버튼 (간소화된 구현)
+                                    if st.button("🔄", key=f"retry_{filename}_{chunk_range}", help=f"{chunk_range} 재시도"):
+                                        st.info("재시도는 '업로드 및 분석 시작'을 다시 눌러주세요 (멱등성 보장)")
+                                else:
+                                    st.info(f"⏳ {chunk_range}")
 
     with tab2:
 
@@ -1425,6 +1509,35 @@ elif menu == "도면/스펙 비교":
                         
                         st.markdown(response_text)
                         
+                        # Display Google-like search results (Snippets + Links)
+                        if search_results:
+                            with st.expander("🔍 검색 결과 및 스니펫 (상위 후보)", expanded=True):
+                                for i, res in enumerate(search_results[:5]): # Show top 5 for clarity
+                                    res_name = res.get('metadata_storage_name', 'Unknown')
+                                    res_path = res.get('metadata_storage_path', '')
+                                    
+                                    # Extract snippet from highlights
+                                    highlights = res.get('@search.highlights', {})
+                                    snippet = highlights.get('content', [""])[0] if highlights else ""
+                                    if not snippet:
+                                        snippet = res.get('content', '')[:200] + "..."
+                                    
+                                    # Generate SAS link for the result
+                                    try:
+                                        # Extract blob path from metadata_storage_path
+                                        from urllib.parse import unquote
+                                        blob_path_part = res_path.split(f"/{CONTAINER_NAME}/")[1].split('#')[0]
+                                        blob_path_part = unquote(blob_path_part)
+                                        sas_url = chat_manager.generate_sas_url(blob_path_part)
+                                    except:
+                                        sas_url = "#"
+
+                                    st.markdown(f"**{i+1}. {res_name}**")
+                                    st.write(f"_{snippet}_")
+                                    if sas_url != "#":
+                                        st.markdown(f"[📥 원본 다운로드]({sas_url})")
+                                    st.divider()
+
                         if citations:
                             st.markdown("---")
                             st.caption("📚 **참조 문서:**")
