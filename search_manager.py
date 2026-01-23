@@ -451,16 +451,12 @@ class AzureSearchManager:
         특정 파일의 모든 페이지/청크를 JSON 형태로 가져오기
         """
         try:
-            # Escape double quotes for search query
-            safe_filename = filename.replace('"', '\\"')
-            
-            # Use search.ismatch for more robust matching (handles special chars and tokenization better)
-            # We use a phrase search ("...") to ensure the filename sequence matches
-            # search.ismatch('"{filename}"', 'metadata_storage_name')
+            # Use startswith for more reliable matching with special characters
+            safe_filename = filename.replace("'", "''")
             
             results = self.search_client.search(
                 search_text="*",
-                filter=f"project eq 'drawings_analysis' and search.ismatch('\"{safe_filename}\"', 'metadata_storage_name')",
+                filter=f"project eq 'drawings_analysis' and startswith(metadata_storage_name, '{safe_filename}')",
                 select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
                 top=1000 # Assuming max 1000 pages per doc
             )
