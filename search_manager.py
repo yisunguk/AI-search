@@ -379,7 +379,7 @@ class AzureSearchManager:
             print(f"Error getting doc count: {e}")
             return -1
 
-    def search(self, query, filter_expr=None, use_semantic_ranker=False, search_mode="all"):
+    def search(self, query, filter_expr=None, use_semantic_ranker=False, search_mode="all", **kwargs):
         """
         문서 검색
         """
@@ -407,6 +407,9 @@ class AzureSearchManager:
                 "top": 50,
                 "search_mode": search_mode
             }
+            
+            # Update with any additional parameters (e.g. select, top)
+            search_params.update(kwargs)
 
             # 시맨틱 랭커 적용
             if use_semantic_ranker:
