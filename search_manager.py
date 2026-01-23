@@ -511,3 +511,47 @@ class AzureSearchManager:
         except Exception as e:
             print(f"Error fetching document JSON: {e}")
             return []
+
+    def upload_analysis_json(self, container_client, user_folder, filename, page_chunks):
+        """
+        Document Intelligence 분석 결과를 Blob Storage에 JSON으로 저장
+        """
+        try:
+            import json
+            import unicodedata
+            # Ensure NFC normalization
+            filename = unicodedata.normalize('NFC', filename)
+            json_path = f"{user_folder}/json/{filename}.json"
+            
+            json_data = json.dumps(page_chunks, ensure_ascii=False, indent=2)
+            
+            blob_client = container_client.get_blob_client(json_path)
+            blob_client.upload_blob(json_data, overwrite=True)
+            
+            print(f"DEBUG: Analysis JSON uploaded to {json_path}")
+            return True, f"JSON uploaded to {json_path}"
+        except Exception as e:
+            print(f"Error uploading analysis JSON: {e}")
+            return False, str(e)
+
+    def get_document_json_from_blob(self, container_client, user_folder, filename):
+        """
+        Blob Storage에서 직접 분석 결과 JSON을 가져옴 (가장 정확함)
+        """
+        try:
+            import json
+            import unicodedata
+            # Ensure NFC normalization
+            filename = unicodedata.normalize('NFC', filename)
+            json_path = f"{user_folder}/json/{filename}.json"
+            
+            blob_client = container_client.get_blob_client(json_path)
+            if not blob_client.exists():
+                print(f"DEBUG: JSON blob not found at {json_path}")
+                return None
+                
+            json_data = blob_client.download_blob().readall()
+            return json.loads(json_data)
+        except Exception as e:
+            print(f"Error fetching JSON from blob: {e}")
+            return None

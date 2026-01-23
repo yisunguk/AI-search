@@ -1022,6 +1022,10 @@ elif menu == "도면/스펙 비교":
                             success, msg = search_manager.upload_documents(documents_to_index)
                             if not success:
                                 st.error(f"인덱싱 실패 ({file.name}): {msg}")
+                            
+                            # 5. Save Analysis JSON to Blob Storage (Dual Retrieval Strategy)
+                            # This allows exact retrieval by filename without AI Search
+                            search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
                         
                         progress_bar.progress((idx + 1) / total_files)
                         
@@ -1225,7 +1229,14 @@ elif menu == "도면/스펙 비교":
                                     if st.button("JSON", key=f"gen_json_{blob_info['name']}"):
                                         with st.spinner("..."):
                                             search_manager = get_search_manager()
-                                            docs = search_manager.get_document_json(blob_info['name'])
+                                            # Dual Retrieval Strategy: Try Blob first
+                                            docs = search_manager.get_document_json_from_blob(container_client, user_folder, blob_info['name'])
+                                            
+                                            # Fallback to AI Search if Blob JSON not found (for older files)
+                                            if not docs:
+                                                st.info("Blob JSON을 찾을 수 없어 AI Search에서 검색합니다...")
+                                                docs = search_manager.get_document_json(blob_info['name'])
+                                                
                                             if docs:
                                                 import json
                                                 json_str = json.dumps(docs, ensure_ascii=False, indent=2)
@@ -1602,15 +1613,15 @@ elif menu == "도면/스펙 비교":
             st.write("### ⚠️ 인덱스 초기화")
             if st.button("🗑️ 모든 도면 데이터 삭제 (Index & Blob)", type="primary"):
                 try:
-                    # 1. Delete all blobs in any drawings/ folder (Global reset)
+                    # 1. Delete all blobs in any drawings/, json/ folder (Global reset)
                     blob_service_client = get_blob_service_client()
                     container_client = blob_service_client.get_container_client(CONTAINER_NAME)
                     
-                    # List all blobs and filter for drawings
+                    # List all blobs and filter for drawings or json
                     blobs = container_client.list_blobs()
                     deleted_blobs = 0
                     for blob in blobs:
-                        if '/drawings/' in blob.name or blob.name.startswith('drawings/'):
+                        if '/drawings/' in blob.name or blob.name.startswith('drawings/') or '/json/' in blob.name or blob.name.startswith('json/'):
                             container_client.delete_blob(blob.name)
                             deleted_blobs += 1
                     
