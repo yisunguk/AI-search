@@ -122,9 +122,11 @@ You must interpret the provided text as if you are looking at an engineering dia
             import re
             escaped_filename = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_filename)
             
-            # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
-            # We match the prefix because the indexed name might be "filename (p.N)"
-            return f"(metadata_storage_name eq '{safe_filename}' or startswith(metadata_storage_name, '{safe_filename} (p.'))"
+            import re
+            escaped_filename = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_filename)
+            # Use search.ismatch for exact filename matching (more reliable for SearchableFields)
+            # We match the phrase because the indexed name might be "filename (p.N)"
+            return f"search.ismatch('\"{escaped_filename}\"', 'metadata_storage_name')"
             
         return None
 
@@ -190,9 +192,10 @@ Convert the user's natural language question into a keyword-based search query.
                  for f in normalized_files:
                      # Escape single quotes for OData filter
                      safe_f = f.replace("'", "''")
-                     # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
-                     # We match the prefix because the indexed name might be "filename (p.N)"
-                     conditions.append(f"(metadata_storage_name eq '{safe_f}' or startswith(metadata_storage_name, '{safe_f} (p.'))")
+                     import re
+                     escaped_f = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_f)
+                     # Use search.ismatch for exact filename matching (more reliable for SearchableFields)
+                     conditions.append(f"search.ismatch('\"{escaped_f}\"', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
@@ -347,9 +350,10 @@ Convert the user's natural language question into a keyword-based search query.
                     print(f"DEBUG: Essential context fetch for '{target_file}' (is_found={is_found})")
                     safe_target = target_file.replace("'", "''")
                     
-                    # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
-                    # We match the prefix because the indexed name might be "filename (p.N)"
-                    file_specific_filter = f"(metadata_storage_name eq '{safe_target}' or startswith(metadata_storage_name, '{safe_target} (p.'))"
+                    import re
+                    escaped_target = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_target)
+                    # Use search.ismatch for exact filename matching (more reliable for SearchableFields)
+                    file_specific_filter = f"search.ismatch('\"{escaped_target}\"', 'metadata_storage_name')"
                     if final_filter:
                         file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
                     
