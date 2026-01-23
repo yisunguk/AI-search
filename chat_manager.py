@@ -580,7 +580,7 @@ USER QUESTION:
 
             except Exception as e:
                 print(f"DEBUG: LLM call failed: {e}")
-                return f"LLM 호출 중 오류가 발생했습니다: {str(e)}\n\n(컨텍스트 길이: {len(context)} 자)", citations, context
+                return f"LLM 호출 중 오류가 발생했습니다: {str(e)}\n\n(컨텍스트 길이: {len(context)} 자)", citations, context, final_filter, search_results
 
             return response_text, citations, context, final_filter, search_results
 
