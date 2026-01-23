@@ -1631,19 +1631,20 @@ elif menu == "도면/스펙 비교":
             if st.button("🏷️ 누락된 'drawings_analysis' 태그 복구", help="드로잉 폴더에 있지만 프로젝트 태그가 없는 문서를 찾아 태그를 추가합니다."):
                 try:
                     search_manager = get_search_manager()
-                    # Search for docs in drawings folder with missing project tag
+                    # Search for all docs with missing project tag and filter path in Python
                     results = search_manager.search_client.search(
                         search_text="*",
-                        filter="search.ismatch('/drawings/', 'metadata_storage_path') and (project eq null)",
+                        filter="(project eq null)",
                         select=["id", "metadata_storage_name", "metadata_storage_path", "content", "content_exact", "metadata_storage_last_modified", "metadata_storage_size", "metadata_storage_content_type"],
                         top=1000
                     )
                     
                     docs_to_fix = []
                     for doc in results:
-                        doc['project'] = 'drawings_analysis'
-                        # Ensure all required fields are present for merge
-                        docs_to_fix.append(doc)
+                        # Filter by path in Python
+                        if '/drawings/' in doc.get('metadata_storage_path', ''):
+                            doc['project'] = 'drawings_analysis'
+                            docs_to_fix.append(doc)
                     
                     if docs_to_fix:
                         success, msg = search_manager.upload_documents(docs_to_fix)

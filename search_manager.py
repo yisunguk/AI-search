@@ -463,16 +463,20 @@ class AzureSearchManager:
             )
             documents = list(results)
             
-            # Fallback: If no results with project tag, try searching by path containing '/drawings/'
+            # Fallback: If no results with project tag, try searching by name and filter path in Python
             if not documents:
-                print(f"DEBUG: No docs found with project tag for {filename}. Retrying with path filter...")
+                print(f"DEBUG: No docs found with project tag for {filename}. Retrying with name-only filter...")
                 results = self.search_client.search(
                     search_text="*",
-                    filter=f"startswith(metadata_storage_name, '{safe_filename}') and search.ismatch('/drawings/', 'metadata_storage_path')",
+                    filter=f"startswith(metadata_storage_name, '{safe_filename}')",
                     select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
                     top=1000
                 )
-                documents = list(results)
+                # Filter by path in Python
+                documents = [
+                    doc for doc in results 
+                    if '/drawings/' in doc.get('metadata_storage_path', '')
+                ]
             
             documents = list(results)
             # Sort by page number if possible, or just name
