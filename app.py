@@ -1237,7 +1237,7 @@ elif menu == "도면/스펙 비교":
                                                 safe_name = blob_info['name'].replace("'", "''")
                                                 debug_docs = search_manager.search_client.search(
                                                     search_text="*",
-                                                    filter=f"startswith(metadata_storage_name, '{safe_name}')",
+                                                    filter=f"search.ismatch('\"{safe_name}*\"', 'metadata_storage_name')",
                                                     select=["metadata_storage_name", "project"],
                                                     top=5
                                                 )

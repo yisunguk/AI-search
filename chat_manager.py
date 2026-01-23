@@ -114,8 +114,8 @@ You must interpret the provided text as if you are looking at an engineering dia
             print(f"DEBUG: Detected filename in query: {matched_file}")
             # Escape single quotes for OData
             safe_filename = matched_file.replace("'", "''")
-            # Filter by metadata_storage_name using startswith because indexed name has (p.N) suffix
-            return f"startswith(metadata_storage_name, '{safe_filename}')"
+            # Use search.ismatch for searchable fields (startswith is for non-searchable filterable fields)
+            return f"search.ismatch('\"{safe_filename}*\"', 'metadata_storage_name')"
             
         return None
 
@@ -181,7 +181,7 @@ Convert the user's natural language question into a keyword-based search query.
                  for f in normalized_files:
                      # Escape single quotes for OData filter
                      safe_f = f.replace("'", "''")
-                     conditions.append(f"startswith(metadata_storage_name, '{safe_f}')")
+                     conditions.append(f"search.ismatch('\"{safe_f}*\"', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
@@ -337,7 +337,7 @@ Convert the user's natural language question into a keyword-based search query.
                     safe_target = target_file.replace("'", "''")
                     
                     # CRITICAL: Use the final_filter (which includes project/scope) to ensure strict filtering
-                    file_specific_filter = f"startswith(metadata_storage_name, '{safe_target}')"
+                    file_specific_filter = f"search.ismatch('\"{safe_target}*\"', 'metadata_storage_name')"
                     if final_filter:
                         file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
                     

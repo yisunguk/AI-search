@@ -114,7 +114,7 @@ class AzureSearchManager:
                 # 파일명도 검색 가능하도록 (Custom Analyzer 적용하여 정확도 향상)
                 SearchableField(name="metadata_storage_name", type=SearchFieldDataType.String, analyzer_name=tag_analyzer_name, filterable=True, sortable=True),
                 
-                SimpleField(name="metadata_storage_path", type=SearchFieldDataType.String),
+                SimpleField(name="metadata_storage_path", type=SearchFieldDataType.String, filterable=True),
                 SimpleField(name="metadata_storage_last_modified", type=SearchFieldDataType.DateTimeOffset, filterable=True, sortable=True),
                 SimpleField(name="metadata_storage_size", type=SearchFieldDataType.Int64),
                 SimpleField(name="metadata_storage_content_type", type=SearchFieldDataType.String, filterable=True),
@@ -451,13 +451,13 @@ class AzureSearchManager:
         특정 파일의 모든 페이지/청크를 JSON 형태로 가져오기
         """
         try:
-            # Use startswith for more reliable matching with special characters
+            # Use search.ismatch for searchable fields (startswith is for non-searchable filterable fields)
             safe_filename = filename.replace("'", "''")
             
             # Try with project filter first
             results = self.search_client.search(
                 search_text="*",
-                filter=f"project eq 'drawings_analysis' and startswith(metadata_storage_name, '{safe_filename}')",
+                filter=f"project eq 'drawings_analysis' and search.ismatch('\"{safe_filename}*\"', 'metadata_storage_name')",
                 select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
                 top=1000
             )
@@ -468,7 +468,7 @@ class AzureSearchManager:
                 print(f"DEBUG: No docs found with project tag for {filename}. Retrying with name-only filter...")
                 results = self.search_client.search(
                     search_text="*",
-                    filter=f"startswith(metadata_storage_name, '{safe_filename}')",
+                    filter=f"search.ismatch('\"{safe_filename}*\"', 'metadata_storage_name')",
                     select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
                     top=1000
                 )
