@@ -129,6 +129,10 @@ You must interpret the provided text as if you are looking at an engineering dia
             if "전기부하리스트" in user_message or "Load List" in user_message:
                 return f"{user_message} Electrical Load List Motor Heater kW HP Tag No Rating"
             
+            # Rule for P&ID List
+            if any(x in user_message.upper() for x in ["P&ID", "PID", "피앤아이디"]) and any(x in user_message for x in ["리스트", "목록", "List", "Index"]):
+                return f"{user_message} PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX"
+            
             # Use LLM for complex rewriting
             system_prompt = """You are a search query optimizer for technical documents.
 Convert the user's natural language question into a keyword-based search query.
@@ -448,7 +452,9 @@ Convert the user's natural language question into a keyword-based search query.
             # Increased to 20 to allow for more context when comparing multiple documents
             # Limit total pages
             # Reduced to 10 to prevent token overflow (finish_reason='length')
-            context_limit = 10
+            # Limit total pages
+            # Increased to 25 to ensure we capture lists/tables that might be ranked lower
+            context_limit = 25
             
             for key in sorted_keys[:context_limit]:
                 filename, page = key
