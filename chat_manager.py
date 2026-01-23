@@ -14,6 +14,7 @@ class AzureOpenAIChatManager:
             api_key=api_key,
             api_version=api_version
         )
+        print("DEBUG: chat_manager.py loaded (Version: Startswith Fix v2)")
         self.deployment_name = deployment_name
         self.search_manager = search_manager
         self.storage_connection_string = storage_connection_string
@@ -162,20 +163,24 @@ Convert the user's natural language question into a keyword-based search query.
             # 0. Construct Scope Filter from available_files (if provided, treat as selected files)
             # This ensures we ONLY search within the files the user has selected in the UI
             scope_filter = None
+            import unicodedata
+            
             if available_files:
-                 # Use search.ismatch for more robust matching (handles tokenization and minor differences)
-                 # We use a phrase search ("...") to ensure the filename sequence matches
-                 # search.ismatch('"{filename}"', 'metadata_storage_name')
+                 # Normalize filenames to NFC to match index
+                 normalized_files = [unicodedata.normalize('NFC', f) for f in available_files]
+                 
+                 # Use startswith for exact filename matching (more reliable than search.ismatch for filenames with special chars)
+                 # We match the prefix because the indexed name might be "filename (p.N)"
                  conditions = []
-                 for f in available_files:
-                     # Escape double quotes for the search query
-                     safe_f = f.replace('"', '\\"')
-                     conditions.append(f"search.ismatch('\"{safe_f}\"', 'metadata_storage_name')")
+                 for f in normalized_files:
+                     # Escape single quotes for OData filter
+                     safe_f = f.replace("'", "''")
+                     conditions.append(f"startswith(metadata_storage_name, '{safe_f}')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
-                    print(f"DEBUG: Scope filter (Selected files): {len(available_files)} files")
-                    print(f"DEBUG: Scope filter string: {scope_filter}")
+                    print(f"DEBUG: Scope filter (Selected files): {len(normalized_files)} files")
+                    # print(f"DEBUG: Scope filter string: {scope_filter}")
             else:
                 print("DEBUG: No available_files passed (or empty list)")
 
@@ -257,17 +262,19 @@ Convert the user's natural language question into a keyword-based search query.
             # 4. Force Inclusion of Selected Files (CRITICAL for Comparison)
             # If user selected files but they didn't appear in the top results, force fetch them.
             if available_files:
+                # Normalize available_files again just to be safe (though we did it above, let's use the local var)
+                normalized_files = [unicodedata.normalize('NFC', f) for f in available_files]
+                
                 # Get set of filenames already in results
-                # Normalize: remove extension, lower case for comparison
                 found_filenames = set()
                 for res in search_results:
                     fname = res.get('metadata_storage_name', '')
-                    found_filenames.add(fname)
+                    # Normalize found filenames too
+                    found_filenames.add(unicodedata.normalize('NFC', fname))
                 
                 # Check for missing files
-                for target_file in available_files:
+                for target_file in normalized_files:
                     # We check if the target file is "represented" in the results
-                    # The result filename might have (p.N) suffix or be exact match
                     is_found = False
                     for found in found_filenames:
                         if found.startswith(target_file):
