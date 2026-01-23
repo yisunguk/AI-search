@@ -1670,6 +1670,30 @@ elif menu == "도면/스펙 비교":
                         st.info("태그를 복구할 문서가 없습니다.")
                 except Exception as e:
                     st.error(f"태그 복구 중 오류 발생: {e}")
+
+            if st.button("📋 인덱스 전체 목록 덤프 (최근 50개)", help="인덱스에 저장된 실제 파일명과 태그를 직접 확인합니다."):
+                try:
+                    search_manager = get_search_manager()
+                    results = search_manager.search_client.search(
+                        search_text="*",
+                        select=["metadata_storage_name", "project", "metadata_storage_path"],
+                        top=50
+                    )
+                    
+                    dump_data = []
+                    for doc in results:
+                        dump_data.append({
+                            "Name": doc.get('metadata_storage_name'),
+                            "Project": doc.get('project'),
+                            "Path": doc.get('metadata_storage_path')
+                        })
+                    
+                    if dump_data:
+                        st.table(dump_data)
+                    else:
+                        st.warning("인덱스가 비어있습니다.")
+                except Exception as e:
+                    st.error(f"덤프 중 오류 발생: {e}")
             with st.expander("📊 선택된 파일 토큰 분석 (Token Analyzer)", expanded=False):
                 st.caption("특정 파일의 인덱스 내용을 분석하여 토큰 사용량을 확인합니다.")
                 target_file_input = st.text_input("분석할 파일명 (일부만 입력해도 됨)", value="PH20-810-EC115-00540")
