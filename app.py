@@ -1094,44 +1094,147 @@ elif menu == "도면/스펙 비교":
                             st.markdown(f"**{blob_info['name']}** ({size_mb:.2f} MB)")
                         
                         with col2:
-                            # JSON Download Logic
-                            json_key = f"json_data_{blob_info['name']}"
-                            
-                            if json_key not in st.session_state:
-                                if st.button("JSON 생성", key=f"gen_json_{blob_info['name']}"):
-                                    with st.spinner("데이터 가져오는 중..."):
-                                        search_manager = get_search_manager()
-                                        docs = search_manager.get_document_json(blob_info['name'])
-                                        if docs:
-                                            import json
-                                            json_str = json.dumps(docs, ensure_ascii=False, indent=2)
-                                            st.session_state[json_key] = json_str
-                                            st.rerun()
-                                        else:
-                                            st.error("데이터가 없습니다.")
-                            else:
-                                # Show download button
-                                json_data = st.session_state[json_key]
-                                st.download_button(
-                                    label="💾 다운로드",
-                                    data=json_data,
-                                    file_name=f"{blob_info['name']}.json",
-                                    mime="application/json",
-                                    key=f"dl_json_{blob_info['name']}"
+                            # 1. Download Button
+                            try:
+                                sas_url = generate_sas_url(
+                                    blob_service_client, 
+                                    CONTAINER_NAME, 
+                                    blob_info['full_name'], 
+                                    content_disposition="attachment"
                                 )
+                                st.markdown(f'<a href="{sas_url}" download="{blob_info["name"]}" style="text-decoration:none; font-size:1.2em;">📥</a>', unsafe_allow_html=True)
+                            except:
+                                st.write("❌")
+
+                            # 2. Rename Button (Popover)
+                            with st.popover("✏️"):
+                                new_name_input = st.text_input("새 파일명", value=blob_info['name'], key=f"ren_{blob_info['name']}")
+                                if st.button("이름 변경", key=f"btn_ren_{blob_info['name']}"):
+                                    if new_name_input != blob_info['name']:
+                                        try:
+                                            with st.spinner("이름 변경 및 인덱스 업데이트 중..."):
+                                                # A. Rename Blob
+                                                old_blob_name = blob_info['full_name']
+                                                folder_path = old_blob_name.rsplit('/', 1)[0]
+                                                new_blob_name = f"{folder_path}/{new_name_input}"
+                                                
+                                                source_blob = container_client.get_blob_client(old_blob_name)
+                                                dest_blob = container_client.get_blob_client(new_blob_name)
+                                                
+                                                # Copy
+                                                source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, old_blob_name)
+                                                dest_blob.start_copy_from_url(source_sas)
+                                                
+                                                # Wait for copy
+                                                for _ in range(20):
+                                                    props = dest_blob.get_blob_properties()
+                                                    if props.copy.status == "success":
+                                                        break
+                                                    time.sleep(0.2)
+                                                
+                                                # B. Update Search Index (Preserve OCR Data)
+                                                search_manager = get_search_manager()
+                                                import unicodedata
+                                                safe_old_filename = unicodedata.normalize('NFC', blob_info['name'])
+                                                safe_new_filename = unicodedata.normalize('NFC', new_name_input)
+                                                
+                                                # Find old docs
+                                                results = search_manager.search_client.search(
+                                                    search_text="*",
+                                                    filter=f"project eq 'drawings_analysis'",
+                                                    select=["id", "content", "content_exact", "metadata_storage_name", "metadata_storage_path", "metadata_storage_size", "metadata_storage_content_type"]
+                                                )
+                                                
+                                                docs_to_upload = []
+                                                ids_to_delete = []
+                                                
+                                                for doc in results:
+                                                    # Check if this doc belongs to the file (by name prefix)
+                                                    # Name format: "{filename} (p.{page})"
+                                                    if doc['metadata_storage_name'].startswith(safe_old_filename):
+                                                        # Create new doc
+                                                        page_suffix = doc['metadata_storage_name'].split(safe_old_filename)[-1] # e.g. " (p.1)"
+                                                        
+                                                        # New ID
+                                                        import base64
+                                                        # Extract page number from suffix or path if possible, or just reconstruct
+                                                        # Path format: .../filename#page=N
+                                                        try:
+                                                            page_num = doc['metadata_storage_path'].split('#page=')[-1]
+                                                            new_page_id_str = f"{new_blob_name}_page_{page_num}"
+                                                            new_doc_id = base64.urlsafe_b64encode(new_page_id_str.encode('utf-8')).decode('utf-8')
+                                                            
+                                                            new_doc = {
+                                                                "id": new_doc_id,
+                                                                "content": doc['content'],
+                                                                "content_exact": doc.get('content_exact', doc['content']),
+                                                                "metadata_storage_name": f"{safe_new_filename}{page_suffix}",
+                                                                "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{new_blob_name}#page={page_num}",
+                                                                "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                                                                "metadata_storage_size": doc['metadata_storage_size'],
+                                                                "metadata_storage_content_type": doc['metadata_storage_content_type'],
+                                                                "project": "drawings_analysis"
+                                                            }
+                                                            docs_to_upload.append(new_doc)
+                                                            ids_to_delete.append({"id": doc['id']})
+                                                        except:
+                                                            pass
+
+                                                if docs_to_upload:
+                                                    search_manager.upload_documents(docs_to_upload)
+                                                if ids_to_delete:
+                                                    search_manager.search_client.delete_documents(documents=ids_to_delete)
+
+                                                # C. Delete old blob
+                                                source_blob.delete_blob()
+                                                
+                                                st.success("이름 변경 완료!")
+                                                time.sleep(1)
+                                                st.rerun()
+                                                
+                                        except Exception as e:
+                                            st.error(f"변경 실패: {e}")
+
+                            # 3. JSON (Admin only)
+                            if user_role == 'admin':
+                                json_key = f"json_data_{blob_info['name']}"
+                                
+                                if json_key not in st.session_state:
+                                    if st.button("JSON", key=f"gen_json_{blob_info['name']}"):
+                                        with st.spinner("..."):
+                                            search_manager = get_search_manager()
+                                            docs = search_manager.get_document_json(blob_info['name'])
+                                            if docs:
+                                                import json
+                                                json_str = json.dumps(docs, ensure_ascii=False, indent=2)
+                                                st.session_state[json_key] = json_str
+                                                st.rerun()
+                                            else:
+                                                st.error("No Data")
+                                else:
+                                    # Show download button
+                                    json_data = st.session_state[json_key]
+                                    st.download_button(
+                                        label="💾",
+                                        data=json_data,
+                                        file_name=f"{blob_info['name']}.json",
+                                        mime="application/json",
+                                        key=f"dl_json_{blob_info['name']}"
+                                    )
 
                         with col3:
                             if st.button("🗑️ 삭제", key=f"del_{blob_info['name']}"):
                                 try:
-                                    # 1. Delete from Blob Storage
-                                    blob_client = container_client.get_blob_client(f"drawings/{blob_info['name']}")
+                                    # 1. Delete from Blob Storage (Use full_name)
+                                    blob_client = container_client.get_blob_client(blob_info['full_name'])
                                     blob_client.delete_blob()
                                     
                                     # 2. Delete from Search Index
                                     search_manager = get_search_manager()
                                     
                                     # Find docs to delete
-                                    safe_filename = blob_info['name'].replace("'", "''")
+                                    import unicodedata
+                                    safe_filename = unicodedata.normalize('NFC', blob_info['name'])
                                     
                                     # Clean up index
                                     results = search_manager.search_client.search(
@@ -1141,11 +1244,9 @@ elif menu == "도면/스펙 비교":
                                     )
                                     
                                     ids_to_delete = []
-                                    import unicodedata
-                                    safe_blob_name = unicodedata.normalize('NFC', blob_info['name'])
                                     
                                     for doc in results:
-                                        if doc['metadata_storage_name'].startswith(safe_blob_name):
+                                        if doc['metadata_storage_name'].startswith(safe_filename):
                                             ids_to_delete.append({"id": doc['id']})
                                     
                                     if ids_to_delete:
