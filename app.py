@@ -1119,90 +1119,90 @@ elif menu == "도면/스펙 비교":
                                 with st.popover("✏️", use_container_width=True):
                                     new_name_input = st.text_input("새 파일명", value=blob_info['name'], key=f"ren_{blob_info['name']}")
                                     if st.button("이름 변경", key=f"btn_ren_{blob_info['name']}"):
-                                    if new_name_input != blob_info['name']:
-                                        try:
-                                            with st.spinner("이름 변경 및 인덱스 업데이트 중..."):
-                                                # A. Rename Blob
-                                                old_blob_name = blob_info['full_name']
-                                                folder_path = old_blob_name.rsplit('/', 1)[0]
-                                                new_blob_name = f"{folder_path}/{new_name_input}"
-                                                
-                                                source_blob = container_client.get_blob_client(old_blob_name)
-                                                dest_blob = container_client.get_blob_client(new_blob_name)
-                                                
-                                                # Copy
-                                                source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, old_blob_name)
-                                                dest_blob.start_copy_from_url(source_sas)
-                                                
-                                                # Wait for copy
-                                                for _ in range(20):
-                                                    props = dest_blob.get_blob_properties()
-                                                    if props.copy.status == "success":
-                                                        break
-                                                    time.sleep(0.2)
-                                                
-                                                # B. Update Search Index (Preserve OCR Data)
-                                                search_manager = get_search_manager()
-                                                import unicodedata
-                                                safe_old_filename = unicodedata.normalize('NFC', blob_info['name'])
-                                                safe_new_filename = unicodedata.normalize('NFC', new_name_input)
-                                                
-                                                # Find old docs
-                                                results = search_manager.search_client.search(
-                                                    search_text="*",
-                                                    filter=f"project eq 'drawings_analysis'",
-                                                    select=["id", "content", "content_exact", "metadata_storage_name", "metadata_storage_path", "metadata_storage_size", "metadata_storage_content_type"]
-                                                )
-                                                
-                                                docs_to_upload = []
-                                                ids_to_delete = []
-                                                
-                                                for doc in results:
-                                                    # Check if this doc belongs to the file (by name prefix)
-                                                    # Name format: "{filename} (p.{page})"
-                                                    if doc['metadata_storage_name'].startswith(safe_old_filename):
-                                                        # Create new doc
-                                                        page_suffix = doc['metadata_storage_name'].split(safe_old_filename)[-1] # e.g. " (p.1)"
-                                                        
-                                                        # New ID
-                                                        import base64
-                                                        # Extract page number from suffix or path if possible, or just reconstruct
-                                                        # Path format: .../filename#page=N
-                                                        try:
-                                                            page_num = doc['metadata_storage_path'].split('#page=')[-1]
-                                                            new_page_id_str = f"{new_blob_name}_page_{page_num}"
-                                                            new_doc_id = base64.urlsafe_b64encode(new_page_id_str.encode('utf-8')).decode('utf-8')
+                                        if new_name_input != blob_info['name']:
+                                            try:
+                                                with st.spinner("이름 변경 및 인덱스 업데이트 중..."):
+                                                    # A. Rename Blob
+                                                    old_blob_name = blob_info['full_name']
+                                                    folder_path = old_blob_name.rsplit('/', 1)[0]
+                                                    new_blob_name = f"{folder_path}/{new_name_input}"
+                                                    
+                                                    source_blob = container_client.get_blob_client(old_blob_name)
+                                                    dest_blob = container_client.get_blob_client(new_blob_name)
+                                                    
+                                                    # Copy
+                                                    source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, old_blob_name)
+                                                    dest_blob.start_copy_from_url(source_sas)
+                                                    
+                                                    # Wait for copy
+                                                    for _ in range(20):
+                                                        props = dest_blob.get_blob_properties()
+                                                        if props.copy.status == "success":
+                                                            break
+                                                        time.sleep(0.2)
+                                                    
+                                                    # B. Update Search Index (Preserve OCR Data)
+                                                    search_manager = get_search_manager()
+                                                    import unicodedata
+                                                    safe_old_filename = unicodedata.normalize('NFC', blob_info['name'])
+                                                    safe_new_filename = unicodedata.normalize('NFC', new_name_input)
+                                                    
+                                                    # Find old docs
+                                                    results = search_manager.search_client.search(
+                                                        search_text="*",
+                                                        filter=f"project eq 'drawings_analysis'",
+                                                        select=["id", "content", "content_exact", "metadata_storage_name", "metadata_storage_path", "metadata_storage_size", "metadata_storage_content_type"]
+                                                    )
+                                                    
+                                                    docs_to_upload = []
+                                                    ids_to_delete = []
+                                                    
+                                                    for doc in results:
+                                                        # Check if this doc belongs to the file (by name prefix)
+                                                        # Name format: "{filename} (p.{page})"
+                                                        if doc['metadata_storage_name'].startswith(safe_old_filename):
+                                                            # Create new doc
+                                                            page_suffix = doc['metadata_storage_name'].split(safe_old_filename)[-1] # e.g. " (p.1)"
                                                             
-                                                            new_doc = {
-                                                                "id": new_doc_id,
-                                                                "content": doc['content'],
-                                                                "content_exact": doc.get('content_exact', doc['content']),
-                                                                "metadata_storage_name": f"{safe_new_filename}{page_suffix}",
-                                                                "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{new_blob_name}#page={page_num}",
-                                                                "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
-                                                                "metadata_storage_size": doc['metadata_storage_size'],
-                                                                "metadata_storage_content_type": doc['metadata_storage_content_type'],
-                                                                "project": "drawings_analysis"
-                                                            }
-                                                            docs_to_upload.append(new_doc)
-                                                            ids_to_delete.append({"id": doc['id']})
-                                                        except:
-                                                            pass
+                                                            # New ID
+                                                            import base64
+                                                            # Extract page number from suffix or path if possible, or just reconstruct
+                                                            # Path format: .../filename#page=N
+                                                            try:
+                                                                page_num = doc['metadata_storage_path'].split('#page=')[-1]
+                                                                new_page_id_str = f"{new_blob_name}_page_{page_num}"
+                                                                new_doc_id = base64.urlsafe_b64encode(new_page_id_str.encode('utf-8')).decode('utf-8')
+                                                                
+                                                                new_doc = {
+                                                                    "id": new_doc_id,
+                                                                    "content": doc['content'],
+                                                                    "content_exact": doc.get('content_exact', doc['content']),
+                                                                    "metadata_storage_name": f"{safe_new_filename}{page_suffix}",
+                                                                    "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{new_blob_name}#page={page_num}",
+                                                                    "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                                                                    "metadata_storage_size": doc['metadata_storage_size'],
+                                                                    "metadata_storage_content_type": doc['metadata_storage_content_type'],
+                                                                    "project": "drawings_analysis"
+                                                                }
+                                                                docs_to_upload.append(new_doc)
+                                                                ids_to_delete.append({"id": doc['id']})
+                                                            except:
+                                                                pass
 
-                                                if docs_to_upload:
-                                                    search_manager.upload_documents(docs_to_upload)
-                                                if ids_to_delete:
-                                                    search_manager.search_client.delete_documents(documents=ids_to_delete)
+                                                    if docs_to_upload:
+                                                        search_manager.upload_documents(docs_to_upload)
+                                                    if ids_to_delete:
+                                                        search_manager.search_client.delete_documents(documents=ids_to_delete)
 
-                                                # C. Delete old blob
-                                                source_blob.delete_blob()
-                                                
-                                                st.success("이름 변경 완료!")
-                                                time.sleep(1)
-                                                st.rerun()
-                                                
-                                        except Exception as e:
-                                            st.error(f"변경 실패: {e}")
+                                                    # C. Delete old blob
+                                                    source_blob.delete_blob()
+                                                    
+                                                    st.success("이름 변경 완료!")
+                                                    time.sleep(1)
+                                                    st.rerun()
+                                                    
+                                            except Exception as e:
+                                                st.error(f"변경 실패: {e}")
 
                             # 3. JSON (Admin only)
                             if user_role == 'admin':
