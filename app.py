@@ -1671,7 +1671,37 @@ elif menu == "도면/스펙 비교":
                 except Exception as e:
                     st.error(f"태그 복구 중 오류 발생: {e}")
 
-            if st.button("📋 인덱스 전체 목록 덤프 (최근 50개)", help="인덱스에 저장된 실제 파일명과 태그를 직접 확인합니다."):
+            if st.button("📊 인덱스 통계 확인", help="프로젝트별 문서 개수를 확인합니다."):
+                try:
+                    search_manager = get_search_manager()
+                    
+                    # Count drawings_analysis
+                    drawings_res = search_manager.search_client.search(
+                        search_text="*",
+                        filter="project eq 'drawings_analysis'",
+                        include_total_count=True,
+                        top=0
+                    )
+                    drawings_count = drawings_res.get_count()
+                    
+                    # Count others (likely standard indexed)
+                    others_res = search_manager.search_client.search(
+                        search_text="*",
+                        filter="project eq null",
+                        include_total_count=True,
+                        top=0
+                    )
+                    others_count = others_res.get_count()
+                    
+                    st.write(f"**도면 분석 데이터 (drawings_analysis):** {drawings_count}개")
+                    st.write(f"**일반 문서 데이터 (Standard Indexer):** {others_count}개")
+                    
+                    if drawings_count == 0 and others_count > 0:
+                        st.warning("도면 데이터가 하나도 없습니다. 인덱싱 과정에 문제가 있을 수 있습니다.")
+                except Exception as e:
+                    st.error(f"통계 확인 중 오류 발생: {e}")
+
+            if st.button("📋 인덱스 전체 목록 덤프 (최근 100개)", help="인덱스에 저장된 실제 파일명과 태그를 직접 확인합니다."):
                 try:
                     search_manager = get_search_manager()
                     
