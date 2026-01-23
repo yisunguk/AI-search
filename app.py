@@ -1232,7 +1232,20 @@ elif menu == "도면/스펙 비교":
                                                 st.session_state[json_key] = json_str
                                                 st.rerun()
                                             else:
-                                                st.error("No Data")
+                                                st.error(f"No Data found for '{blob_info['name']}'")
+                                                # Try one more time without project filter to see if it exists at all
+                                                safe_name = blob_info['name'].replace("'", "''")
+                                                debug_docs = search_manager.search_client.search(
+                                                    search_text="*",
+                                                    filter=f"startswith(metadata_storage_name, '{safe_name}')",
+                                                    select=["metadata_storage_name", "project"],
+                                                    top=5
+                                                )
+                                                debug_list = list(debug_docs)
+                                                if debug_list:
+                                                    st.warning(f"Found {len(debug_list)} docs without correct project tag. Example: {debug_list[0].get('metadata_storage_name')} (Project: {debug_list[0].get('project')})")
+                                                else:
+                                                    st.error("Document not found in index at all.")
                                 else:
                                     # Show download button
                                     json_data = st.session_state[json_key]
