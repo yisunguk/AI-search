@@ -1649,7 +1649,7 @@ elif menu == "도면/스펙 비교":
                         search_text="*",
                         filter="(project eq null)",
                         select=["id", "metadata_storage_name", "metadata_storage_path", "content", "content_exact", "metadata_storage_last_modified", "metadata_storage_size", "metadata_storage_content_type"],
-                        top=1000
+                        top=10000 # Increase to cover all docs
                     )
                     
                     docs_to_fix = []
@@ -1696,6 +1696,25 @@ elif menu == "도면/스펙 비교":
                     st.write(f"**도면 분석 데이터 (drawings_analysis):** {drawings_count}개")
                     st.write(f"**일반 문서 데이터 (Standard Indexer):** {others_count}개")
                     
+                    # Check Standard Indexer Status
+                    st.divider()
+                    st.write("**표준 인덱서 (Standard Indexer) 상태 확인:**")
+                    # Try common indexer names
+                    for idx_name in ["pdf-indexer", "indexer-all", "indexer-drawings"]:
+                        try:
+                            status = search_manager.indexer_client.get_indexer_status(idx_name)
+                            last_res = status.last_result
+                            if last_res:
+                                st.write(f"- `{idx_name}`: {last_res.status} (성공: {last_res.item_count}, 실패: {last_res.failed_item_count})")
+                                if last_res.failed_item_count > 0:
+                                    with st.expander(f"❌ {idx_name} 에러 상세 보기"):
+                                        for err in last_res.errors[:5]:
+                                            st.error(f"문서: {err.key}\n에러: {err.message}")
+                            else:
+                                st.write(f"- `{idx_name}`: 실행 기록 없음")
+                        except:
+                            pass
+
                     if drawings_count == 0 and others_count > 0:
                         st.warning("도면 데이터가 하나도 없습니다. 인덱싱 과정에 문제가 있을 수 있습니다.")
                 except Exception as e:
@@ -1717,7 +1736,7 @@ elif menu == "도면/스펙 비교":
                         results = search_manager.search_client.search(
                             search_text=diag_query if diag_query else "*",
                             select=["metadata_storage_name", "project", "metadata_storage_path"],
-                            top=100
+                            top=1000 # Increase for better diagnosis
                         )
                         
                         dump_data = []
@@ -1749,7 +1768,7 @@ elif menu == "도면/스펙 비교":
                                 search_text="*",
                                 filter="startswith(metadata_storage_path, 'https://')", # Broad filter
                                 select=["metadata_storage_name", "project", "metadata_storage_path"],
-                                top=100
+                                top=5000 # Increase to cover more docs
                             )
                             # Filter for '/drawings/' in Python for maximum reliability
                             path_data = [
