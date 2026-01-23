@@ -1597,17 +1597,25 @@ elif menu == "도면/스펙 비교":
                     
                     # 2. Delete all docs in index with project='drawings_analysis'
                     search_manager = get_search_manager()
-                    results = search_manager.search_client.search(
-                        search_text="*",
-                        filter="project eq 'drawings_analysis'",
-                        select=["id"]
-                    )
-                    ids_to_delete = [{"id": doc['id']} for doc in results]
-                    if ids_to_delete:
-                        # Delete in batches of 1000 if needed, but for now simple
-                        search_manager.search_client.delete_documents(documents=ids_to_delete)
                     
-                    st.success("모든 도면 데이터가 삭제되었습니다. 이제 파일을 다시 업로드하세요.")
+                    deleted_total = 0
+                    while True:
+                        results = search_manager.search_client.search(
+                            search_text="*",
+                            filter="project eq 'drawings_analysis'",
+                            select=["id"],
+                            top=1000
+                        )
+                        ids_to_delete = [{"id": doc['id']} for doc in results]
+                        if not ids_to_delete:
+                            break
+                            
+                        search_manager.search_client.delete_documents(documents=ids_to_delete)
+                        deleted_total += len(ids_to_delete)
+                        if len(ids_to_delete) < 1000:
+                            break
+                    
+                    st.success(f"모든 도면 데이터가 삭제되었습니다. (Blob 삭제 완료, Index {deleted_total}개 삭제 완료) 이제 파일을 다시 업로드하세요.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"초기화 실패: {e}")
