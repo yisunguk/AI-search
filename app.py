@@ -1363,7 +1363,8 @@ elif menu == "도면/스펙 비교":
                         current_files = selected_filenames
                         
                         # Construct robust filter expression
-                        base_filter = "project eq 'drawings_analysis'"
+                        # Include fallback for documents that might have lost their project tag but are in the drawings folder
+                        base_filter = "(project eq 'drawings_analysis' or search.ismatch('/drawings/', 'metadata_storage_path'))"
                         
                         # Note: We used to filter by path here, but OData encoding issues caused 0 results.
                         # Now we pass user_folder to chat_manager for Python-side filtering.

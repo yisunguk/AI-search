@@ -454,12 +454,25 @@ class AzureSearchManager:
             # Use startswith for more reliable matching with special characters
             safe_filename = filename.replace("'", "''")
             
+            # Try with project filter first
             results = self.search_client.search(
                 search_text="*",
                 filter=f"project eq 'drawings_analysis' and startswith(metadata_storage_name, '{safe_filename}')",
                 select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
-                top=1000 # Assuming max 1000 pages per doc
+                top=1000
             )
+            documents = list(results)
+            
+            # Fallback: If no results with project tag, try searching by path containing '/drawings/'
+            if not documents:
+                print(f"DEBUG: No docs found with project tag for {filename}. Retrying with path filter...")
+                results = self.search_client.search(
+                    search_text="*",
+                    filter=f"startswith(metadata_storage_name, '{safe_filename}') and search.ismatch('/drawings/', 'metadata_storage_path')",
+                    select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
+                    top=1000
+                )
+                documents = list(results)
             
             documents = list(results)
             # Sort by page number if possible, or just name
