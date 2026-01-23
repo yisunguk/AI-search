@@ -130,8 +130,10 @@ You must interpret the provided text as if you are looking at an engineering dia
                 return f"{user_message} Electrical Load List Motor Heater kW HP Tag No Rating"
             
             # Rule for P&ID List
-            if any(x in user_message.upper() for x in ["P&ID", "PID", "피앤아이디"]) and any(x in user_message for x in ["리스트", "목록", "List", "Index"]):
-                return f"{user_message} PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX"
+            if any(x in user_message.upper() for x in ["P&ID", "PID", "피앤아이디"]) and any(x in user_message for x in ["리스트", "목록", "LIST", "INDEX", "비교"]):
+                expanded = f"{user_message} PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX TABLE"
+                print(f"DEBUG: Query expansion triggered for P&ID List: '{user_message}' -> '{expanded}'")
+                return expanded
             
             # Use LLM for complex rewriting
             system_prompt = """You are a search query optimizer for technical documents.
@@ -238,6 +240,10 @@ Convert the user's natural language question into a keyword-based search query.
             
             # Debug: Check search results
             print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")
+            if search_results:
+                print(f"DEBUG: Top 10 search results pages:")
+                for i, res in enumerate(search_results[:10]):
+                    print(f"  {i+1}. {res.get('metadata_storage_name', 'Unknown')}")
             
             # Fallback: If specific file search failed, try without file filter (maybe user got name wrong)
             if not search_results and specific_file_filter:
@@ -355,6 +361,16 @@ Convert the user's natural language question into a keyword-based search query.
                             search_mode=search_mode
                         )
 
+                        # Strategy 1.5: If query search failed, try searching for "LIST" pages explicitly
+                        if not forced_results and any(keyword in search_query.upper() for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록"]):
+                            print(f"DEBUG: Trying LIST-specific search for '{target_file}'...")
+                            forced_results = self.search_manager.search(
+                                "PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE",
+                                filter_expr=file_specific_filter,
+                                use_semantic_ranker=False,
+                                search_mode="any"
+                            )
+
                         # Strategy 2: If specific query fails, fallback to filename search (to get at least title page)
                         if not forced_results:
                             print(f"DEBUG: Query specific search failed for '{target_file}'. Fallback to filename search...")
@@ -416,6 +432,8 @@ Convert the user's natural language question into a keyword-based search query.
                         # Take top 3 chunks from this file to ensure it's represented
                         if forced_results:
                             print(f"DEBUG: Force fetched {len(forced_results[:3])} chunks for '{target_file}'")
+                            for res in forced_results[:3]:
+                                print(f"  - {res.get('metadata_storage_name', 'Unknown')}")
                             search_results.extend(forced_results[:3])
 
             # 5. Page-Aware Context Grouping
@@ -451,10 +469,19 @@ Convert the user's natural language question into a keyword-based search query.
                 key = (filename, page)
                 
                 # Track the best rank for this page
+                # BOOST ranking for pages with "LIST", "INDEX", "TABLE" keywords
+                boost = 0
+                content_upper = content.upper()
+                if any(keyword in content_upper for keyword in ["PIPING AND INSTRUMENT DIAGRAM", "P&I DIAGRAM", "P & I DIAGRAM"]):
+                    if any(list_keyword in content_upper for list_keyword in ["LIST", "INDEX", "TABLE OF CONTENTS"]):
+                        boost = -100  # Strong boost for list pages
+                        print(f"DEBUG: BOOSTING page {key} (contains LIST/INDEX)")
+                
+                adjusted_rank = rank + boost
                 if key not in page_ranks:
-                    page_ranks[key] = rank
+                    page_ranks[key] = adjusted_rank
                 else:
-                    page_ranks[key] = min(page_ranks[key], rank)
+                    page_ranks[key] = min(page_ranks[key], adjusted_rank)
                 
                 if key not in grouped_context:
                     grouped_context[key] = []
@@ -504,6 +531,7 @@ Convert the user's natural language question into a keyword-based search query.
             max_pages_per_doc = max(len(p) for p in docs_map.values()) if docs_map else 0
             
             sorted_filenames = sorted(docs_map.keys())
+            print(f"DEBUG: Context construction - {len(sorted_filenames)} documents, max {max_pages_per_doc} pages each")
             
             for i in range(max_pages_per_doc):
                 for fname in sorted_filenames:
