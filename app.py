@@ -1743,16 +1743,25 @@ elif menu == "도면/스펙 비교":
                         # Extra check: Search by path only if query failed
                         if diag_query and not dump_data:
                             st.info(f"'{diag_query}'로 검색된 결과가 없어 경로 기반으로 다시 찾습니다...")
+                            # Use startswith on metadata_storage_path (SimpleField/Filterable)
+                            # We don't know the full prefix, but we can try to find anything in drawings
                             path_results = search_manager.search_client.search(
                                 search_text="*",
-                                filter="search.ismatch('/drawings/', 'metadata_storage_path')",
-                                select=["metadata_storage_name", "project"],
-                                top=50
+                                filter="startswith(metadata_storage_path, 'https://')", # Broad filter
+                                select=["metadata_storage_name", "project", "metadata_storage_path"],
+                                top=100
                             )
-                            path_data = [{"Name": d['metadata_storage_name'], "Project": d['project']} for d in path_results]
+                            # Filter for '/drawings/' in Python for maximum reliability
+                            path_data = [
+                                {"Name": d['metadata_storage_name'], "Project": d['project'], "Path": d['metadata_storage_path']} 
+                                for d in path_results 
+                                if '/drawings/' in d.get('metadata_storage_path', '')
+                            ]
                             if path_data:
-                                st.write("'/drawings/' 경로에 있는 파일들:")
-                                st.table(path_data)
+                                st.write("'/drawings/' 경로에서 발견된 파일들 (최근 100개 중):")
+                                st.table(path_data[:20])
+                            else:
+                                st.error("'/drawings/' 경로에서 문서를 찾을 수 없습니다. 인덱서가 해당 폴더를 스캔하지 않았을 수 있습니다.")
                                 
                     except Exception as e:
                         st.error(f"진단 중 오류 발생: {e}")

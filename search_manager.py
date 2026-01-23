@@ -452,10 +452,17 @@ class AzureSearchManager:
         """
         try:
             import unicodedata
-            # Ensure NFC normalization for consistent matching with indexed data
+            import urllib.parse
+            # Ensure NFC normalization for consistent matching
             filename = unicodedata.normalize('NFC', filename)
-            # Use search.ismatch for searchable fields (startswith is for non-searchable filterable fields)
             safe_filename = filename.replace("'", "''")
+            
+            # Method 1: Path-based filtering (Most robust for exact file matching)
+            # We search for documents whose path starts with the expected blob URL prefix
+            # This avoids issues with special characters in searchable fields
+            
+            # We don't have the full path here, but we can search for the filename in metadata_storage_name
+            # and then verify the project tag.
             
             # Try with project filter first
             results = self.search_client.search(
@@ -481,6 +488,23 @@ class AzureSearchManager:
                     if '/drawings/' in doc.get('metadata_storage_path', '')
                 ]
             
+            # Final Fallback: If still nothing, try a broad path search
+            if not documents:
+                print(f"DEBUG: Still no docs found for {filename}. Trying broad path search...")
+                results = self.search_client.search(
+                    search_text="*",
+                    filter="startswith(metadata_storage_path, 'https://')",
+                    select=["id", "metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified"],
+                    top=1000
+                )
+                # Filter by filename in path in Python
+                encoded_filename = urllib.parse.quote(filename)
+                documents = [
+                    doc for doc in results 
+                    if (filename in doc.get('metadata_storage_path', '') or encoded_filename in doc.get('metadata_storage_path', ''))
+                    and '/drawings/' in doc.get('metadata_storage_path', '')
+                ]
+
             # Sort by page number if possible, or just name
             documents.sort(key=lambda x: x.get('metadata_storage_name', ''))
             
