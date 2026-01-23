@@ -1627,6 +1627,35 @@ elif menu == "도면/스펙 비교":
                         
                 except Exception as e:
                     st.error(f"정리 중 오류 발생: {e}")
+
+            if st.button("🏷️ 누락된 'drawings_analysis' 태그 복구", help="드로잉 폴더에 있지만 프로젝트 태그가 없는 문서를 찾아 태그를 추가합니다."):
+                try:
+                    search_manager = get_search_manager()
+                    # Search for docs in drawings folder with missing project tag
+                    results = search_manager.search_client.search(
+                        search_text="*",
+                        filter="search.ismatch('/drawings/', 'metadata_storage_path') and (project eq null)",
+                        select=["id", "metadata_storage_name", "metadata_storage_path", "content", "content_exact", "metadata_storage_last_modified", "metadata_storage_size", "metadata_storage_content_type"],
+                        top=1000
+                    )
+                    
+                    docs_to_fix = []
+                    for doc in results:
+                        doc['project'] = 'drawings_analysis'
+                        # Ensure all required fields are present for merge
+                        docs_to_fix.append(doc)
+                    
+                    if docs_to_fix:
+                        success, msg = search_manager.upload_documents(docs_to_fix)
+                        if success:
+                            st.success(f"복구 완료! {len(docs_to_fix)}개의 문서에 'drawings_analysis' 태그를 추가했습니다.")
+                            st.rerun()
+                        else:
+                            st.error(f"복구 실패: {msg}")
+                    else:
+                        st.info("태그를 복구할 문서가 없습니다.")
+                except Exception as e:
+                    st.error(f"태그 복구 중 오류 발생: {e}")
             with st.expander("📊 선택된 파일 토큰 분석 (Token Analyzer)", expanded=False):
                 st.caption("특정 파일의 인덱스 내용을 분석하여 토큰 사용량을 확인합니다.")
                 target_file_input = st.text_input("분석할 파일명 (일부만 입력해도 됨)", value="PH20-810-EC115-00540")
