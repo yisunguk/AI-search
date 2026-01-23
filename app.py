@@ -1107,8 +1107,8 @@ elif menu == "도면/스펙 비교":
                                         blob_info['full_name'], 
                                         content_disposition="attachment"
                                     )
-                                    # Use a button-like link or just an icon
-                                    st.markdown(f'<div style="text-align:center;"><a href="{sas_url}" download="{blob_info["name"]}" style="text-decoration:none; font-size:1.5em;" title="다운로드">📥</a></div>', unsafe_allow_html=True)
+                                    # Use st.link_button for consistent UI (Box style)
+                                    st.link_button("📥", sas_url, help="다운로드", use_container_width=True)
                                 except Exception as e:
                                     st.error(f"Err: {e}")
 
