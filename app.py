@@ -145,7 +145,8 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
             
         # PDF는 inline, 나머지는 attachment (또는 브라우저 기본 동작)
         # 엑셀 등은 브라우저가 알아서 다운로드 처리함
-        content_disposition = "inline" if content_type == "application/pdf" else "attachment"
+        if content_disposition is None:
+            content_disposition = "inline" if content_type == "application/pdf" else "attachment"
 
         sas_token = generate_blob_sas(
             account_name=account_name,
