@@ -267,7 +267,7 @@ def get_user_folder_name(user_info):
 user_folder = get_user_folder_name(user_info)
 
 # Define role-based menu permissions (Fallback / Admin)
-ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 분석", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"]
+ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 비교", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"]
 GUEST_MENUS = ["홈", "사용자 설정"]
 
 if user_role == 'admin':
@@ -909,23 +909,12 @@ elif menu == "검색 & AI 채팅":
                 st.session_state.chat_messages = []
                 st.rerun()
 
-elif menu == "도면/스펙 분석":
+elif menu == "도면/스펙 비교":
     # st.subheader("🏗️ 도면/스펙 정밀 분석 (RAG)") - Removed to avoid duplication
-    st.caption("Azure Document Intelligence를 활용한 고정밀 문서 분석 및 질의응답")
     
-    with st.expander("ℹ️ Document Intelligence가 왜 더 좋은가요?", expanded=False):
-        st.markdown("""
-        **건설 EPC 설계 담당자님께 이 서비스가 필요한 이유는 크게 3가지입니다.**
-
-        1. **표(Table) 추출의 정확도**: 일반 OCR은 표 안의 데이터를 읽을 때 줄이 밀리거나 텍스트가 섞이기 쉽습니다. 하지만 Document Intelligence는 행과 열의 구조를 완벽히 파악하여 엑셀처럼 정교하게 데이터를 추출합니다.
-        2. **레이아웃 분석**: 제목, 본문, 각주, 페이지 번호 등을 구분하여 텍스트의 우선순위를 정할 수 있습니다.
-        3. **체크박스 및 서명 인식**: 설계 검토서나 승인 문서에 포함된 체크 표시나 서명 여부까지 인식할 수 있습니다.
-        """)
-
-    tab1, tab2 = st.tabs(["📤 문서 업로드 및 분석", "💬 분석 문서 채팅"])
+    tab1, tab2 = st.tabs(["📤 문서 업로드", "💬 AI분석"])
     
     with tab1:
-        st.markdown(f"### 1. 분석할 문서 업로드 ({user_folder}/drawings 폴더)")
         
         if "drawing_uploader_key" not in st.session_state:
             st.session_state.drawing_uploader_key = 0
@@ -1307,178 +1296,179 @@ elif menu == "도면/스펙 분석":
     # -----------------------------
     # 디버깅 도구 (Debug Tools)
     # -----------------------------
-    with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=False):
-        st.warning("이 도구는 검색 문제를 진단하기 위한 것입니다.")
-        
-        if st.button("🔍 인덱스 상태 및 검색 테스트 실행"):
-            try:
-                search_manager = get_search_manager()
-                client = search_manager.search_client
-                
-                st.write("### 1. 인덱스 문서 확인 (project='drawings_analysis')")
-                results = client.search(search_text="*", filter="project eq 'drawings_analysis'", select=["id", "metadata_storage_name", "project"], top=20)
-                
-                docs = list(results)
-                st.write(f"총 {len(docs)}개의 문서가 발견되었습니다.")
-                
-                if docs:
-                    for doc in docs:
-                        st.code(f"ID: {doc['id']}\nName: {doc['metadata_storage_name']}\nProject: {doc['project']}")
-                else:
-                    st.error("인덱스에 'drawings_analysis' 프로젝트 문서가 없습니다!")
-                
-                st.write("---")
-                st.write("### 2. 키워드 검색 테스트 ('foundation loading data')")
-                search_results = client.search(search_text="foundation loading data", filter="project eq 'drawings_analysis'", top=5, select=["metadata_storage_name", "content"])
-                search_docs = list(search_results)
-                
-                st.write(f"검색 결과: {len(search_docs)}개")
-                for doc in search_docs:
-                    st.text(f"Match: {doc['metadata_storage_name']}")
-                    st.caption(f"Content: {doc['content'][:200]}...")
-                
-                st.write("---")
-                st.write("### 3. 와일드카드 검색 테스트 ('*')")
-                wild_results = client.search(search_text="*", filter="project eq 'drawings_analysis'", top=5, select=["metadata_storage_name", "content"])
-                wild_docs = list(wild_results)
-                
-                st.write(f"검색 결과: {len(wild_docs)}개")
-                for doc in wild_docs:
-                    st.text(f"Match: {doc['metadata_storage_name']}")
-                    st.caption(f"Content: {doc['content'][:200]}...")
-                    
-            except Exception as e:
-                st.error(f"진단 중 오류 발생: {str(e)}")
-                st.code(str(e))
-        
-        st.write("---")
-        st.write("### 🧪 사용자 지정 검색 테스트")
-        debug_query = st.text_input("검색어 입력 (예: filter element)", key="debug_query")
-        if st.button("검색 테스트 실행", key="run_debug_search"):
-            if debug_query:
+    if user_role == 'admin':
+        with st.expander("🛠️ 인덱스 및 검색 진단 (Debug Tools)", expanded=False):
+            st.warning("이 도구는 검색 문제를 진단하기 위한 것입니다.")
+            
+            if st.button("🔍 인덱스 상태 및 검색 테스트 실행"):
                 try:
                     search_manager = get_search_manager()
                     client = search_manager.search_client
                     
-                    st.write(f"Query: '{debug_query}'")
-                    # Use 'any' search mode to match behavior
-                    results = client.search(
-                        search_text=debug_query, 
-                        filter="project eq 'drawings_analysis'", 
-                        search_mode="any",
-                        select=["metadata_storage_name", "content"],
-                        top=10
-                    )
+                    st.write("### 1. 인덱스 문서 확인 (project='drawings_analysis')")
+                    results = client.search(search_text="*", filter="project eq 'drawings_analysis'", select=["id", "metadata_storage_name", "project"], top=20)
+                    
                     docs = list(results)
-                    st.write(f"검색 결과: {len(docs)}개")
+                    st.write(f"총 {len(docs)}개의 문서가 발견되었습니다.")
                     
                     if docs:
                         for doc in docs:
-                            st.text(f"Match: {doc['metadata_storage_name']}")
-                            st.caption(f"Content: {doc['content'][:200]}...")
+                            st.code(f"ID: {doc['id']}\\nName: {doc['metadata_storage_name']}\\nProject: {doc['project']}")
                     else:
-                        st.warning("검색 결과가 없습니다.")
-                except Exception as e:
-                    st.error(f"검색 오류: {e}")
-
-        st.write("---")
-        st.write("### ⚠️ 인덱스 초기화")
-        if st.button("🗑️ 모든 도면 데이터 삭제 (Index & Blob)", type="primary"):
-            try:
-                # 1. Delete all blobs in drawings/
-                blob_service_client = get_blob_service_client()
-                container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-                blobs = container_client.list_blobs(name_starts_with="drawings/")
-                for blob in blobs:
-                    container_client.delete_blob(blob.name)
-                
-                # 2. Delete all docs in index with project='drawings_analysis'
-                search_manager = get_search_manager()
-                results = search_manager.search_client.search(
-                    search_text="*",
-                    filter="project eq 'drawings_analysis'",
-                    select=["id"]
-                )
-                ids_to_delete = [{"id": doc['id']} for doc in results]
-                if ids_to_delete:
-                    # Delete in batches of 1000 if needed, but for now simple
-                    search_manager.search_client.delete_documents(documents=ids_to_delete)
-                
-                st.success("모든 도면 데이터가 삭제되었습니다. 이제 파일을 다시 업로드하세요.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"초기화 실패: {e}")
-
-        if st.button("🧹 '페이지 번호 없는' 중복 데이터 정리 (권장)", help="인덱스에서 (p.N) 형식이 아닌 잘못된 데이터를 찾아 삭제합니다."):
-            try:
-                search_manager = get_search_manager()
-                results = search_manager.search_client.search(
-                    search_text="*",
-                    filter="project eq 'drawings_analysis'",
-                    select=["id", "metadata_storage_name"],
-                    top=1000
-                )
-                
-                ids_to_delete = []
-                count = 0
-                for doc in results:
-                    name = doc['metadata_storage_name']
-                    # Delete if it doesn't contain "(p." (standard page suffix)
-                    if "(p." not in name:
-                        ids_to_delete.append({"id": doc['id']})
-                        count += 1
-                
-                if ids_to_delete:
-                    search_manager.search_client.delete_documents(documents=ids_to_delete)
-                    st.success(f"정리 완료! {count}개의 중복/잘못된 문서를 삭제했습니다.")
-                    st.rerun()
-                else:
-                    st.info("삭제할 잘못된 데이터가 없습니다. 인덱스가 깨끗합니다! ✨")
+                        st.error("인덱스에 'drawings_analysis' 프로젝트 문서가 없습니다!")
                     
-            except Exception as e:
-                st.error(f"정리 중 오류 발생: {e}")
-        with st.expander("📊 선택된 파일 토큰 분석 (Token Analyzer)", expanded=False):
-            st.caption("특정 파일의 인덱스 내용을 분석하여 토큰 사용량을 확인합니다.")
-            target_file_input = st.text_input("분석할 파일명 (일부만 입력해도 됨)", value="PH20-810-EC115-00540")
+                    st.write("---")
+                    st.write("### 2. 키워드 검색 테스트 ('foundation loading data')")
+                    search_results = client.search(search_text="foundation loading data", filter="project eq 'drawings_analysis'", top=5, select=["metadata_storage_name", "content"])
+                    search_docs = list(search_results)
+                    
+                    st.write(f"검색 결과: {len(search_docs)}개")
+                    for doc in search_docs:
+                        st.text(f"Match: {doc['metadata_storage_name']}")
+                        st.caption(f"Content: {doc['content'][:200]}...")
+                    
+                    st.write("---")
+                    st.write("### 3. 와일드카드 검색 테스트 ('*')")
+                    wild_results = client.search(search_text="*", filter="project eq 'drawings_analysis'", top=5, select=["metadata_storage_name", "content"])
+                    wild_docs = list(wild_results)
+                    
+                    st.write(f"검색 결과: {len(wild_docs)}개")
+                    for doc in wild_docs:
+                        st.text(f"Match: {doc['metadata_storage_name']}")
+                        st.caption(f"Content: {doc['content'][:200]}...")
+                        
+                except Exception as e:
+                    st.error(f"진단 중 오류 발생: {str(e)}")
+                    st.code(str(e))
             
-            if st.button("분석 실행", key="analyze_token_btn"):
+            st.write("---")
+            st.write("### 🧪 사용자 지정 검색 테스트")
+            debug_query = st.text_input("검색어 입력 (예: filter element)", key="debug_query")
+            if st.button("검색 테스트 실행", key="run_debug_search"):
+                if debug_query:
+                    try:
+                        search_manager = get_search_manager()
+                        client = search_manager.search_client
+                        
+                        st.write(f"Query: '{debug_query}'")
+                        # Use 'any' search mode to match behavior
+                        results = client.search(
+                            search_text=debug_query, 
+                            filter="project eq 'drawings_analysis'", 
+                            search_mode="any",
+                            select=["metadata_storage_name", "content"],
+                            top=10
+                        )
+                        docs = list(results)
+                        st.write(f"검색 결과: {len(docs)}개")
+                        
+                        if docs:
+                            for doc in docs:
+                                st.text(f"Match: {doc['metadata_storage_name']}")
+                                st.caption(f"Content: {doc['content'][:200]}...")
+                        else:
+                            st.warning("검색 결과가 없습니다.")
+                    except Exception as e:
+                        st.error(f"검색 오류: {e}")
+
+            st.write("---")
+            st.write("### ⚠️ 인덱스 초기화")
+            if st.button("🗑️ 모든 도면 데이터 삭제 (Index & Blob)", type="primary"):
                 try:
+                    # 1. Delete all blobs in drawings/
+                    blob_service_client = get_blob_service_client()
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    blobs = container_client.list_blobs(name_starts_with="drawings/")
+                    for blob in blobs:
+                        container_client.delete_blob(blob.name)
+                    
+                    # 2. Delete all docs in index with project='drawings_analysis'
                     search_manager = get_search_manager()
-                    # Search for chunks matching the filename
                     results = search_manager.search_client.search(
                         search_text="*",
-                        filter=f"search.ismatch('{target_file_input}', 'metadata_storage_name')",
-                        select=["metadata_storage_name", "content", "metadata_storage_path"]
+                        filter="project eq 'drawings_analysis'",
+                        select=["id"]
+                    )
+                    ids_to_delete = [{"id": doc['id']} for doc in results]
+                    if ids_to_delete:
+                        # Delete in batches of 1000 if needed, but for now simple
+                        search_manager.search_client.delete_documents(documents=ids_to_delete)
+                    
+                    st.success("모든 도면 데이터가 삭제되었습니다. 이제 파일을 다시 업로드하세요.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"초기화 실패: {e}")
+
+            if st.button("🧹 '페이지 번호 없는' 중복 데이터 정리 (권장)", help="인덱스에서 (p.N) 형식이 아닌 잘못된 데이터를 찾아 삭제합니다."):
+                try:
+                    search_manager = get_search_manager()
+                    results = search_manager.search_client.search(
+                        search_text="*",
+                        filter="project eq 'drawings_analysis'",
+                        select=["id", "metadata_storage_name"],
+                        top=1000
                     )
                     
-                    results_list = list(results)
-                    st.info(f"검색된 청크(Chunk) 수: {len(results_list)}개")
+                    ids_to_delete = []
+                    count = 0
+                    for doc in results:
+                        name = doc['metadata_storage_name']
+                        # Delete if it doesn't contain "(p." (standard page suffix)
+                        if "(p." not in name:
+                            ids_to_delete.append({"id": doc['id']})
+                            count += 1
                     
-                    total_chars = 0
-                    for i, doc in enumerate(results_list):
-                        content = doc.get('content', '')
-                        char_count = len(content)
-                        total_chars += char_count
-                        
-                        with st.expander(f"Chunk {i+1}: {doc.get('metadata_storage_name')} ({char_count}자)"):
-                            st.code(content[:1000] + ("..." if len(content) > 1000 else ""))
-                    
-                    st.divider()
-                    st.metric("총 글자 수 (Total Characters)", f"{total_chars:,}")
-                    est_tokens = int(total_chars / 4)
-                    st.metric("예상 토큰 수 (Estimated Tokens)", f"{est_tokens:,}")
-                    
-                    if est_tokens > 5000:
-                        st.warning(f"⚠️ 토큰 수가 많습니다 ({est_tokens} > 5000). AI 답변 생성 시 'Token Limit Exceeded' 오류가 발생할 수 있습니다.")
+                    if ids_to_delete:
+                        search_manager.search_client.delete_documents(documents=ids_to_delete)
+                        st.success(f"정리 완료! {count}개의 중복/잘못된 문서를 삭제했습니다.")
+                        st.rerun()
                     else:
-                        st.success(f"✅ 토큰 수가 적절합니다 ({est_tokens}).")
+                        st.info("삭제할 잘못된 데이터가 없습니다. 인덱스가 깨끗합니다! ✨")
                         
                 except Exception as e:
-                    st.error(f"분석 실패: {e}")
-        
-        if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
-            st.session_state.rag_chat_messages = []
-            st.rerun()
+                    st.error(f"정리 중 오류 발생: {e}")
+            with st.expander("📊 선택된 파일 토큰 분석 (Token Analyzer)", expanded=False):
+                st.caption("특정 파일의 인덱스 내용을 분석하여 토큰 사용량을 확인합니다.")
+                target_file_input = st.text_input("분석할 파일명 (일부만 입력해도 됨)", value="PH20-810-EC115-00540")
+                
+                if st.button("분석 실행", key="analyze_token_btn"):
+                    try:
+                        search_manager = get_search_manager()
+                        # Search for chunks matching the filename
+                        results = search_manager.search_client.search(
+                            search_text="*",
+                            filter=f"search.ismatch('{target_file_input}', 'metadata_storage_name')",
+                            select=["metadata_storage_name", "content", "metadata_storage_path"]
+                        )
+                        
+                        results_list = list(results)
+                        st.info(f"검색된 청크(Chunk) 수: {len(results_list)}개")
+                        
+                        total_chars = 0
+                        for i, doc in enumerate(results_list):
+                            content = doc.get('content', '')
+                            char_count = len(content)
+                            total_chars += char_count
+                            
+                            with st.expander(f"Chunk {i+1}: {doc.get('metadata_storage_name')} ({char_count}자)"):
+                                st.code(content[:1000] + ("..." if len(content) > 1000 else ""))
+                        
+                        st.divider()
+                        st.metric("총 글자 수 (Total Characters)", f"{total_chars:,}")
+                        est_tokens = int(total_chars / 4)
+                        st.metric("예상 토큰 수 (Estimated Tokens)", f"{est_tokens:,}")
+                        
+                        if est_tokens > 5000:
+                            st.warning(f"⚠️ 토큰 수가 많습니다 ({est_tokens} > 5000). AI 답변 생성 시 'Token Limit Exceeded' 오류가 발생할 수 있습니다.")
+                        else:
+                            st.success(f"✅ 토큰 수가 적절합니다 ({est_tokens}).")
+                            
+                    except Exception as e:
+                        st.error(f"분석 실패: {e}")
+            
+            if st.button("🗑️ 대화 초기화", key="clear_rag_chat"):
+                st.session_state.rag_chat_messages = []
+                st.rerun()
 
     st.markdown("---")
 
