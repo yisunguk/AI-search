@@ -1701,49 +1701,61 @@ elif menu == "도면/스펙 비교":
                 except Exception as e:
                     st.error(f"통계 확인 중 오류 발생: {e}")
 
-            if st.button("📋 인덱스 전체 목록 덤프 (최근 100개)", help="인덱스에 저장된 실제 파일명과 태그를 직접 확인합니다."):
-                try:
-                    search_manager = get_search_manager()
-                    
-                    # Add search input for specific file diagnosis
-                    diag_query = st.text_input("진단할 파일명 검색 (선택 사항)", value="", key="diag_query")
-                    diag_path_filter = st.checkbox("'/drawings/' 경로만 보기", value=False, key="diag_path_filter")
-                    
-                    filter_parts = []
-                    if diag_path_filter:
-                        filter_parts.append("startswith(metadata_storage_path, 'https://')") # Dummy to allow path check in Python or use searchable path if possible
-                    
-                    # Since metadata_storage_path is now filterable, we can use startswith if we know the prefix, 
-                    # but for general contains check, we still need Python or search.ismatch if supported.
-                    # Let's just fetch top 100 and filter in Python for maximum reliability during diagnosis.
-                    
-                    results = search_manager.search_client.search(
-                        search_text=diag_query if diag_query else "*",
-                        select=["metadata_storage_name", "project", "metadata_storage_path"],
-                        top=100
-                    )
-                    
-                    dump_data = []
-                    for doc in results:
-                        name = doc.get('metadata_storage_name', '')
-                        path = doc.get('metadata_storage_path', '')
+            with st.expander("🔍 인덱스 상세 진단 도구", expanded=False):
+                st.caption("인덱스에 저장된 실제 파일명과 태그를 직접 확인합니다.")
+                
+                # Add search input for specific file diagnosis (Outside button for persistence)
+                diag_query = st.text_input("진단할 파일명 검색 (일부만 입력 가능)", value="", key="diag_query")
+                diag_path_filter = st.checkbox("'/drawings/' 경로만 보기", value=True, key="diag_path_filter")
+                
+                if st.button("📋 진단 실행 (최근 100개)"):
+                    try:
+                        search_manager = get_search_manager()
                         
-                        if diag_path_filter and '/drawings/' not in path:
-                            continue
+                        # Use a more inclusive search for diagnosis
+                        # If query is provided, use it as search_text. If not, use *
+                        results = search_manager.search_client.search(
+                            search_text=diag_query if diag_query else "*",
+                            select=["metadata_storage_name", "project", "metadata_storage_path"],
+                            top=100
+                        )
+                        
+                        dump_data = []
+                        for doc in results:
+                            name = doc.get('metadata_storage_name', '')
+                            path = doc.get('metadata_storage_path', '')
                             
-                        dump_data.append({
-                            "Name": name,
-                            "Project": doc.get('project'),
-                            "Path": path
-                        })
-                    
-                    if dump_data:
-                        st.write(f"Found {len(dump_data)} documents matching criteria.")
-                        st.table(dump_data)
-                    else:
-                        st.warning("검색 결과가 없습니다.")
-                except Exception as e:
-                    st.error(f"덤프 중 오류 발생: {e}")
+                            if diag_path_filter and '/drawings/' not in path:
+                                continue
+                                
+                            dump_data.append({
+                                "Name": name,
+                                "Project": doc.get('project'),
+                                "Path": path
+                            })
+                        
+                        if dump_data:
+                            st.write(f"검색 결과: {len(dump_data)}개의 문서 발견")
+                            st.table(dump_data)
+                        else:
+                            st.warning("검색 결과가 없습니다. 파일명이 인덱스에 존재하지 않거나 필터에 걸러졌을 수 있습니다.")
+                            
+                        # Extra check: Search by path only if query failed
+                        if diag_query and not dump_data:
+                            st.info(f"'{diag_query}'로 검색된 결과가 없어 경로 기반으로 다시 찾습니다...")
+                            path_results = search_manager.search_client.search(
+                                search_text="*",
+                                filter="search.ismatch('/drawings/', 'metadata_storage_path')",
+                                select=["metadata_storage_name", "project"],
+                                top=50
+                            )
+                            path_data = [{"Name": d['metadata_storage_name'], "Project": d['project']} for d in path_results]
+                            if path_data:
+                                st.write("'/drawings/' 경로에 있는 파일들:")
+                                st.table(path_data)
+                                
+                    except Exception as e:
+                        st.error(f"진단 중 오류 발생: {e}")
             with st.expander("📊 선택된 파일 토큰 분석 (Token Analyzer)", expanded=False):
                 st.caption("특정 파일의 인덱스 내용을 분석하여 토큰 사용량을 확인합니다.")
                 target_file_input = st.text_input("분석할 파일명 (일부만 입력해도 됨)", value="PH20-810-EC115-00540")

@@ -451,6 +451,9 @@ class AzureSearchManager:
         특정 파일의 모든 페이지/청크를 JSON 형태로 가져오기
         """
         try:
+            import unicodedata
+            # Ensure NFC normalization for consistent matching with indexed data
+            filename = unicodedata.normalize('NFC', filename)
             # Use search.ismatch for searchable fields (startswith is for non-searchable filterable fields)
             safe_filename = filename.replace("'", "''")
             

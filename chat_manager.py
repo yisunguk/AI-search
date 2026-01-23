@@ -112,6 +112,9 @@ You must interpret the provided text as if you are looking at an engineering dia
         
         if matched_file:
             print(f"DEBUG: Detected filename in query: {matched_file}")
+            import unicodedata
+            # Ensure NFC normalization for consistent matching with indexed data
+            matched_file = unicodedata.normalize('NFC', matched_file)
             # Escape single quotes for OData
             safe_filename = matched_file.replace("'", "''")
             # Use search.ismatch for searchable fields (startswith is for non-searchable filterable fields)
