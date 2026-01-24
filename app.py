@@ -1713,10 +1713,16 @@ elif menu == "디버그 (Debug)":
             found_list = False
             
             for doc in results:
-                content = doc['content'].upper()
-                if any(k in content for k in list_keywords):
+                # Handle None content safely
+                content = doc.get('content')
+                if content is None:
+                    content = ""
+                    st.warning(f"⚠️ Document '{doc['metadata_storage_name']}' has NO CONTENT (NULL).")
+                
+                content_upper = content.upper()
+                if any(k in content_upper for k in list_keywords):
                     st.success(f"✅ Found List Page! Name: `{doc['metadata_storage_name']}`")
-                    st.text_area("Content Preview", doc['content'][:500], height=150)
+                    st.text_area("Content Preview", content[:500], height=150)
                     found_list = True
                     break
             
@@ -1724,7 +1730,23 @@ elif menu == "디버그 (Debug)":
                 st.error("❌ List Page NOT found in the top 50 results.")
                 st.write("Top 5 Results Content Snippets:")
                 for i, doc in enumerate(results[:5]):
-                    st.text(f"{i+1}. {doc['metadata_storage_name']}: {doc['content'][:100]}...")
+                    content_preview = (doc.get('content') or "")[:100]
+                    st.text(f"{i+1}. {doc['metadata_storage_name']}: {content_preview}...")
+
+            # 4. Cleanup Tool
+            st.divider()
+            st.subheader("4. Index Cleanup")
+            st.warning("If this document is corrupt (No Content / No Project), you can delete it here.")
+            
+            if st.button(f"🗑️ Delete ALL {len(results)} found documents from Index"):
+                try:
+                    # Collect IDs
+                    ids_to_delete = [{"id": doc['id']} for doc in results]
+                    search_manager.search_client.delete_documents(documents=ids_to_delete)
+                    st.success(f"Successfully deleted {len(results)} documents.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Delete failed: {e}")
 
         else:
             st.error("No documents found in index matching this filename.")
