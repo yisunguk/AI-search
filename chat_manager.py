@@ -20,6 +20,7 @@ class AzureOpenAIChatManager:
         self.search_manager = search_manager
         self.storage_connection_string = storage_connection_string
         self.container_name = container_name
+
         
         
     def generate_sas_url(self, blob_name):
