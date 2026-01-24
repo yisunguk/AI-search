@@ -860,6 +860,12 @@ USER QUESTION:
                     if url:
                         # Append page fragment
                         url += f"#page={page_text}"
+                        # Use a shorter link text to prevent table layout breakage
+                        # Instead of replacing the whole (Filename: p.1), we just link the "p.1" part or similar?
+                        # User wants the citation to be clickable.
+                        # Let's keep the full text but ensure the URL is valid so Markdown renders it.
+                        # If Markdown fails to render, it shows the raw URL which is huge.
+                        # The issue in the screenshot was likely the URL not being quoted properly, breaking the Markdown syntax if it contained spaces or parens.
                         return f"[{full_match}]({url})"
             
             return full_match
@@ -884,7 +890,11 @@ USER QUESTION:
                 expiry=datetime.utcnow() + timedelta(hours=1)
             )
             
-            blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{self.container_name}/{blob_name}?{sas_token}"
+            # CRITICAL FIX: URL encode the blob name to handle Korean characters and spaces
+            # The blob_name passed to generate_blob_sas must be the raw name.
+            # The blob_name in the URL must be encoded.
+            encoded_blob_name = urllib.parse.quote(blob_name)
+            blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{self.container_name}/{encoded_blob_name}?{sas_token}"
             return blob_url
         except Exception as e:
             print(f"Error generating SAS URL: {e}")
