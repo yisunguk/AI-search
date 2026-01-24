@@ -11,9 +11,91 @@ AZURE_SEARCH_KEY = st.secrets["AZURE_SEARCH_KEY"]
 
 search_manager = AzureSearchManager(AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY)
 
-filename = "제4권 도면(청주).pdf"
+# ========================================
+# 사용자 정의 검색 입력
+# ========================================
+st.header("📝 사용자 지정 검색")
+
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    custom_query = st.text_input(
+        "검색할 키워드 입력",
+        value="piping and instrument diagram list",
+        help="검색하고 싶은 키워드를 입력하세요"
+    )
+
+with col2:
+    custom_top = st.number_input(
+        "검색 결과 수",
+        min_value=1,
+        max_value=200,
+        value=50,
+        step=10
+    )
+
+filename = st.text_input(
+    "대상 파일명 (선택사항)",
+    value="제4권 도면(청주).pdf",
+    help="특정 파일만 검색하려면 입력하세요. 비워두면 전체 인덱스를 검색합니다."
+)
+
+if st.button("🔍 검색 실행", type="primary", use_container_width=True):
+    st.markdown("---")
+    st.subheader(f"🔎 검색 결과: '{custom_query}'")
+    
+    with st.spinner("검색 중..."):
+        # Build filter
+        filter_expr = None
+        if filename and filename.strip():
+            filter_expr = f"search.ismatch('{filename}', 'metadata_storage_name')"
+        
+        # Execute search
+        results = search_manager.search(
+            custom_query,
+            filter_expr=filter_expr,
+            search_mode="any",
+            top=custom_top
+        )
+        
+        st.success(f"✅ **{len(results)}개 결과 발견**")
+        
+        if len(results) == 0:
+            st.warning("검색 결과가 없습니다. 다른 키워드를 시도해보세요.")
+        else:
+            # Display results
+            for i, doc in enumerate(results, 1):
+                doc_name = doc.get('metadata_storage_name', 'Unknown')
+                content = doc.get('content', '')
+                title = doc.get('title', 'No title')
+                
+                with st.expander(f"**{i}. {doc_name}**", expanded=(i <= 3)):
+                    st.markdown(f"**Title**: {title}")
+                    
+                    # Highlight if query keywords are in content
+                    content_upper = content.upper()
+                    query_upper = custom_query.upper()
+                    
+                    # Check for keyword presence
+                    keywords_found = []
+                    for word in query_upper.split():
+                        if word in content_upper:
+                            keywords_found.append(word)
+                    
+                    if keywords_found:
+                        st.success(f"✅ 키워드 매칭: {', '.join(keywords_found)}")
+                    
+                    # Content preview
+                    st.markdown("**Content Preview (처음 500자):**")
+                    st.text_area("", content[:500], height=150, key=f"custom_result_{i}", disabled=True)
+                    
+                    # Full content
+                    with st.expander("전체 내용 보기"):
+                        st.text_area("", content, height=400, key=f"custom_full_{i}", disabled=True)
 
 st.markdown("---")
+st.markdown("---")
+st.header("🔬 자동 테스트 (기본 디버깅)")
 
 # Test 1: Check if page 7 exists
 st.header("📋 Test 1: Verify Page 7 is Indexed")
