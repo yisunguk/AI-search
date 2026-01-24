@@ -1207,7 +1207,7 @@ elif menu == "도면/스펙 비교":
                         
                         with col2:
                             # Use sub-columns to align icons horizontally
-                            sub_c1, sub_c2 = st.columns([1, 1])
+                            sub_c1, sub_c2, sub_c3 = st.columns([1, 1, 1])
                             
                             with sub_c1:
                                 # 1. Download Button
@@ -1314,6 +1314,124 @@ elif menu == "도면/스펙 비교":
                                                     
                                             except Exception as e:
                                                 st.error(f"변경 실패: {e}")
+
+                            with sub_c3:
+                                # 3. Re-analyze Button
+                                if st.button("🔄", key=f"reanalyze_{blob_info['name']}", help="재분석 (인덱스 복구)"):
+                                    try:
+                                        with st.spinner("재분석 시작... (파일 다운로드 중)"):
+                                            # A. Download Blob to memory
+                                            blob_client = container_client.get_blob_client(blob_info['full_name'])
+                                            download_stream = blob_client.download_blob()
+                                            pdf_data = download_stream.readall()
+                                            
+                                            # B. Count Pages
+                                            import fitz
+                                            doc = fitz.open(stream=pdf_data, filetype="pdf")
+                                            total_pages = doc.page_count
+                                            
+                                            # C. Initialize Status
+                                            if "analysis_status" not in st.session_state:
+                                                st.session_state.analysis_status = {}
+                                            
+                                            safe_filename = blob_info['name']
+                                            st.session_state.analysis_status[safe_filename] = {
+                                                "status": "Extracting",
+                                                "total_pages": total_pages,
+                                                "processed_pages": 0,
+                                                "chunks": {},
+                                                "error": None
+                                            }
+                                            
+                                            # D. Analyze Chunks
+                                            doc_intel_manager = get_doc_intel_manager()
+                                            search_manager = get_search_manager()
+                                            blob_service_client = get_blob_service_client()
+                                            
+                                            # Generate SAS for Analysis
+                                            sas_token = generate_blob_sas(
+                                                account_name=blob_service_client.account_name,
+                                                container_name=CONTAINER_NAME,
+                                                blob_name=blob_info['full_name'],
+                                                account_key=blob_service_client.credential.account_key,
+                                                permission=BlobSasPermissions(read=True),
+                                                expiry=datetime.utcnow() + timedelta(hours=1)
+                                            )
+                                            # Use relative path for URL construction if needed, but full_name is usually relative to container if listed from container_client?
+                                            # container_client.list_blobs returns name relative to container.
+                                            blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_info['full_name'])}?{sas_token}"
+                                            
+                                            chunk_size = 50
+                                            page_chunks = []
+                                            
+                                            progress_bar = st.progress(0)
+                                            status_text = st.empty()
+                                            
+                                            for start_page in range(1, total_pages + 1, chunk_size):
+                                                end_page = min(start_page + chunk_size - 1, total_pages)
+                                                page_range = f"{start_page}-{end_page}"
+                                                
+                                                st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Extracting"
+                                                status_text.text(f"재분석 중: {safe_filename} ({page_range})...")
+                                                
+                                                # Retry logic
+                                                max_retries = 3
+                                                for retry in range(max_retries):
+                                                    try:
+                                                        chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=use_high_res)
+                                                        page_chunks.extend(chunks)
+                                                        st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
+                                                        st.session_state.analysis_status[safe_filename]["processed_pages"] += len(chunks)
+                                                        break
+                                                    except Exception as e:
+                                                        if retry == max_retries - 1:
+                                                            st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Failed"
+                                                            st.session_state.analysis_status[safe_filename]["error"] = str(e)
+                                                            raise e
+                                                        time.sleep(5 * (retry + 1))
+                                            
+                                            # E. Indexing
+                                            st.session_state.analysis_status[safe_filename]["status"] = "Indexing"
+                                            status_text.text("인덱싱 중...")
+                                            
+                                            documents_to_index = []
+                                            for page_chunk in page_chunks:
+                                                import base64
+                                                # Use full_name (path in container) for ID generation to match upload logic
+                                                page_id_str = f"{blob_info['full_name']}_page_{page_chunk['page_number']}"
+                                                doc_id = base64.urlsafe_b64encode(page_id_str.encode('utf-8')).decode('utf-8')
+                                                
+                                                document = {
+                                                    "id": doc_id,
+                                                    "content": page_chunk['content'],
+                                                    "content_exact": page_chunk['content'],
+                                                    "metadata_storage_name": f"{safe_filename} (p.{page_chunk['page_number']})",
+                                                    "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_info['full_name']}#page={page_chunk['page_number']}",
+                                                    "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                                                    "metadata_storage_size": blob_info['size'],
+                                                    "metadata_storage_content_type": "application/pdf",
+                                                    "project": "drawings_analysis",
+                                                    "page_number": page_chunk['page_number'],
+                                                    "filename": safe_filename
+                                                }
+                                                documents_to_index.append(document)
+                                            
+                                            if documents_to_index:
+                                                batch_size = 50
+                                                for i in range(0, len(documents_to_index), batch_size):
+                                                    batch = documents_to_index[i:i + batch_size]
+                                                    search_manager.upload_documents(batch)
+                                                
+                                                # Save JSON
+                                                search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
+                                            
+                                            st.session_state.analysis_status[safe_filename]["status"] = "Ready"
+                                            st.success("재분석 완료! 이제 검색이 가능합니다.")
+                                            time.sleep(1)
+                                            st.rerun()
+
+                                    except Exception as e:
+                                        st.error(f"재분석 실패: {e}")
 
                             # 3. JSON (Admin only)
                             if user_role == 'admin':
