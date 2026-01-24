@@ -154,6 +154,20 @@ You must interpret the provided text as if you are looking at an engineering dia
         """
         Rewrite user query to be search-friendly using LLM
         """
+        import re
+        
+        # Skip rewriting for page-specific queries (preserve exact page number)
+        if re.search(r'(\d+)\s*페이지|p\.?\s*\d+|page\s*\d+', user_message, re.IGNORECASE):
+            print("DEBUG: Skipping query rewriting (page-specific query)")
+            return user_message
+        
+        # Skip rewriting for structural/title queries (preserve exact keywords)
+        structural_keywords = ['LIST', 'INDEX', 'TABLE', 'DIAGRAM', '목록', '리스트', '다이어그램', '도면']
+        if any(kw in user_message.upper() for kw in structural_keywords):
+            print("DEBUG: Skipping query rewriting (structural/title query)")
+            return user_message
+        
+        # Otherwise, proceed with LLM-based query rewriting
         try:
             # Simple rule-based first for speed
             # If it's a "Load List" request, add specific keywords
@@ -232,6 +246,7 @@ Convert the user's natural language question into a keyword-based search query.
                 results.append({
                     'metadata_storage_name': f"{filename} (p.{chunk.get('page_number', 1)})",
                     'content': chunk.get('content', ''),
+                    'title': chunk.get('도면명(TITLE)', ''),  # Extract title for search matching
                     # Use a custom scheme to pass the full path info
                     'metadata_storage_path': f"https://direct_fetch/{folder_prefix}{filename}#page={chunk.get('page_number', 1)}",
                     'project': 'drawings_analysis'
@@ -248,6 +263,22 @@ Convert the user's natural language question into a keyword-based search query.
         Get chat response with client-side RAG
         """
         try:
+            # 0. Extract explicit page number from query
+            # This allows users to request specific pages like "7페이지", "p.10", "page 7"
+            import re
+            explicit_page = None
+            page_patterns = [
+                r'(\d+)\s*페이지',  # "7페이지"
+                r'p\.?\s*(\d+)',  # "p.7" or "p7" or "p. 7"
+                r'page\s*(\d+)',  # "page 7"
+            ]
+            for pattern in page_patterns:
+                match = re.search(pattern, user_message, re.IGNORECASE)
+                if match:
+                    explicit_page = int(match.group(1))
+                    print(f"DEBUG: Detected explicit page request: {explicit_page}")
+                    break
+            
             # 1. Intent Detection & Filtering
             
             # 0. Construct Scope Filter from available_files (if provided, treat as selected files)
@@ -490,6 +521,7 @@ Convert the user's natural language question into a keyword-based search query.
                 filename = result.get('metadata_storage_name', 'Unknown')
                 path = result.get('metadata_storage_path', '')
                 content = result.get('content', '')
+                page_title = result.get('title', '')  # Extract title if available
                 
                 # Extract page number
                 page = None
@@ -541,6 +573,18 @@ Convert the user's natural language question into a keyword-based search query.
                     boost = -200  # Stronger boost for list pages
                     print(f"DEBUG: BOOSTING page {key} (contains LIST/INDEX/TABLE) - Rank adjustment: {boost}")
                 
+                # Title-based boosting: If query keywords match the page title, boost heavily
+                if page_title:
+                    title_upper = page_title.upper()
+                    query_upper = user_message.upper()
+                    # Check for keyword overlap
+                    query_keywords = set(re.findall(r'\w+', query_upper))
+                    title_keywords = set(re.findall(r'\w+', title_upper))
+                    overlap = query_keywords & title_keywords
+                    if len(overlap) >= 2:  # At least 2 keywords match
+                        boost -= 100  # Strong boost for title match
+                        print(f"DEBUG: TITLE MATCH BOOST for page {key} (Title: {page_title[:50]}...) - Rank adjustment: {boost}")
+                
                 adjusted_rank = rank + boost
                 if key not in page_ranks:
                     page_ranks[key] = adjusted_rank
@@ -590,7 +634,7 @@ Convert the user's natural language question into a keyword-based search query.
                         'filepath': blob_path,
                         'url': '',
                         'path': path,
-                        'title': filename,
+                        'title': page_title,  # Store actual page title, not filename
                         'page': page
                     }
                 
@@ -638,6 +682,14 @@ Convert the user's natural language question into a keyword-based search query.
             # Increased to 25 to ensure we capture lists/tables that might be ranked lower
             context_limit = 25
             
+            # CRITICAL: If user asked for a specific page, prioritize it
+            if explicit_page:
+                explicit_keys = [k for k in sorted_keys if k[1] == explicit_page]
+                other_keys = [k for k in sorted_keys if k[1] != explicit_page]
+                sorted_keys = explicit_keys + other_keys
+                if explicit_keys:
+                    print(f"DEBUG: Prioritized explicit page {explicit_page}, found {len(explicit_keys)} matching pages")
+            
             for key in sorted_keys[:context_limit]:
                 filename, page = key
                 chunks = grouped_context[key]
@@ -649,7 +701,12 @@ Convert the user's natural language question into a keyword-based search query.
                 # Increased limit to 8000 to allow for more context per page
                 if len(page_content) > 8000: page_content = page_content[:8000] + "..."
                 
-                context_parts.append(f"[Document: {filename}, Page: {page}]\n{page_content}\n")
+                # Include title in context if available
+                title = citations_map[key].get('title', '')
+                if title:
+                    context_parts.append(f"[Document: {filename}, Page: {page}, Title: {title}]\n{page_content}\n")
+                else:
+                    context_parts.append(f"[Document: {filename}, Page: {page}]\n{page_content}\n")
                 citations.append(citations_map[key])
             
             if not context_parts and not conversation_history:
