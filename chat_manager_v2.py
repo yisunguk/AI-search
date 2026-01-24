@@ -932,7 +932,32 @@ USER QUESTION:
             # 8. Post-process: Linkify Citations in Text
             response_text = self._linkify_citations(response_text, citations)
 
-            return response_text, citations, context, final_filter, search_results
+            # DEBUG: Add context visualization to the answer (hidden in expander)
+            # This helps users/admins verify if the correct pages were used
+            debug_info = "\n\n<details><summary>🛠️ <b>Debug: Selected Context Pages</b></summary>\n\n"
+            debug_info += "| Rank | Page | Score/Priority | Source |\n"
+            debug_info += "|---|---|---|---|\n"
+            
+            for idx, key in enumerate(sorted_keys[:context_limit], 1):
+                filename, page = key
+                rank = page_ranks.get(key, 999)
+                
+                # Check if it was a list page
+                is_list = False
+                if key in grouped_context:
+                    for chunk in grouped_context[key]:
+                        if any(kw in chunk.upper() for kw in ["DRAWING LIST", "PIPING INSTRUMENT DIAGRAM LIST", "도면 목록"]):
+                            is_list = True
+                            break
+                
+                marker = "🎯 LIST" if is_list else ""
+                if idx == 1: marker += " (Top)"
+                
+                debug_info += f"| {idx} | {filename} (p.{page}) | {rank} {marker} | Context |\n"
+            
+            debug_info += "\n</details>"
+            
+            return response_text + debug_info, citations, context, final_filter, search_results
 
         except Exception as e:
             print(f"Error in get_chat_response: {e}")
