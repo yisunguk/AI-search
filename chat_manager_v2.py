@@ -353,11 +353,14 @@ Convert the user's natural language question into a keyword-based search query.
             exact_match_count = 0
             
             # Stage 1: Search with user's EXACT query (no expansion)
-            print(f"DEBUG: [Stage 1] Exact phrase search...")
+            # CRITICAL FIX: Disable Semantic Ranker for Stage 1
+            # The Debug Tool finds Page 7 as #1 using standard BM25.
+            # Semantic Ranker might be down-ranking it due to noise or slight phrasing differences.
+            print(f"DEBUG: [Stage 1] Exact phrase search (Semantic Ranker: OFF)...")
             exact_results = self.search_manager.search(
                 user_message,  # Use original query, NO rewriting
                 filter_expr=final_filter,
-                use_semantic_ranker=use_semantic_ranker,
+                use_semantic_ranker=False,  # FORCE FALSE for exact match stage
                 search_mode="any",  # At least one keyword must match
                 top=50  # Get enough to find exact matches
             )
