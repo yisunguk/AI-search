@@ -11,40 +11,10 @@ import uuid
 from datetime import datetime
 from web_search import perform_web_search
 
+from utils.chat_history_utils import load_history, save_history, get_session_title
+
 # --- History Management ---
 HISTORY_FILE = "chat_history.json"
-
-def load_history():
-    """Load chat history from local JSON file."""
-    if not os.path.exists(HISTORY_FILE):
-        return {}
-    try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading history: {e}")
-        return {}
-
-def save_history(history):
-    """Save chat history to local JSON file."""
-    try:
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Error saving history: {e}")
-
-def get_session_title(messages):
-    """Generate a title for the session based on the first user message."""
-    for msg in messages:
-        if msg["role"] == "user":
-            content = msg["content"]
-            if isinstance(content, list):
-                for item in content:
-                    if item["type"] == "text":
-                        return item["text"][:20] + "..."
-            else:
-                return str(content)[:20] + "..."
-    return "새로운 대화"
 
 def render_home_chat(chat_manager):
     """
@@ -56,7 +26,7 @@ def render_home_chat(chat_manager):
     
     # Initialize Session State for History
     if "chat_history_data" not in st.session_state:
-        st.session_state.chat_history_data = load_history()
+        st.session_state.chat_history_data = load_history(HISTORY_FILE)
     
     if "current_session_id" not in st.session_state:
         # Create a new session if none exists
@@ -136,7 +106,7 @@ def render_home_chat(chat_manager):
         # Delete All Button (Optional, for cleanup)
         if st.button("🗑️ 기록 삭제", use_container_width=True):
             st.session_state.chat_history_data = {}
-            save_history({})
+            save_history(HISTORY_FILE, {})
             # Reset current
             new_id = str(uuid.uuid4())
             st.session_state.current_session_id = new_id
@@ -364,7 +334,7 @@ def render_home_chat(chat_manager):
                         st.session_state.chat_history_data[current_id]["timestamp"] = datetime.now().isoformat()
                         
                         # Save to file
-                        save_history(st.session_state.chat_history_data)
+                        save_history(HISTORY_FILE, st.session_state.chat_history_data)
                         
                         # Rerun to update UI (Sidebar title, etc.)
                         st.rerun()

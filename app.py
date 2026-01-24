@@ -21,6 +21,7 @@ import excel_manager
 # Authentication imports
 from utils.auth_manager import AuthManager
 from modules.login_page import render_login_page
+from utils.chat_history_utils import load_history, save_history, get_session_title
 import extra_streamlit_components as stx
 
 # -----------------------------
@@ -676,7 +677,89 @@ elif menu == "파일 보관함":
             st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
 
 elif menu == "검색 & AI 채팅":
-    _, col_main, _ = st.columns([0.1, 0.8, 0.1])
+    from utils.chat_history_utils import load_history, save_history, get_session_title
+    SEARCH_HISTORY_FILE = "search_chat_history.json"
+
+    # Initialize Session State for Search History
+    if "search_chat_history_data" not in st.session_state:
+        st.session_state.search_chat_history_data = load_history(SEARCH_HISTORY_FILE)
+    
+    if "current_search_session_id" not in st.session_state:
+        new_id = str(uuid.uuid4())
+        st.session_state.current_search_session_id = new_id
+        st.session_state.search_chat_history_data[new_id] = {
+            "title": "새로운 대화",
+            "timestamp": datetime.now().isoformat(),
+            "messages": []
+        }
+        st.session_state.chat_messages = [] # This maps to the current session messages
+
+    # Layout: Spacer L (25%) | Main Content (50%) | Spacer R (10%) | History Sidebar (15%)
+    col_spacer_l, col_main, col_spacer_r, col_history = st.columns([0.25, 0.5, 0.1, 0.15])
+    
+    # Custom CSS for Sidebar Styling (Same as Home)
+    st.markdown("""
+    <style>
+    /* Target the fourth column (History Sidebar) */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(4) {
+        background-color: #1E1E1E;
+        border-left: 1px solid #333;
+        padding: 1rem;
+        border-radius: 10px;
+    }
+    [data-testid="column"]:nth-of-type(4) button {
+        text-align: left;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- Right Sidebar (History) ---
+    with col_history:
+        st.markdown("### 채팅 기록")
+        
+        if st.button("➕ 새 채팅", key="new_search_chat", use_container_width=True):
+            new_id = str(uuid.uuid4())
+            st.session_state.current_search_session_id = new_id
+            st.session_state.search_chat_history_data[new_id] = {
+                "title": "새로운 대화",
+                "timestamp": datetime.now().isoformat(),
+                "messages": []
+            }
+            st.session_state.chat_messages = []
+            st.rerun()
+            
+        st.markdown("---")
+        
+        sorted_sessions = sorted(
+            st.session_state.search_chat_history_data.items(),
+            key=lambda x: x[1].get("timestamp", ""),
+            reverse=True
+        )
+        
+        for session_id, session_data in sorted_sessions:
+            title = session_data.get("title", "대화")
+            if session_id == st.session_state.current_search_session_id:
+                if st.button(f"📂 {title}", key=f"search_hist_{session_id}", use_container_width=True, type="primary"):
+                    pass
+            else:
+                if st.button(f"📄 {title}", key=f"search_hist_{session_id}", use_container_width=True):
+                    st.session_state.current_search_session_id = session_id
+                    st.session_state.chat_messages = session_data.get("messages", [])
+                    st.rerun()
+        
+        if st.button("🗑️ 기록 삭제", key="del_search_hist", use_container_width=True):
+            st.session_state.search_chat_history_data = {}
+            save_history(SEARCH_HISTORY_FILE, {})
+            new_id = str(uuid.uuid4())
+            st.session_state.current_search_session_id = new_id
+            st.session_state.search_chat_history_data[new_id] = {
+                "title": "새로운 대화",
+                "timestamp": datetime.now().isoformat(),
+                "messages": []
+            }
+            st.session_state.chat_messages = []
+            st.rerun()
+
     with col_main:
         # Tabs for Search and Chat to preserve state
         tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
@@ -856,7 +939,7 @@ elif menu == "검색 & AI 채팅":
                 with c2:
                     chat_search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=1, horizontal=True, key="chat_search_mode", help="any: 키워드 중 하나라도 포함되면 검색 (추천)")
                     chat_search_mode = "all" if "all" in chat_search_mode_opt else "any"
-    
+
             # Chat input
             if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)"):
                 # Add user message to chat history
@@ -922,194 +1005,24 @@ elif menu == "검색 & AI 채팅":
                                     st.caption(f"**OData Filter:** `{final_filter}`")
                                 st.text_area("LLM에게 전달된 원문 데이터", value=context, height=300)
                             
+                            # --- Auto-Save History ---
+                            current_id = st.session_state.current_search_session_id
+                            current_title = st.session_state.search_chat_history_data[current_id]["title"]
+                            if current_title == "새로운 대화" and len(st.session_state.chat_messages) > 0:
+                                new_title = get_session_title(st.session_state.chat_messages)
+                                st.session_state.search_chat_history_data[current_id]["title"] = new_title
+                            
+                            st.session_state.search_chat_history_data[current_id]["messages"] = st.session_state.chat_messages
+                            st.session_state.search_chat_history_data[current_id]["timestamp"] = datetime.now().isoformat()
+                            save_history(SEARCH_HISTORY_FILE, st.session_state.search_chat_history_data)
+                            st.rerun()
+
                         except Exception as e:
                             st.error(f"오류가 발생했습니다: {str(e)}")
-            
-            # Clear chat button
-            # Clear chat button
-            if st.session_state.chat_messages:
-                if st.button("🗑️ 대화 초기화"):
-                    st.session_state.chat_messages = []
-                    st.rerun()
-
-elif menu == "도면/스펙 비교":
-    _, col_main, _ = st.columns([0.1, 0.8, 0.1])
-    with col_main:
-        # st.subheader("🏗️ 도면/스펙 정밀 분석 (RAG)") - Removed to avoid duplication
-    
-        tab1, tab2 = st.tabs(["📤 문서 업로드", "💬 AI분석"])
-    
-        with tab1:
         
-            if "drawing_uploader_key" not in st.session_state:
-                st.session_state.drawing_uploader_key = 0
-            
-            # High Resolution OCR Toggle
-            use_high_res = st.toggle("고해상도 OCR 적용 (도면 미세 글자 추출용)", value=False, help="복잡한 도면의 작은 글씨를 더 정확하게 읽습니다. 분석 시간이 더 오래 걸릴 수 있습니다.")
-        
-            uploaded_files = st.file_uploader("PDF 도면, 스펙, 사양서 등을 업로드하세요", accept_multiple_files=True, type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'], key=f"drawing_{st.session_state.drawing_uploader_key}")
-        
-            if uploaded_files:
-                if "analysis_status" not in st.session_state:
-                    st.session_state.analysis_status = {}
-                
-                if st.button("업로드 및 분석 시작"):
-                    blob_service_client = get_blob_service_client()
-                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-                    doc_intel_manager = get_doc_intel_manager()
-                    search_manager = get_search_manager()
-                
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                
-                    total_files = len(uploaded_files)
-                
-                    for idx, file in enumerate(uploaded_files):
-                        try:
-                            # Normalize filename to NFC (to match search query logic)
-                            import unicodedata
-                            safe_filename = unicodedata.normalize('NFC', file.name)
-                        
-                            # Initialize status
-                            st.session_state.analysis_status[safe_filename] = {
-                                "status": "Extracting",
-                                "total_pages": 0,
-                                "processed_pages": 0,
-                                "chunks": {},
-                                "error": None
-                            }
-                        
-                            status_text.text(f"처리 중 ({idx+1}/{total_files}): {safe_filename}")
-                        
-                            blob_path = f"{user_folder}/drawings/{safe_filename}"
-                            # 2. Upload to Azure Blob Storage
-                            status_text.text(f"업로드 중 ({idx+1}/{total_files}): {file.name}...")
-                            blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=blob_path)
-                        
-                            # CRITICAL: Reset file pointer to ensure full upload
-                            file.seek(0)
-                            blob_client.upload_blob(file, overwrite=True)
-                        
-                            # Verify upload size
-                            props = blob_client.get_blob_properties()
-                            if props.size != file.size:
-                                st.error(f"⚠️ 파일 업로드 크기 불일치! (원본: {file.size}, 업로드됨: {props.size})")
-                            else:
-                                print(f"DEBUG: Upload verified. Size: {props.size} bytes")
-
-                            # Generate SAS Token for Document Intelligence access
-                            sas_token = generate_blob_sas(
-                                account_name=blob_service_client.account_name,
-                                container_name=CONTAINER_NAME,
-                                blob_name=blob_path,
-                                account_key=blob_service_client.credential.account_key,
-                                permission=BlobSasPermissions(read=True),
-                                expiry=datetime.utcnow() + timedelta(hours=1)
-                            )
-                            blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
-                        
-                            # 3. Analyze with Document Intelligence (Chunked)
-                            file.seek(0)
-                            pdf_data = file.read()
-                            doc = fitz.open(stream=pdf_data, filetype="pdf")
-                            total_pages = doc.page_count
-                            file.seek(0)
-                        
-                            status_text.text(f"분석 준비 중 ({idx+1}/{total_files}): {file.name} (총 {total_pages} 페이지)")
-                        
-                            st.session_state.analysis_status[safe_filename]["total_pages"] = total_pages
-                        
-                            chunk_size = 50
-                            page_chunks = []
-                        
-                            for start_page in range(1, total_pages + 1, chunk_size):
-                                end_page = min(start_page + chunk_size - 1, total_pages)
-                                page_range = f"{start_page}-{end_page}"
-                            
-                                st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Extracting"
-                                status_text.text(f"분석 중 ({idx+1}/{total_files}): {file.name} - 페이지 {page_range} 분석 중...")
-                            
-                                # Retry logic for each chunk
-                                max_retries = 3
-                                for retry in range(max_retries):
-                                    try:
-                                        chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=use_high_res)
-                                        page_chunks.extend(chunks)
-                                        st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
-                                        st.session_state.analysis_status[safe_filename]["processed_pages"] += len(chunks)
-                                        break
-                                    except Exception as e:
-                                        if retry == max_retries - 1:
-                                            st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Failed"
-                                            st.session_state.analysis_status[safe_filename]["error"] = str(e)
-                                            raise e
-                                    
-                                        # Transient error - show friendly message
-                                        wait_time = 5 * (retry + 1)
-                                        status_text.text(f"⏳ 일시적 지연으로 재연결 중 ({retry+1}/{max_retries}): {file.name} - 페이지 {page_range} (약 {wait_time}초 대기)...")
-                                        time.sleep(wait_time)
-                        
-                            # 4. Indexing
-                            st.session_state.analysis_status[safe_filename]["status"] = "Indexing"
-                        
-                            if len(page_chunks) == 0:
-                                st.warning(f"⚠️ 경고: '{file.name}'에서 페이지를 찾을 수 없습니다.")
-                        
-                            documents_to_index = []
-                            for page_chunk in page_chunks:
-                                # Create document object for each page
-                                # ID must be unique and URL safe. Include page number in ID.
-                                import base64
-                                page_id_str = f"{blob_path}_page_{page_chunk['page_number']}"
-                                doc_id = base64.urlsafe_b64encode(page_id_str.encode('utf-8')).decode('utf-8')
-                            
-                                document = {
-                                    "id": doc_id,
-                                    "content": page_chunk['content'],
-                                    "content_exact": page_chunk['content'],
-                                    "metadata_storage_name": f"{safe_filename} (p.{page_chunk['page_number']})",
-                                    "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_path}#page={page_chunk['page_number']}",
-                                    "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
-                                    "metadata_storage_size": file.size,
-                                    "metadata_storage_content_type": file.type,
-                                    "project": "drawings_analysis",  # Tag for filtering
-                                    "title": page_chunk.get('도면명(TITLE)', ''),  # Drawing title
-                                    "drawing_no": page_chunk.get('도면번호(DWG. NO.)', ''),  # Drawing number
-                                    "page_number": page_chunk['page_number'],  # Page number for filtering
-                                    "filename": safe_filename  # Filename for search
-                                }
-                                documents_to_index.append(document)
-                        
-                            # Batch upload all pages (50 pages at a time to avoid request size limits)
-                            if documents_to_index:
-                                batch_size = 50
-                                for i in range(0, len(documents_to_index), batch_size):
-                                    batch = documents_to_index[i:i + batch_size]
-                                    status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {safe_filename} - 배치 전송 중 ({i//batch_size + 1}/{(len(documents_to_index)-1)//batch_size + 1})")
-                                    success, msg = search_manager.upload_documents(batch)
-                                    if not success:
-                                        st.error(f"인덱싱 실패 ({file.name}, 배치 {i//batch_size + 1}): {msg}")
-                                        break
-                            
-                                # 5. Save Analysis JSON to Blob Storage (Dual Retrieval Strategy)
-                                # This allows exact retrieval by filename without AI Search
-                                status_text.text(f"분석 결과 저장 중 ({idx+1}/{total_files}): {safe_filename}...")
-                                search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
-                        
-                            st.session_state.analysis_status[safe_filename]["status"] = "Ready"
-                            progress_bar.progress((idx + 1) / total_files)
-                        
-                        except Exception as e:
-                            st.error(f"오류 발생 ({file.name}): {str(e)}")
-                
-                    status_text.text("모든 작업이 완료되었습니다!")
-                    st.success("업로드, 분석 및 인덱싱이 완료되었습니다.")
-                
-                    # 성공적으로 완료되면 업로더 초기화
-                    st.session_state.drawing_uploader_key += 1
-                    time.sleep(2)
-                    st.rerun()
-
+        # Clear chat button
+        # Clear chat button
+        if st.session_state.chat_messages:
             # 📊 분석 모니터링 대시보드
             if "analysis_status" in st.session_state and st.session_state.analysis_status:
                 st.divider()
@@ -1742,6 +1655,18 @@ elif menu == "도면/스펙 비교":
                                 "citations": citations,
                                 "context": context
                             })
+                            
+                            # --- Auto-Save History ---
+                            current_id = st.session_state.current_drawing_session_id
+                            current_title = st.session_state.drawing_chat_history_data[current_id]["title"]
+                            if current_title == "새로운 대화" and len(st.session_state.rag_chat_messages) > 0:
+                                new_title = get_session_title(st.session_state.rag_chat_messages)
+                                st.session_state.drawing_chat_history_data[current_id]["title"] = new_title
+                            
+                            st.session_state.drawing_chat_history_data[current_id]["messages"] = st.session_state.rag_chat_messages
+                            st.session_state.drawing_chat_history_data[current_id]["timestamp"] = datetime.now().isoformat()
+                            save_history(DRAWING_HISTORY_FILE, st.session_state.drawing_chat_history_data)
+                            
                             st.rerun()
 
 
