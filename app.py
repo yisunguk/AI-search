@@ -1895,13 +1895,14 @@ elif menu == "디버그 (Debug)":
         else:
             st.error("No documents found in index matching this filename.")
             
-            # Debug: List what IS in the index
+            # Debug: List what IS in the index (drawings only)
             st.divider()
-            st.subheader("🕵️ Index Content Peek (Top 20)")
+            st.subheader("🕵️ Index Content Peek (Top 20 Drawings)")
             try:
-                # Get top 20 docs to see what's actually there
+                # Get top 20 docs from drawings_analysis project
                 peek_results = search_manager.search_client.search(
                     search_text="*",
+                    filter="project eq 'drawings_analysis'",
                     select=["metadata_storage_name", "project", "metadata_storage_last_modified"],
                     top=20
                 )
