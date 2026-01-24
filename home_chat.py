@@ -77,6 +77,23 @@ def render_home_chat(chat_manager):
     # Layout: Main Chat (Left) | History Sidebar (Right)
     col_chat, col_history = st.columns([0.85, 0.15])
     
+    # Custom CSS for Sidebar Styling
+    st.markdown("""
+    <style>
+    /* Target the second column (History Sidebar) */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(2) {
+        background-color: #1E1E1E; /* Darker background for sidebar */
+        border-left: 1px solid #333;
+        padding: 1rem;
+        border-radius: 10px;
+    }
+    /* Adjust button styles in sidebar */
+    [data-testid="column"]:nth-of-type(2) button {
+        text-align: left;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # --- Right Sidebar (History) ---
     with col_history:
         st.markdown("### 채팅 기록")
