@@ -74,21 +74,22 @@ def render_home_chat(chat_manager):
     # But we also need to ensure that if we add messages, they are saved back.
     # We'll do the save on message send.
     
-    # Layout: Main Chat (Left) | History Sidebar (Right)
-    col_chat, col_history = st.columns([0.85, 0.15])
+    # Layout: Spacer (Left) | Main Chat (Center) | History Sidebar (Right)
+    # This centers the chat window while keeping the sidebar on the right
+    col_spacer, col_chat, col_history = st.columns([0.2, 0.65, 0.15])
     
     # Custom CSS for Sidebar Styling
     st.markdown("""
     <style>
-    /* Target the second column (History Sidebar) */
-    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(2) {
+    /* Target the third column (History Sidebar) */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(3) {
         background-color: #1E1E1E; /* Darker background for sidebar */
         border-left: 1px solid #333;
         padding: 1rem;
         border-radius: 10px;
     }
     /* Adjust button styles in sidebar */
-    [data-testid="column"]:nth-of-type(2) button {
+    [data-testid="column"]:nth-of-type(3) button {
         text-align: left;
     }
     </style>
