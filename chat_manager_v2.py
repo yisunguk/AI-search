@@ -162,7 +162,8 @@ You must interpret the provided text as if you are looking at an engineering dia
             
             # Rule for P&ID List
             if any(x in user_message.upper() for x in ["P&ID", "PID", "피앤아이디"]) and any(x in user_message for x in ["리스트", "목록", "LIST", "INDEX", "비교"]):
-                expanded = f"{user_message} PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX TABLE"
+                # Expanded to include exact title from user screenshot
+                expanded = f"{user_message} PIPING AND INSTRUMENT DIAGRAM LIST DRAWING INDEX TABLE PIPING AND INSTRUMENT DIAGRAM FOR LIST"
                 print(f"DEBUG: Query expansion triggered for P&ID List: '{user_message}' -> '{expanded}'")
                 return expanded
             
@@ -579,6 +580,11 @@ Convert the user's natural language question into a keyword-based search query.
                         # Case 3: Path is already relative (rare but possible)
                         elif not path.startswith("http"):
                              blob_path = path
+                        
+                        # CRITICAL FIX: Strip " (p.N)" suffix if present in the path
+                        # This happens if the indexer appended it to the path
+                        import re
+                        blob_path = re.sub(r'\s*\(p\.\d+\)$', '', blob_path)
                         
                     citations_map[key] = {
                         'filepath': blob_path,

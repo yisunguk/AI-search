@@ -1530,6 +1530,7 @@ elif menu == "도면/스펙 비교":
                                     try:
                                         # Extract blob path from metadata_storage_path
                                         from urllib.parse import unquote
+                                        import re
                                         
                                         if "https://direct_fetch/" in res_path:
                                             # Handle custom direct fetch scheme
@@ -1543,6 +1544,10 @@ elif menu == "도면/스펙 비교":
                                         else:
                                             # Fallback or relative path
                                             blob_path_part = res_path
+                                        
+                                        # CRITICAL FIX: Strip " (p.N)" suffix if present in the path
+                                        # This happens if the indexer appended it to the path
+                                        blob_path_part = re.sub(r'\s*\(p\.\d+\)$', '', blob_path_part)
                                             
                                         sas_url = chat_manager.generate_sas_url(blob_path_part)
                                     except:
