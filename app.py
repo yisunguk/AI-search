@@ -1785,7 +1785,7 @@ elif menu == "디버그 (Debug)":
             results = search_manager.search_client.search(
                 search_text=f"\"{filename}\"",
                 search_mode="all",
-                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content", "page_number"],
+                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content"],
                 top=1000  # Increase to capture all pages
             )
             
