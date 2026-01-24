@@ -20,27 +20,6 @@ class AzureOpenAIChatManager:
         self.search_manager = search_manager
         self.storage_connection_string = storage_connection_string
         self.container_name = container_name
-
-        
-        
-    def generate_sas_url(self, blob_name):
-        """
-        Generate a SAS URL for a specific blob
-        """
-        try:
-            blob_service_client = BlobServiceClient.from_connection_string(self.storage_connection_string)
-            sas_token = generate_blob_sas(
-                account_name=blob_service_client.account_name,
-                container_name=self.container_name,
-                blob_name=blob_name,
-                account_key=blob_service_client.credential.account_key,
-                permission=BlobSasPermissions(read=True),
-                expiry=datetime.utcnow() + timedelta(hours=1)
-            )
-            return f"https://{blob_service_client.account_name}.blob.core.windows.net/{self.container_name}/{urllib.parse.quote(blob_name)}?{sas_token}"
-        except Exception as e:
-            print(f"Error generating SAS URL: {e}")
-            return "#"
         
         # System prompt optimized for technical accuracy and table interpretation
         self.system_prompt = """You are an expert EPC (Engineering, Procurement, and Construction) project assistant with deep knowledge in interpreting technical drawings and documents.
@@ -70,41 +49,60 @@ You must interpret the provided text as if you are looking at an engineering dia
 
 ### 2. CRITICAL ANSWER STRATEGY
 1. **Answer Strategy**:
-   - PRIMARY: Use information from the provided context documents.
-   - SECONDARY: Use your general engineering knowledge to bridge gaps (e.g., explaining what a component does or interpreting fragmented specs).
-   - ALWAYS clearly distinguish between document-based facts and general knowledge.
-   - **IMPORTANT**: Even if specific information is not found, you MUST provide a helpful response. Never leave it empty.
+    - PRIMARY: Use information from the provided context documents.
+    - SECONDARY: Use your general engineering knowledge to bridge gaps (e.g., explaining what a component does or interpreting fragmented specs).
+    - ALWAYS clearly distinguish between document-based facts and general knowledge.
+    - **IMPORTANT**: Even if specific information is not found, you MUST provide a helpful response. Never leave it empty.
 
 2. **Information Source Labeling**:
-   - For facts from documents: Cite with (문서명: p.페이지번호)
-   - For general knowledge: Clearly state "일반적인 엔지니어링 지식에 따르면..." or "문서에는 명시되지 않았으나, 일반적으로..."
+    - For facts from documents: Cite with (문서명: p.페이지번호)
+    - For general knowledge: Clearly state "일반적인 엔지니어링 지식에 따르면..." or "문서에는 명시되지 않았으나, 일반적으로..."
 
 3. **Table/Data Interpretation**: 
-   - Engineering documents often contain tables where keys and values might be visually separated.
-   - Look for patterns like "Item: Value" or columns in a table row.
-   - Even if the text is fragmented, try to reconstruct the specification from nearby words.
+    - Engineering documents often contain tables where keys and values might be visually separated.
+    - Look for patterns like "Item: Value" or columns in a table row.
+    - Even if the text is fragmented, try to reconstruct the specification from nearby words.
 
 4. **Machine Identifiers**: For Tag Nos like "10-P-101A", copy them EXACTLY.
 
 5. **Numeric Values**: Quote exact numbers with units.
 
 6. **Citations with Page Numbers**: 
-   - ALWAYS cite the source document name AND page number.
-   - Use the format: (문서명: p.페이지번호)
+    - ALWAYS cite the source document name AND page number.
+    - Use the format: (문서명: p.페이지번호)
 
 7. **Multi-Document Comparison (CRITICAL)**:
-   - If the context contains multiple documents, you MUST check all of them for the requested information.
-   - **Conflicting Info**: If Document A says "Material X" and Document B says "Material Y", you MUST report BOTH.
-     - Example: "문서 A에 따르면 재질은 X이나, 문서 B에는 Y로 명시되어 있습니다."
-   - **Complementary Info**: Combine information from all documents to provide a complete answer.
-   - Do NOT just pick the first answer you find. Compare and contrast.
+    - If the context contains multiple documents, you MUST check all of them for the requested information.
+    - **Conflicting Info**: If Document A says "Material X" and Document B says "Material Y", you MUST report BOTH.
+      - Example: "문서 A에 따르면 재질은 X이나, 문서 B에는 Y로 명시되어 있습니다."
+    - **Complementary Info**: Combine information from all documents to provide a complete answer.
+    - Do NOT just pick the first answer you find. Compare and contrast.
 
 8. **Formatting**:
-   - **Tables**: When the user asks for a list, summary, or comparison, YOU MUST USE MARKDOWN TABLE SYNTAX.
-   - Do not use bullet points for structured data if a table is requested.
+    - **Tables**: When the user asks for a list, summary, or comparison, YOU MUST USE MARKDOWN TABLE SYNTAX.
+    - Do not use bullet points for structured data if a table is requested.
 
 9. **Language**: Respond in Korean unless asked otherwise.
 """
+
+    def generate_sas_url(self, blob_name):
+        """
+        Generate a SAS URL for a specific blob
+        """
+        try:
+            blob_service_client = BlobServiceClient.from_connection_string(self.storage_connection_string)
+            sas_token = generate_blob_sas(
+                account_name=blob_service_client.account_name,
+                container_name=self.container_name,
+                blob_name=blob_name,
+                account_key=blob_service_client.credential.account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=datetime.utcnow() + timedelta(hours=1)
+            )
+            return f"https://{blob_service_client.account_name}.blob.core.windows.net/{self.container_name}/{urllib.parse.quote(blob_name)}?{sas_token}"
+        except Exception as e:
+            print(f"Error generating SAS URL: {e}")
+            return "#"
 
     def _extract_filename_filter(self, user_message, available_files):
         """
