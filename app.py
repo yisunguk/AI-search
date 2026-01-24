@@ -1378,7 +1378,8 @@ elif menu == "도면/스펙 비교":
                                                 max_retries = 3
                                                 for retry in range(max_retries):
                                                     try:
-                                                        chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=use_high_res)
+                                                        # Use default high_res=False for re-analysis
+                                                        chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=False)
                                                         page_chunks.extend(chunks)
                                                         st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
                                                         st.session_state.analysis_status[safe_filename]["processed_pages"] += len(chunks)
