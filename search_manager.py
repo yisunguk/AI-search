@@ -121,6 +121,10 @@ class AzureSearchManager:
                 # 추가 메타데이터 필드
                 SearchableField(name="project", type=SearchFieldDataType.String, filterable=True, sortable=True),
                 
+                # 도면 관련 필드 (Drawing metadata)
+                SearchableField(name="title", type=SearchFieldDataType.String, analyzer_name="ko.microsoft"),  # 도면명
+                SearchableField(name="drawing_no", type=SearchFieldDataType.String, analyzer_name=tag_analyzer_name),  # 도면번호
+                
                 # 페이지 단위 필드 (추가)
                 SimpleField(name="page_number", type=SearchFieldDataType.Int32, filterable=True, sortable=True),
                 SearchableField(name="filename", type=SearchFieldDataType.String, filterable=True, sortable=True, analyzer_name=tag_analyzer_name),

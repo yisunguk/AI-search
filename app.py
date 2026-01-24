@@ -1064,7 +1064,11 @@ elif menu == "도면/스펙 비교":
                                 "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
                                 "metadata_storage_size": file.size,
                                 "metadata_storage_content_type": file.type,
-                                "project": "drawings_analysis"  # Tag for filtering
+                                "project": "drawings_analysis",  # Tag for filtering
+                                "title": page_chunk.get('도면명(TITLE)', ''),  # Drawing title
+                                "drawing_no": page_chunk.get('도면번호(DWG. NO.)', ''),  # Drawing number
+                                "page_number": page_chunk['page_number'],  # Page number for filtering
+                                "filename": safe_filename  # Filename for search
                             }
                             documents_to_index.append(document)
                         
@@ -1409,7 +1413,11 @@ elif menu == "도면/스펙 비교":
                                                     "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
                                                     "metadata_storage_size": blob_info['size'],
                                                     "metadata_storage_content_type": "application/pdf",
-                                                    "project": "drawings_analysis"
+                                                    "project": "drawings_analysis",
+                                                    "title": page_chunk.get('도면명(TITLE)', ''),  # Drawing title
+                                                    "drawing_no": page_chunk.get('도면번호(DWG. NO.)', ''),  # Drawing number
+                                                    "page_number": page_chunk['page_number'],  # Page number for filtering
+                                                    "filename": safe_filename  # Filename for search
                                                 }
                                                 documents_to_index.append(document)
                                             
