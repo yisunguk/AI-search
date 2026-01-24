@@ -1035,7 +1035,11 @@ elif menu == "도면/스펙 비교":
                                         st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Failed"
                                         st.session_state.analysis_status[safe_filename]["error"] = str(e)
                                         raise e
-                                    time.sleep(5)
+                                    
+                                    # Transient error - show friendly message
+                                    wait_time = 5 * (retry + 1)
+                                    status_text.text(f"⏳ 일시적 지연으로 재연결 중 ({retry+1}/{max_retries}): {file.name} - 페이지 {page_range} (약 {wait_time}초 대기)...")
+                                    time.sleep(wait_time)
                         
                         # 4. Indexing
                         st.session_state.analysis_status[safe_filename]["status"] = "Indexing"
