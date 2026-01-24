@@ -501,11 +501,11 @@ Convert the user's natural language question into a keyword-based search query.
                     # 2. If query is list-related, specifically search for LIST pages
                     if any(keyword in search_query.upper() for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록", "비교", "COMPARE"]):
                         print(f"DEBUG: List-specific search for '{target_file}'...")
-                        list_query = "PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE DRAWING LIST 도면 목록 리스트"
+                        list_query = "PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE DRAWING LIST 도면 목록 리스트 목차 FOR LIST"
                         list_results = self.search_manager.search(
                             list_query,
                             filter_expr=file_specific_filter,
-                            top=10,
+                            top=50,
                             search_mode="any"
                         )
                         if list_results:
