@@ -53,16 +53,29 @@ class DocumentIntelligenceManager:
             # In the new SDK, result.pages is a list of DocumentPage
             print(f"DEBUG: Document Intelligence found {len(result.pages)} pages in this range.")
             
+            # Extract global metadata (Key-Value Pairs) - First pass
+            # This is useful if the title/drawing no is detected as a global KV pair
+            global_title = ""
+            global_drawing_no = ""
+            
+            if result.key_value_pairs:
+                for kvp in result.key_value_pairs:
+                    if kvp.key and kvp.value:
+                        key_text = kvp.key.content.lower()
+                        value_text = kvp.value.content
+                        
+                        # Heuristic for Title
+                        if "title" in key_text or "도면명" in key_text:
+                            global_title = value_text
+                        
+                        # Heuristic for Drawing No
+                        if "dwg" in key_text or "drawing no" in key_text or "도면번호" in key_text:
+                            global_drawing_no = value_text
+
             for page in result.pages:
                 page_num = page.page_number
                 
                 # Extract text from this page
-                # In markdown mode, result.content contains the full markdown.
-                # We might want to slice result.content by page spans if we want per-page markdown.
-                # However, for simplicity and better RAG, we can use the page-specific text if available
-                # or slice the global content.
-                
-                # The new SDK provides 'spans' for each page in result.content
                 page_content = ""
                 if page.spans:
                     for span in page.spans:
@@ -70,15 +83,37 @@ class DocumentIntelligenceManager:
                 
                 # Find tables on this page
                 page_tables_count = 0
+                page_title = global_title
+                page_drawing_no = global_drawing_no
+                
                 if result.tables:
                     for table in result.tables:
                         if table.bounding_regions and table.bounding_regions[0].page_number == page_num:
                             page_tables_count += 1
+                            
+                            # Try to extract metadata from tables (Title Block) if not found in KV pairs
+                            # or if we want page-specific metadata
+                            if not page_title or not page_drawing_no:
+                                cells = table.cells
+                                for i, cell in enumerate(cells):
+                                    content = cell.content.lower()
+                                    # Check next cell for value (simple heuristic for horizontal or vertical adjacency)
+                                    # This is a simplified approach. A more robust one would check row/col indices.
+                                    if i + 1 < len(cells):
+                                        next_cell = cells[i+1]
+                                        
+                                        if not page_title and ("title" in content or "도면명" in content):
+                                            page_title = next_cell.content
+                                        
+                                        if not page_drawing_no and ("dwg" in content or "drawing no" in content or "도면번호" in content):
+                                            page_drawing_no = next_cell.content
                 
                 page_chunks.append({
                     'content': page_content,
                     'page_number': page_num,
-                    'tables_count': page_tables_count
+                    'tables_count': page_tables_count,
+                    '도면명(TITLE)': page_title,       # Key expected by app.py
+                    '도면번호(DWG. NO.)': page_drawing_no # Key expected by app.py
                 })
             
             return page_chunks
