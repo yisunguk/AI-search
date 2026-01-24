@@ -942,7 +942,7 @@ elif menu == "검색 & AI 채팅":
                     chat_search_mode = "all" if "all" in chat_search_mode_opt else "any"
 
             # Chat input
-            if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)"):
+            if prompt := st.chat_input("질문을 입력하세요 (예: 10-P-101A의 사양은 무엇인가요?)", key="search_chat_input"):
                 # Add user message to chat history
                 st.session_state.chat_messages.append({"role": "user", "content": prompt})
                 
@@ -2403,7 +2403,7 @@ elif menu == "도면/스펙 비교":
                         
                             st.markdown(f"{i}. [{filepath}]({display_url})")
 
-            if prompt := st.chat_input("도면이나 스펙에 대해 질문하세요..."):
+            if prompt := st.chat_input("도면이나 스펙에 대해 질문하세요...", key="drawing_chat_input"):
                 st.session_state.rag_chat_messages.append({"role": "user", "content": prompt})
                 with st.chat_message("user"):
                     st.markdown(prompt)
