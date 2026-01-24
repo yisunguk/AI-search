@@ -3,3 +3,4 @@ backup
 temp_secrets.txt
 *.env
 __pycache__/
+chat_history.json
