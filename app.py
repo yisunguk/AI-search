@@ -1746,12 +1746,13 @@ elif menu == "디버그 (Debug)":
     blob_service_client = get_blob_service_client()
     container_client = blob_service_client.get_container_client(CONTAINER_NAME)
 
-    # Fetch list of files for selection
+    # Fetch list of files for selection (Filter for drawings only)
     blob_list = []
     try:
         blobs = container_client.list_blobs()
         for b in blobs:
-            if not b.name.endswith('/'): # Skip folders
+            # Filter: Must be a file (not folder) AND must be in a 'drawings' folder
+            if not b.name.endswith('/') and '/drawings/' in b.name:
                 blob_list.append(b.name)
     except Exception as e:
         st.error(f"Failed to list blobs: {e}")
