@@ -47,6 +47,12 @@ You must interpret the provided text as if you are looking at an engineering dia
 - **BOM/MTO (Bill of Materials)**:
     - Extract material descriptions, quantities, sizes, and weights from tabular text data.
 
+- **Drawing List / Index / Table of Contents (CRITICAL)**:
+    - If the user asks for a "List of Drawings", "P&ID List", or "Index", **FIRST** check if there is a dedicated "DRAWING LIST", "INDEX", or "LIST OF DRAWINGS" page in the context.
+    - **PRIORITY**: If such a page exists (e.g., "PIPING AND INSTRUMENT DIAGRAM FOR LIST"), extract the list **directly from that page**.
+    - Do NOT attempt to compile a list by looking at individual drawings unless no master list is found.
+    - The Master List is the Source of Truth. Use it.
+
 ### 2. CRITICAL ANSWER STRATEGY
 1. **Answer Strategy**:
     - PRIMARY: Use information from the provided context documents.
