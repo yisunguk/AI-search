@@ -14,7 +14,7 @@ import fitz # PyMuPDF for page count
 from search_manager import AzureSearchManager
 
 # Chat Manager Import  
-from chat_manager import AzureOpenAIChatManager
+from chat_manager_v2 import AzureOpenAIChatManager
 from doc_intel_manager import DocumentIntelligenceManager
 import excel_manager
 

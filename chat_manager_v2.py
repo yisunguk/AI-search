@@ -15,7 +15,7 @@ class AzureOpenAIChatManager:
             api_key=api_key,
             api_version=api_version
         )
-        print("DEBUG: chat_manager.py loaded (Version: Startswith Fix v2)")
+        print("DEBUG: chat_manager_v2.py loaded (Version: V2 Rename Fix)")
         self.deployment_name = deployment_name
         self.search_manager = search_manager
         self.storage_connection_string = storage_connection_string
