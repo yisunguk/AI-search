@@ -1421,9 +1421,12 @@ elif menu == "도면/스펙 비교":
                                                 batch_size = 50
                                                 for i in range(0, len(documents_to_index), batch_size):
                                                     batch = documents_to_index[i:i + batch_size]
-                                                    search_manager.upload_documents(batch)
+                                                    success, msg = search_manager.upload_documents(batch)
+                                                    if not success:
+                                                        st.error(f"❌ 인덱스 업로드 실패 (배치 {i//batch_size + 1}): {msg}")
+                                                        raise Exception(f"Index upload failed: {msg}")
                                                 
-                                                # Save JSON
+                                                # Save JSON only if upload succeeded
                                                 search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
                                             
                                             st.session_state.analysis_status[safe_filename]["status"] = "Ready"
