@@ -336,9 +336,9 @@ with st.sidebar:
     else:
         st.warning("⚠️ 일부 Azure 자격 증명이 누락되었습니다.")
 
-# Common Header for non-Home pages
-if menu != "홈":
-    st.title(menu)
+# Common Header for non-Home pages - Removed to allow custom placement
+# if menu != "홈":
+#     st.title(menu)
 
 
 if menu == "홈":
@@ -761,6 +761,7 @@ elif menu == "검색 & AI 채팅":
             st.rerun()
 
     with col_main:
+        st.title("검색 & AI 채팅")
         # Tabs for Search and Chat to preserve state
         tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
         
@@ -1020,9 +1021,270 @@ elif menu == "검색 & AI 채팅":
                         except Exception as e:
                             st.error(f"오류가 발생했습니다: {str(e)}")
         
-        # Clear chat button
-        # Clear chat button
         if st.session_state.chat_messages:
+            if st.button("🗑️ 대화 초기화"):
+                st.session_state.chat_messages = []
+                st.rerun()
+
+elif menu == "도면/스펙 비교":
+    DRAWING_HISTORY_FILE = "drawing_chat_history.json"
+    
+    # Initialize Session State for Drawing History
+    if "drawing_chat_history_data" not in st.session_state:
+        st.session_state.drawing_chat_history_data = load_history(DRAWING_HISTORY_FILE)
+    
+    if "current_drawing_session_id" not in st.session_state:
+        new_id = str(uuid.uuid4())
+        st.session_state.current_drawing_session_id = new_id
+        st.session_state.drawing_chat_history_data[new_id] = {
+            "title": "새로운 대화",
+            "timestamp": datetime.now().isoformat(),
+            "messages": []
+        }
+        st.session_state.rag_chat_messages = []
+
+    # Layout: Spacer L (25%) | Main Content (50%) | Spacer R (10%) | History Sidebar (15%)
+    col_spacer_l, col_main, col_spacer_r, col_history = st.columns([0.25, 0.5, 0.1, 0.15])
+    
+    # Custom CSS for Sidebar Styling (Same as Home)
+    st.markdown("""
+    <style>
+    /* Target the fourth column (History Sidebar) */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(4) {
+        background-color: #1E1E1E;
+        border-left: 1px solid #333;
+        padding: 1rem;
+        border-radius: 10px;
+    }
+    [data-testid="column"]:nth-of-type(4) button {
+        text-align: left;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- Right Sidebar (History) ---
+    with col_history:
+        st.markdown("### 채팅 기록")
+        
+        if st.button("➕ 새 채팅", key="new_drawing_chat", use_container_width=True):
+            new_id = str(uuid.uuid4())
+            st.session_state.current_drawing_session_id = new_id
+            st.session_state.drawing_chat_history_data[new_id] = {
+                "title": "새로운 대화",
+                "timestamp": datetime.now().isoformat(),
+                "messages": []
+            }
+            st.session_state.rag_chat_messages = []
+            st.rerun()
+            
+        st.markdown("---")
+        
+        sorted_sessions = sorted(
+            st.session_state.drawing_chat_history_data.items(),
+            key=lambda x: x[1].get("timestamp", ""),
+            reverse=True
+        )
+        
+        for session_id, session_data in sorted_sessions:
+            title = session_data.get("title", "대화")
+            if session_id == st.session_state.current_drawing_session_id:
+                if st.button(f"📂 {title}", key=f"drawing_hist_{session_id}", use_container_width=True, type="primary"):
+                    pass
+            else:
+                if st.button(f"📄 {title}", key=f"drawing_hist_{session_id}", use_container_width=True):
+                    st.session_state.current_drawing_session_id = session_id
+                    st.session_state.rag_chat_messages = session_data.get("messages", [])
+                    st.rerun()
+        
+        if st.button("🗑️ 기록 삭제", key="del_drawing_hist", use_container_width=True):
+            st.session_state.drawing_chat_history_data = {}
+            save_history(DRAWING_HISTORY_FILE, {})
+            new_id = str(uuid.uuid4())
+            st.session_state.current_drawing_session_id = new_id
+            st.session_state.drawing_chat_history_data[new_id] = {
+                "title": "새로운 대화",
+                "timestamp": datetime.now().isoformat(),
+                "messages": []
+            }
+            st.session_state.rag_chat_messages = []
+            st.rerun()
+
+    with col_main:
+        st.title("도면/스펙 비교")
+    
+        tab1, tab2 = st.tabs(["📤 문서 업로드", "💬 AI분석"])
+    
+        with tab1:
+        
+            if "drawing_uploader_key" not in st.session_state:
+                st.session_state.drawing_uploader_key = 0
+            
+            # High Resolution OCR Toggle
+            use_high_res = st.toggle("고해상도 OCR 적용 (도면 미세 글자 추출용)", value=False, help="복잡한 도면의 작은 글씨를 더 정확하게 읽습니다. 분석 시간이 더 오래 걸릴 수 있습니다.")
+        
+            uploaded_files = st.file_uploader("PDF 도면, 스펙, 사양서 등을 업로드하세요", accept_multiple_files=True, type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'], key=f"drawing_{st.session_state.drawing_uploader_key}")
+        
+            if uploaded_files:
+                if "analysis_status" not in st.session_state:
+                    st.session_state.analysis_status = {}
+                
+                if st.button("업로드 및 분석 시작"):
+                    blob_service_client = get_blob_service_client()
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    doc_intel_manager = get_doc_intel_manager()
+                    search_manager = get_search_manager()
+                    
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    total_files = len(uploaded_files)
+                    
+                    for idx, file in enumerate(uploaded_files):
+                        try:
+                            # Normalize filename to NFC (to match search query logic)
+                            import unicodedata
+                            safe_filename = unicodedata.normalize('NFC', file.name)
+                            
+                            # Initialize status
+                            st.session_state.analysis_status[safe_filename] = {
+                                "status": "Extracting",
+                                "total_pages": 0,
+                                "processed_pages": 0,
+                                "chunks": {},
+                                "error": None
+                            }
+                            
+                            status_text.text(f"처리 중 ({idx+1}/{total_files}): {safe_filename}")
+                            
+                            blob_path = f"{user_folder}/drawings/{safe_filename}"
+                            # 2. Upload to Azure Blob Storage
+                            status_text.text(f"업로드 중 ({idx+1}/{total_files}): {file.name}...")
+                            blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=blob_path)
+                            
+                            # CRITICAL: Reset file pointer to ensure full upload
+                            file.seek(0)
+                            blob_client.upload_blob(file, overwrite=True)
+                            
+                            # Verify upload size
+                            props = blob_client.get_blob_properties()
+                            if props.size != file.size:
+                                st.error(f"⚠️ 파일 업로드 크기 불일치! (원본: {file.size}, 업로드됨: {props.size})")
+                            else:
+                                print(f"DEBUG: Upload verified. Size: {props.size} bytes")
+
+                            # Generate SAS Token for Document Intelligence access
+                            sas_token = generate_blob_sas(
+                                account_name=blob_service_client.account_name,
+                                container_name=CONTAINER_NAME,
+                                blob_name=blob_path,
+                                account_key=blob_service_client.credential.account_key,
+                                permission=BlobSasPermissions(read=True),
+                                expiry=datetime.utcnow() + timedelta(hours=1)
+                            )
+                            blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
+                            
+                            # 3. Analyze with Document Intelligence (Chunked)
+                            file.seek(0)
+                            pdf_data = file.read()
+                            doc = fitz.open(stream=pdf_data, filetype="pdf")
+                            total_pages = doc.page_count
+                            file.seek(0)
+                            
+                            status_text.text(f"분석 준비 중 ({idx+1}/{total_files}): {file.name} (총 {total_pages} 페이지)")
+                            
+                            st.session_state.analysis_status[safe_filename]["total_pages"] = total_pages
+                            
+                            chunk_size = 50
+                            page_chunks = []
+                            
+                            for start_page in range(1, total_pages + 1, chunk_size):
+                                end_page = min(start_page + chunk_size - 1, total_pages)
+                                page_range = f"{start_page}-{end_page}"
+                                
+                                st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Extracting"
+                                status_text.text(f"분석 중 ({idx+1}/{total_files}): {file.name} - 페이지 {page_range} 분석 중...")
+                                
+                                # Retry logic for each chunk
+                                max_retries = 3
+                                for retry in range(max_retries):
+                                    try:
+                                        chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=use_high_res)
+                                        page_chunks.extend(chunks)
+                                        st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
+                                        st.session_state.analysis_status[safe_filename]["processed_pages"] += len(chunks)
+                                        break
+                                    except Exception as e:
+                                        if retry == max_retries - 1:
+                                            st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Failed"
+                                            st.session_state.analysis_status[safe_filename]["error"] = str(e)
+                                            raise e
+                                        
+                                        # Transient error - show friendly message
+                                        wait_time = 5 * (retry + 1)
+                                        status_text.text(f"⏳ 일시적 지연으로 재연결 중 ({retry+1}/{max_retries}): {file.name} - 페이지 {page_range} (약 {wait_time}초 대기)...")
+                                        time.sleep(wait_time)
+                            
+                            # 4. Indexing
+                            st.session_state.analysis_status[safe_filename]["status"] = "Indexing"
+                            
+                            if len(page_chunks) == 0:
+                                st.warning(f"⚠️ 경고: '{file.name}'에서 페이지를 찾을 수 없습니다.")
+                            
+                            documents_to_index = []
+                            for page_chunk in page_chunks:
+                                # Create document object for each page
+                                # ID must be unique and URL safe. Include page number in ID.
+                                import base64
+                                page_id_str = f"{blob_path}_page_{page_chunk['page_number']}"
+                                doc_id = base64.urlsafe_b64encode(page_id_str.encode('utf-8')).decode('utf-8')
+                                
+                                document = {
+                                    "id": doc_id,
+                                    "content": page_chunk['content'],
+                                    "content_exact": page_chunk['content'],
+                                    "metadata_storage_name": f"{safe_filename} (p.{page_chunk['page_number']})",
+                                    "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_path}#page={page_chunk['page_number']}",
+                                    "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                                    "metadata_storage_size": file.size,
+                                    "metadata_storage_content_type": file.type,
+                                    "project": "drawings_analysis",  # Tag for filtering
+                                    "title": page_chunk.get('도면명(TITLE)', ''),  # Drawing title
+                                    "drawing_no": page_chunk.get('도면번호(DWG. NO.)', ''),  # Drawing number
+                                    "page_number": page_chunk['page_number'],  # Page number for filtering
+                                    "filename": safe_filename  # Filename for search
+                                }
+                                documents_to_index.append(document)
+                            
+                            # Batch upload all pages (50 pages at a time to avoid request size limits)
+                            if documents_to_index:
+                                batch_size = 50
+                                for i in range(0, len(documents_to_index), batch_size):
+                                    batch = documents_to_index[i:i + batch_size]
+                                    status_text.text(f"인덱싱 중 ({idx+1}/{total_files}): {safe_filename} - 배치 전송 중 ({i//batch_size + 1}/{(len(documents_to_index)-1)//batch_size + 1})")
+                                    success, msg = search_manager.upload_documents(batch)
+                                    if not success:
+                                        st.error(f"인덱싱 실패 ({file.name}, 배치 {i//batch_size + 1}): {msg}")
+                                        break
+                                
+                                # 5. Save Analysis JSON to Blob Storage (Dual Retrieval Strategy)
+                                # This allows exact retrieval by filename without AI Search
+                                status_text.text(f"분석 결과 저장 중 ({idx+1}/{total_files}): {safe_filename}...")
+                                search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
+                            
+                            st.session_state.analysis_status[safe_filename]["status"] = "Ready"
+                            progress_bar.progress((idx + 1) / total_files)
+                            
+                        except Exception as e:
+                            st.error(f"오류 발생 ({file.name}): {str(e)}")
+                    
+                    status_text.text("모든 작업이 완료되었습니다!")
+                    st.success("업로드, 분석 및 인덱싱이 완료되었습니다.")
+                    
+                    # 성공적으로 완료되면 업로더 초기화
+                    st.session_state.drawing_uploader_key += 1
+                    time.sleep(2)
+                    st.rerun()
+
             # 📊 분석 모니터링 대시보드
             if "analysis_status" in st.session_state and st.session_state.analysis_status:
                 st.divider()
@@ -1032,6 +1294,633 @@ elif menu == "검색 & AI 채팅":
                     with st.expander(f":{status_color}[{filename}] - {info['status']}", expanded=(info['status'] != "Ready")):
                         col1, col2 = st.columns([3, 1])
                         with col1:
+                            st.write(f"**전체 상태:** {info['status']}")
+                            progress = info['processed_pages'] / info['total_pages'] if info['total_pages'] > 0 else 0
+                            st.progress(progress)
+                            st.write(f"**진행도:** {info['processed_pages']} / {info['total_pages']} 페이지 완료")
+                    
+                        if info['error']:
+                            st.error(f"**최근 오류:** {info['error']}")
+                    
+                        # 세부 청크 상태
+                        if info['chunks']:
+                            st.markdown("---")
+                            st.caption("🧩 **페이지 청크별 상태**")
+                            chunk_cols = st.columns(4)
+                            for i, (chunk_range, chunk_status) in enumerate(info['chunks'].items()):
+                                with chunk_cols[i % 4]:
+                                    if chunk_status == "Ready":
+                                        st.success(f"✅ {chunk_range}")
+                                    elif chunk_status == "Failed":
+                                        st.error(f"❌ {chunk_range}")
+                                        # 재시도 버튼 (간소화된 구현)
+                                        if st.button("🔄", key=f"retry_{filename}_{chunk_range}", help=f"{chunk_range} 재시도"):
+                                            st.info("재시도는 '업로드 및 분석 시작'을 다시 눌러주세요 (멱등성 보장)")
+                                    else:
+                                        st.info(f"⏳ {chunk_range}")
+
+        with tab2:
+
+        
+            # Display analyzed documents
+            st.markdown("#### 📋 분석된 문서 목록")
+            try:
+                blob_service_client = get_blob_service_client()
+                container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+            
+                # List files in user's drawings folder + Admin access to root drawings
+                blobs = []
+                # User folder
+                blobs.extend(list(container_client.list_blobs(name_starts_with=f"{user_folder}/drawings/")))
+            
+                if user_role == 'admin':
+                    # Admin root folder
+                    blobs.extend(list(container_client.list_blobs(name_starts_with="drawings/")))
+            
+                # Deduplicate
+                unique_blobs = {b.name: b for b in blobs}.values()
+            
+                blob_list = []
+                available_filenames = []
+                for blob in unique_blobs:
+                    if not blob.name.endswith('/'):  # Skip folder markers
+                        filename = blob.name.split('/')[-1]
+                        blob_list.append({
+                            'name': filename,
+                            'full_name': blob.name,
+                            'size': blob.size,
+                            'modified': blob.last_modified
+                        })
+                        available_filenames.append(filename)
+            
+                # Sort by modified date (most recent first)
+                blob_list.sort(key=lambda x: x['modified'], reverse=True)
+            
+                selected_filenames = []
+            
+                if blob_list:
+                    st.info(f"총 {len(blob_list)}개의 문서가 분석되어 있습니다. 분석할 문서를 선택하세요.")
+                
+                    # Add "Select All" checkbox
+                    def toggle_all():
+                        new_state = st.session_state.select_all_files
+                        # Update state for ALL files in the list, not just existing keys
+                        for b in blob_list:
+                            st.session_state[f"chk_{b['name']}"] = new_state
+
+                    select_all = st.checkbox("전체 선택", value=True, key="select_all_files", on_change=toggle_all)
+                
+                    # Display as expandable list
+                    with st.expander("📄 문서 목록 및 선택", expanded=True):
+                        for idx, blob_info in enumerate(blob_list, 1):
+                            col0, col1, col2, col3 = st.columns([0.5, 4, 1.2, 1])
+                            with col0:
+                                # Checkbox for selection
+                                # Initialize state if missing
+                                chk_key = f"chk_{blob_info['name']}"
+                                if chk_key not in st.session_state:
+                                    st.session_state[chk_key] = True # Default to True (Select All default)
+                                
+                                is_selected = st.checkbox(f"select_{idx}", key=chk_key, label_visibility="collapsed")
+                                if is_selected:
+                                    selected_filenames.append(blob_info['name'])
+                        
+                            with col1:
+                                size_mb = blob_info['size'] / (1024 * 1024)
+                                modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
+                                st.markdown(f"**{blob_info['name']}** ({size_mb:.2f} MB)")
+                        
+                            with col2:
+                                # Use sub-columns to align icons horizontally
+                                sub_c1, sub_c2, sub_c3 = st.columns([1, 1, 1])
+                            
+                                with sub_c1:
+                                    # 1. Download Button
+                                    try:
+                                        sas_url = generate_sas_url(
+                                            blob_service_client, 
+                                            CONTAINER_NAME, 
+                                            blob_info['full_name'], 
+                                            content_disposition="attachment"
+                                        )
+                                        # Use st.link_button for consistent UI (Box style)
+                                        st.link_button("📥", sas_url, help="다운로드", use_container_width=True)
+                                    except Exception as e:
+                                        st.error(f"Err: {e}")
+
+                                with sub_c2:
+                                    # 2. Rename Button (Popover)
+                                    # Popover button is wide by default, try to make it compact?
+                                    # Streamlit buttons expand to column width.
+                                    with st.popover("✏️", use_container_width=True):
+                                        new_name_input = st.text_input("새 파일명", value=blob_info['name'], key=f"ren_{blob_info['name']}")
+                                        if st.button("이름 변경", key=f"btn_ren_{blob_info['name']}"):
+                                            if new_name_input != blob_info['name']:
+                                                try:
+                                                    with st.spinner("이름 변경 및 인덱스 업데이트 중..."):
+                                                        # A. Rename Blob
+                                                        old_blob_name = blob_info['full_name']
+                                                        folder_path = old_blob_name.rsplit('/', 1)[0]
+                                                        new_blob_name = f"{folder_path}/{new_name_input}"
+                                                    
+                                                        source_blob = container_client.get_blob_client(old_blob_name)
+                                                        dest_blob = container_client.get_blob_client(new_blob_name)
+                                                    
+                                                        # Copy
+                                                        source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, old_blob_name)
+                                                        dest_blob.start_copy_from_url(source_sas)
+                                                    
+                                                        # Wait for copy
+                                                        for _ in range(20):
+                                                            props = dest_blob.get_blob_properties()
+                                                            if props.copy.status == "success":
+                                                                break
+                                                            time.sleep(0.2)
+                                                    
+                                                        # B. Update Search Index (Preserve OCR Data)
+                                                        search_manager = get_search_manager()
+                                                        import unicodedata
+                                                        safe_old_filename = unicodedata.normalize('NFC', blob_info['name'])
+                                                        safe_new_filename = unicodedata.normalize('NFC', new_name_input)
+                                                    
+                                                        # Find old docs
+                                                        results = search_manager.search_client.search(
+                                                            search_text="*",
+                                                            filter=f"project eq 'drawings_analysis'",
+                                                            select=["id", "content", "content_exact", "metadata_storage_name", "metadata_storage_path", "metadata_storage_size", "metadata_storage_content_type"]
+                                                        )
+                                                    
+                                                        docs_to_upload = []
+                                                        ids_to_delete = []
+                                                    
+                                                        for doc in results:
+                                                            # Check if this doc belongs to the file (by name prefix)
+                                                            # Name format: "{filename} (p.{page})"
+                                                            if doc['metadata_storage_name'].startswith(safe_old_filename):
+                                                                # Create new doc
+                                                                page_suffix = doc['metadata_storage_name'].split(safe_old_filename)[-1] # e.g. " (p.1)"
+                                                            
+                                                                # New ID
+                                                                import base64
+                                                                # Extract page number from suffix or path if possible, or just reconstruct
+                                                                # Path format: .../filename#page=N
+                                                                try:
+                                                                    page_num = doc['metadata_storage_path'].split('#page=')[-1]
+                                                                    new_page_id_str = f"{new_blob_name}_page_{page_num}"
+                                                                    new_doc_id = base64.urlsafe_b64encode(new_page_id_str.encode('utf-8')).decode('utf-8')
+                                                                
+                                                                    new_doc = {
+                                                                        "id": new_doc_id,
+                                                                        "content": doc['content'],
+                                                                        "content_exact": doc.get('content_exact', doc['content']),
+                                                                        "metadata_storage_name": f"{safe_new_filename}{page_suffix}",
+                                                                        "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{new_blob_name}#page={page_num}",
+                                                                        "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                                                                        "metadata_storage_size": doc['metadata_storage_size'],
+                                                                        "metadata_storage_content_type": doc['metadata_storage_content_type'],
+                                                                        "project": "drawings_analysis"
+                                                                    }
+                                                                    docs_to_upload.append(new_doc)
+                                                                    ids_to_delete.append({"id": doc['id']})
+                                                                except:
+                                                                    pass
+                                                                    
+                                                        if docs_to_upload:
+                                                            search_manager.upload_documents(docs_to_upload)
+                                                        if ids_to_delete:
+                                                            search_manager.search_client.delete_documents(documents=ids_to_delete)
+
+                                                        # C. Delete old blob
+                                                        source_blob.delete_blob()
+                                                    
+                                                        st.success("이름 변경 완료!")
+                                                        time.sleep(1)
+                                                        st.rerun()
+                                                    
+                                                except Exception as e:
+                                                    st.error(f"변경 실패: {e}")
+
+                                with sub_c3:
+                                    # 3. Re-analyze Button
+                                    if st.button("🔄", key=f"reanalyze_{blob_info['name']}", help="재분석 (인덱스 복구)"):
+                                        try:
+                                            with st.spinner("재분석 시작... (파일 다운로드 중)"):
+                                                # A. Download Blob to memory
+                                                blob_client = container_client.get_blob_client(blob_info['full_name'])
+                                                download_stream = blob_client.download_blob()
+                                                pdf_data = download_stream.readall()
+                                            
+                                                # B. Count Pages
+                                                import fitz
+                                                doc = fitz.open(stream=pdf_data, filetype="pdf")
+                                                total_pages = doc.page_count
+                                            
+                                                # C. Initialize Status
+                                                if "analysis_status" not in st.session_state:
+                                                    st.session_state.analysis_status = {}
+                                            
+                                                safe_filename = blob_info['name']
+                                                st.session_state.analysis_status[safe_filename] = {
+                                                    "status": "Extracting",
+                                                    "total_pages": total_pages,
+                                                    "processed_pages": 0,
+                                                    "chunks": {},
+                                                    "error": None
+                                                }
+                                            
+                                                # D. Analyze Chunks
+                                                doc_intel_manager = get_doc_intel_manager()
+                                                search_manager = get_search_manager()
+                                                blob_service_client = get_blob_service_client()
+                                            
+                                                # Generate SAS for Analysis
+                                                sas_token = generate_blob_sas(
+                                                    account_name=blob_service_client.account_name,
+                                                    container_name=CONTAINER_NAME,
+                                                    blob_name=blob_info['full_name'],
+                                                    account_key=blob_service_client.credential.account_key,
+                                                    permission=BlobSasPermissions(read=True),
+                                                    expiry=datetime.utcnow() + timedelta(hours=1)
+                                                )
+                                                # Use relative path for URL construction if needed, but full_name is usually relative to container if listed from container_client?
+                                                # container_client.list_blobs returns name relative to container.
+                                                blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_info['full_name'])}?{sas_token}"
+                                            
+                                                chunk_size = 50
+                                                page_chunks = []
+                                            
+                                                progress_bar = st.progress(0)
+                                                status_text = st.empty()
+                                            
+                                                for start_page in range(1, total_pages + 1, chunk_size):
+                                                    end_page = min(start_page + chunk_size - 1, total_pages)
+                                                    page_range = f"{start_page}-{end_page}"
+                                                
+                                                    st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Extracting"
+                                                    status_text.text(f"재분석 중: {safe_filename} ({page_range})...")
+                                                
+                                                    # Retry logic
+                                                    max_retries = 3
+                                                    for retry in range(max_retries):
+                                                        try:
+                                                            # Use default high_res=False for re-analysis
+                                                            chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=False)
+                                                            page_chunks.extend(chunks)
+                                                            st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
+                                                            st.session_state.analysis_status[safe_filename]["processed_pages"] += len(chunks)
+                                                            break
+                                                        except Exception as e:
+                                                            if retry == max_retries - 1:
+                                                                st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Failed"
+                                                                st.session_state.analysis_status[safe_filename]["error"] = str(e)
+                                                                raise e
+                                                            time.sleep(5 * (retry + 1))
+                                            
+                                                # E. Indexing
+                                                st.session_state.analysis_status[safe_filename]["status"] = "Indexing"
+                                                status_text.text("인덱싱 중...")
+                                            
+                                                documents_to_index = []
+                                                for page_chunk in page_chunks:
+                                                    import base64
+                                                    # Use full_name (path in container) for ID generation to match upload logic
+                                                    page_id_str = f"{blob_info['full_name']}_page_{page_chunk['page_number']}"
+                                                    doc_id = base64.urlsafe_b64encode(page_id_str.encode('utf-8')).decode('utf-8')
+                                                
+                                                    document = {
+                                                        "id": doc_id,
+                                                        "content": page_chunk['content'],
+                                                        "content_exact": page_chunk['content'],
+                                                        "metadata_storage_name": f"{safe_filename} (p.{page_chunk['page_number']})",
+                                                        "metadata_storage_path": f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{blob_info['full_name']}#page={page_chunk['page_number']}",
+                                                        "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
+                                                        "metadata_storage_size": blob_info['size'],
+                                                        "metadata_storage_content_type": "application/pdf",
+                                                        "project": "drawings_analysis",
+                                                        "title": page_chunk.get('도면명(TITLE)', ''),  # Drawing title
+                                                        "drawing_no": page_chunk.get('도면번호(DWG. NO.)', ''),  # Drawing number
+                                                        "page_number": page_chunk['page_number'],  # Page number for filtering
+                                                        "filename": safe_filename  # Filename for search
+                                                    }
+                                                    documents_to_index.append(document)
+                                            
+                                                if documents_to_index:
+                                                    batch_size = 50
+                                                    for i in range(0, len(documents_to_index), batch_size):
+                                                        batch = documents_to_index[i:i + batch_size]
+                                                        success, msg = search_manager.upload_documents(batch)
+                                                        if not success:
+                                                            st.error(f"❌ 인덱스 업로드 실패 (배치 {i//batch_size + 1}): {msg}")
+                                                            raise Exception(f"Index upload failed: {msg}")
+                                                
+                                                    # Save JSON only if upload succeeded
+                                                    search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
+                                            
+                                                st.session_state.analysis_status[safe_filename]["status"] = "Ready"
+                                                st.success("재분석 완료! 이제 검색이 가능합니다.")
+                                                time.sleep(1)
+                                                st.rerun()
+
+                                        except Exception as e:
+                                            st.error(f"재분석 실패: {e}")
+
+                                # 3. JSON (Admin only)
+                                if user_role == 'admin':
+                                    json_key = f"json_data_{blob_info['name']}"
+                                
+                                    if json_key not in st.session_state:
+                                        if st.button("JSON", key=f"gen_json_{blob_info['name']}"):
+                                            with st.spinner("..."):
+                                                search_manager = get_search_manager()
+                                                # Dual Retrieval Strategy: Try Blob first
+                                                docs = search_manager.get_document_json_from_blob(container_client, user_folder, blob_info['name'])
+                                            
+                                                # Fallback to AI Search if Blob JSON not found (for older files)
+                                                if not docs:
+                                                    st.info("Blob JSON을 찾을 수 없어 AI Search에서 검색합니다...")
+                                                    docs = search_manager.get_document_json(blob_info['name'])
+                                                
+                                                if docs:
+                                                    import json
+                                                    json_str = json.dumps(docs, ensure_ascii=False, indent=2)
+                                                    st.session_state[json_key] = json_str
+                                                    st.rerun()
+                                                else:
+                                                    st.error(f"No Data found for '{blob_info['name']}'")
+                                                    # Try one more time without project filter to see if it exists at all
+                                                    safe_name = blob_info['name'].replace("'", "''")
+                                                    debug_docs = search_manager.search_client.search(
+                                                        search_text="*",
+                                                        filter=f"search.ismatch('\"{safe_name}*\"', 'metadata_storage_name')",
+                                                        select=["metadata_storage_name", "project"],
+                                                        top=5
+                                                    )
+                                                    debug_list = list(debug_docs)
+                                                    if debug_list:
+                                                        st.warning(f"Found {len(debug_list)} docs without correct project tag. Example: {debug_list[0].get('metadata_storage_name')} (Project: {debug_list[0].get('project')})")
+                                                    else:
+                                                        st.error("Document not found in index at all.")
+                                    else:
+                                        # Show download button
+                                        json_data = st.session_state[json_key]
+                                        st.download_button(
+                                            label="💾",
+                                            data=json_data,
+                                            file_name=f"{blob_info['name']}.json",
+                                            mime="application/json",
+                                            key=f"dl_json_{blob_info['name']}"
+                                        )
+
+                            with col3:
+                                if st.button("🗑️ 삭제", key=f"del_{blob_info['name']}"):
+                                    try:
+                                        # 1. Delete from Blob Storage (Use full_name)
+                                        blob_client = container_client.get_blob_client(blob_info['full_name'])
+                                        blob_client.delete_blob()
+                                    
+                                        # 2. Delete from Search Index
+                                        search_manager = get_search_manager()
+                                    
+                                        # Find docs to delete
+                                        import unicodedata
+                                        safe_filename = unicodedata.normalize('NFC', blob_info['name'])
+                                    
+                                        # Clean up index (Find ALL pages)
+                                        ids_to_delete = []
+                                        while True:
+                                            results = search_manager.search_client.search(
+                                                search_text="*",
+                                                filter=f"project eq 'drawings_analysis'",
+                                                select=["id", "metadata_storage_name"],
+                                                top=1000
+                                            )
+                                        
+                                            batch_ids = []
+                                            for doc in results:
+                                                # Use NFC normalization for comparison
+                                                doc_name = unicodedata.normalize('NFC', doc['metadata_storage_name'])
+                                                if doc_name.startswith(safe_filename):
+                                                    batch_ids.append({"id": doc['id']})
+                                        
+                                            if not batch_ids:
+                                                break
+                                            
+                                            search_manager.search_client.delete_documents(documents=batch_ids)
+                                            ids_to_delete.extend(batch_ids)
+                                        
+                                            # If we found less than 1000, we might be done, but to be safe we continue 
+                                            # until a search returns no matches for our file.
+                                            # Actually, if we delete them, the next search will return different docs.
+                                            # So we continue until no more docs match.
+                                            if len(batch_ids) == 0:
+                                                break
+                                    
+                                        # Clear JSON state if exists
+                                        json_key = f"json_data_{blob_info['name']}"
+                                        if json_key in st.session_state:
+                                            del st.session_state[json_key]
+
+                                        st.success(f"{blob_info['name']} 삭제 완료")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"삭제 실패: {e}")
+                else:
+                    st.warning("분석된 문서가 없습니다. '문서 업로드 및 분석' 탭에서 문서를 업로드하세요.")
+            except Exception as e:
+                st.error(f"문서 목록을 불러오는 중 오류 발생: {e}")
+        
+            st.divider()
+        
+            # DEBUG: Show selected files
+            st.write(f"DEBUG: Selected Files ({len(selected_filenames)}): {selected_filenames}")
+        
+            # Chat Interface (Similar to main chat but focused)
+            if "rag_chat_messages" not in st.session_state:
+                st.session_state.rag_chat_messages = []
+            
+            for message in st.session_state.rag_chat_messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+                    if "citations" in message and message["citations"]:
+                        st.markdown("---")
+                        st.caption("📚 **참조 문서:**")
+                        for i, citation in enumerate(message["citations"], 1):
+                            filepath = citation.get('filepath', 'Unknown')
+                            url = citation.get('url', '')
+                        
+                            # Generate SAS URL for browser viewing
+                            if url:
+                                display_url = url
+                            else:
+                                # Try to generate SAS URL from filepath
+                                try:
+                                    blob_service_client = get_blob_service_client()
+                                    display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                                except:
+                                    display_url = "#"
+                        
+                            st.markdown(f"{i}. [{filepath}]({display_url})")
+
+            if prompt := st.chat_input("도면이나 스펙에 대해 질문하세요..."):
+                st.session_state.rag_chat_messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+            
+                with st.chat_message("assistant"):
+                    with st.spinner("분석 중..."):
+                        try:
+                            chat_manager = get_chat_manager()
+                        
+                            conversation_history = [
+                                {"role": msg["role"], "content": msg["content"]}
+                                for msg in st.session_state.rag_chat_messages[:-1]
+                            ]
+                        
+                            # Use 'any' search mode for better recall (find documents even with partial keyword match)
+                            # This is important because technical drawings may have specific terms
+                            # Filter to only search documents from the drawings folder
+                            # Pass selected_filenames for specific file filtering
+                            # If selected_filenames is empty (user deselected all), we should probably warn or search nothing.
+                            # But for now let's pass it. If empty, the chat manager might search nothing or all depending on logic.
+                            # Actually, let's default to all if none selected? No, user explicitly deselected.
+                            # Let's pass the list as is.
+                        
+                            # Note: selected_filenames is defined in the outer scope of the tab
+                            current_files = selected_filenames
+                        
+                            # Construct robust filter expression
+                            # Include fallback for documents that might have lost their project tag but are in the drawings folder
+                            base_filter = "(project eq 'drawings_analysis' or search.ismatch('/drawings/', 'metadata_storage_path'))"
+                        
+                            # Note: We used to filter by path here, but OData encoding issues caused 0 results.
+                            # Now we pass user_folder to chat_manager for Python-side filtering.
+
+                            response_text, citations, context, final_filter, search_results = chat_manager.get_chat_response(
+                                prompt, 
+                                conversation_history,
+                                search_mode="any",
+                                use_semantic_ranker=False,
+                                filter_expr=base_filter,
+                                available_files=current_files,
+                                user_folder=user_folder # Pass user folder for Python-side filtering
+                            )
+                        
+                            st.markdown(response_text)
+                        
+                            # Display Google-like search results (Snippets + Links)
+                            if search_results:
+                                with st.expander("🔍 검색 결과 및 스니펫 (상위 후보)", expanded=True):
+                                    for i, res in enumerate(search_results[:5]): # Show top 5 for clarity
+                                        res_name = res.get('metadata_storage_name', 'Unknown')
+                                        res_path = res.get('metadata_storage_path', '')
+                                    
+                                        # Extract snippet from highlights
+                                        highlights = res.get('@search.highlights', {})
+                                        snippet = highlights.get('content', [""])[0] if highlights else ""
+                                        if not snippet:
+                                            snippet = res.get('content', '')[:200] + "..."
+                                    
+                                        # Generate SAS link for the result
+                                        try:
+                                            # Extract blob path from metadata_storage_path
+                                            from urllib.parse import unquote
+                                            import re
+                                        
+                                            if "https://direct_fetch/" in res_path:
+                                                # Handle custom direct fetch scheme
+                                                path_without_scheme = res_path.replace("https://direct_fetch/", "")
+                                                blob_path_part = path_without_scheme.split('#')[0]
+                                                blob_path_part = unquote(blob_path_part)
+                                            elif CONTAINER_NAME in res_path:
+                                                # Handle standard Azure Blob URL
+                                                blob_path_part = res_path.split(f"/{CONTAINER_NAME}/")[1].split('#')[0]
+                                                blob_path_part = unquote(blob_path_part)
+                                            else:
+                                                # Fallback or relative path
+                                                blob_path_part = res_path
+                                        
+                                            # CRITICAL FIX: Strip " (p.N)" suffix if present in the path
+                                            # This happens if the indexer appended it to the path
+                                            blob_path_part = re.sub(r'\s*\(p\.\d+\)$', '', blob_path_part)
+                                            
+                                            sas_url = chat_manager.generate_sas_url(blob_path_part)
+                                        except:
+                                            sas_url = "#"
+
+                                        st.markdown(f"**{i+1}. {res_name}**")
+                                        st.write(f"_{snippet}_")
+                                        if sas_url != "#":
+                                            st.markdown(f"[📥 원본 다운로드]({sas_url})")
+                                        st.divider()
+
+                            if citations:
+                                st.markdown("---")
+                                st.caption("📚 **참조 문서:**")
+                                for i, citation in enumerate(citations, 1):
+                                    filepath = citation.get('filepath', 'Unknown')
+                                    url = citation.get('url', '')
+                                
+                                    # Generate SAS URL for browser viewing
+                                    if url:
+                                        display_url = url
+                                    else:
+                                        try:
+                                            blob_service_client = get_blob_service_client()
+                                            # Generate SAS with inline content disposition
+                                            sas_token = generate_blob_sas(
+                                                account_name=blob_service_client.account_name,
+                                                container_name=CONTAINER_NAME,
+                                                blob_name=filepath,
+                                                account_key=blob_service_client.credential.account_key,
+                                                permission=BlobSasPermissions(read=True),
+                                                expiry=datetime.utcnow() + timedelta(hours=1),
+                                                content_disposition="inline",
+                                                content_type="application/pdf"
+                                            )
+                                            display_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(filepath)}?{sas_token}"
+                                        
+                                            # Add page number if available
+                                            page_num = citation.get('page')
+                                            if page_num:
+                                                display_url += f"#page={page_num}"
+                                        except:
+                                            display_url = "#"
+                                
+                                    st.markdown(f"{i}. [{filepath}]({display_url})")
+                        
+                            # Debug: Show Context
+                            with st.expander("🔍 검색된 컨텍스트 확인 (Debug Context)", expanded=False):
+                                if final_filter:
+                                    st.caption(f"**OData Filter:** `{final_filter}`")
+                                if search_results:
+                                    st.caption(f"**Search Results:** {len(search_results)} chunks found")
+                                st.text_area("LLM에게 전달된 원문 데이터", value=context, height=300)
+
+                            st.session_state.rag_chat_messages.append({
+                                "role": "assistant",
+                                "content": response_text,
+                                "citations": citations,
+                                "context": context
+                            })
+                            
+                            # --- Auto-Save History ---
+                            current_id = st.session_state.current_drawing_session_id
+                            current_title = st.session_state.drawing_chat_history_data[current_id]["title"]
+                            if current_title == "새로운 대화" and len(st.session_state.rag_chat_messages) > 0:
+                                new_title = get_session_title(st.session_state.rag_chat_messages)
+                                st.session_state.drawing_chat_history_data[current_id]["title"] = new_title
+                            
+                            st.session_state.drawing_chat_history_data[current_id]["messages"] = st.session_state.rag_chat_messages
+                            st.session_state.drawing_chat_history_data[current_id]["timestamp"] = datetime.now().isoformat()
+                            save_history(DRAWING_HISTORY_FILE, st.session_state.drawing_chat_history_data)
+                            
+                            st.rerun()
+
+
+                        except Exception as e:
+                            st.error(f"오류: {e}")
+                            import traceback
+                            st.code(traceback.format_exc())
                             st.write(f"**전체 상태:** {info['status']}")
                             progress = info['processed_pages'] / info['total_pages'] if info['total_pages'] > 0 else 0
                             st.progress(progress)
