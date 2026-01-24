@@ -1,7 +1,6 @@
 import os
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.documentintelligence import DocumentIntelligenceClient
-from azure.ai.documentintelligence.models import ContentFormat
 
 class DocumentIntelligenceManager:
     def __init__(self, endpoint, key):
@@ -40,7 +39,7 @@ class DocumentIntelligenceManager:
                 "prebuilt-layout",
                 analyze_request={"urlSource": document_url},
                 pages=page_range,
-                output_content_format=ContentFormat.MARKDOWN,
+                output_content_format="markdown",
                 features=features
             )
             
