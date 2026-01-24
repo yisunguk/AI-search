@@ -269,7 +269,7 @@ def get_user_folder_name(user_info):
 user_folder = get_user_folder_name(user_info)
 
 # Define role-based menu permissions (Fallback / Admin)
-ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 비교", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정"]
+ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 비교", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정", "디버그 (Debug)"]
 GUEST_MENUS = ["홈", "사용자 설정"]
 
 if user_role == 'admin':
@@ -1615,6 +1615,104 @@ elif menu == "도면/스펙 비교":
                         st.error(f"오류: {e}")
                         import traceback
                         st.code(traceback.format_exc())
+
+elif menu == "디버그 (Debug)":
+    st.title("🕵️‍♂️ RAG Deep Diagnostic Tool (Integrated)")
+    
+    # Check if admin
+    if user_role != 'admin':
+        st.error("Admin access required.")
+        st.stop()
+
+    search_manager = get_search_manager()
+    blob_service_client = get_blob_service_client()
+    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+
+    filename = st.text_input("Target Filename", value="제4권 도면(청주).pdf")
+
+    if st.button("Run Diagnostics"):
+        st.divider()
+        
+        # 1. Index Inspection
+        st.subheader("1. Index Inspection")
+        
+        # Search for ALL pages
+        results = search_manager.search_client.search(
+            search_text="*",
+            filter=f"search.ismatch('\"{filename}\"', 'metadata_storage_name')",
+            select=["id", "metadata_storage_name", "metadata_storage_path", "project", "page_number", "content"],
+            top=50
+        )
+        results = list(results)
+        
+        st.write(f"Found **{len(results)}** documents in index.")
+        
+        if results:
+            # Analyze First Result
+            first = results[0]
+            st.json({
+                "First Doc ID": first['id'],
+                "Name": first['metadata_storage_name'],
+                "Path": first['metadata_storage_path'],
+                "Project": first['project']
+            })
+            
+            # 2. Blob Verification
+            st.subheader("2. Blob Verification")
+            path = first['metadata_storage_path']
+            blob_path = None
+            
+            if "https://direct_fetch/" in path:
+                st.warning("⚠️ Using 'direct_fetch' scheme. This is a virtual path.")
+                blob_path = path.replace("https://direct_fetch/", "").split('#')[0]
+            elif CONTAINER_NAME in path:
+                try:
+                    blob_path = path.split(f"/{CONTAINER_NAME}/")[1].split('#')[0]
+                    blob_path = urllib.parse.unquote(blob_path)
+                except:
+                    pass
+            
+            if blob_path:
+                st.write(f"**Extracted Blob Path:** `{blob_path}`")
+                blob_client = container_client.get_blob_client(blob_path)
+                if blob_client.exists():
+                    st.success("✅ Blob exists in storage.")
+                else:
+                    st.error("❌ Blob DOES NOT exist at this path!")
+                    
+                    # Search for it
+                    st.write("Searching for file in container...")
+                    found_blobs = list(container_client.list_blobs(name_starts_with=os.path.dirname(blob_path)))
+                    if found_blobs:
+                        st.write("Found similar blobs:")
+                        for b in found_blobs:
+                            st.code(b.name)
+                    else:
+                        st.warning("No similar blobs found.")
+            else:
+                st.error("Could not extract blob path from metadata.")
+
+            # 3. List Page Check
+            st.subheader("3. List Page Check")
+            list_keywords = ["PIPING AND INSTRUMENT DIAGRAM FOR LIST", "DRAWING LIST", "도면 목록"]
+            found_list = False
+            
+            for doc in results:
+                content = doc['content'].upper()
+                if any(k in content for k in list_keywords):
+                    st.success(f"✅ Found List Page! Name: `{doc['metadata_storage_name']}`")
+                    st.text_area("Content Preview", doc['content'][:500], height=150)
+                    found_list = True
+                    break
+            
+            if not found_list:
+                st.error("❌ List Page NOT found in the top 50 results.")
+                st.write("Top 5 Results Content Snippets:")
+                for i, doc in enumerate(results[:5]):
+                    st.text(f"{i+1}. {doc['metadata_storage_name']}: {doc['content'][:100]}...")
+
+        else:
+            st.error("No documents found in index matching this filename.")
 
     # -----------------------------
     # 디버깅 도구 (Debug Tools)
