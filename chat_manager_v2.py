@@ -362,12 +362,24 @@ Convert the user's natural language question into a keyword-based search query.
             # CRITICAL FIX: Disable Semantic Ranker for Stage 1
             # The Debug Tool finds Page 7 as #1 using standard BM25.
             # Semantic Ranker might be down-ranking it due to noise or slight phrasing differences.
+            
+            # SANITIZE QUERY: Remove "AND", "&", and special chars to avoid syntax issues
+            # We want to match "PIPING", "INSTRUMENT", "DIAGRAM", "LIST" regardless of "AND" or "&"
+            import re
+            sanitized_query = re.sub(r'\bAND\b', ' ', user_message, flags=re.IGNORECASE)
+            sanitized_query = re.sub(r'[&+\-|!(){}\[\]^"~*?:\\]', ' ', sanitized_query)
+            sanitized_query = " ".join(sanitized_query.split()) # Normalize whitespace
+            
             print(f"DEBUG: [Stage 1] Exact phrase search (Semantic Ranker: OFF)...")
+            print(f"DEBUG: [Stage 1] Original Query: '{user_message}'")
+            print(f"DEBUG: [Stage 1] Sanitized Query: '{sanitized_query}'")
+            print(f"DEBUG: [Stage 1] Filter: {final_filter}")
+            
             exact_results = self.search_manager.search(
-                user_message,  # Use original query, NO rewriting
+                sanitized_query,  # Use sanitized query
                 filter_expr=final_filter,
                 use_semantic_ranker=False,  # FORCE FALSE for exact match stage
-                search_mode="any",  # At least one keyword must match
+                search_mode="all",  # FORCE ALL (AND logic) - all terms must be present
                 top=50  # Get enough to find exact matches
             )
             
