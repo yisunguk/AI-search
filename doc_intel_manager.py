@@ -30,7 +30,7 @@ class DocumentIntelligenceManager:
         try:
             features = []
             if high_res:
-                features.append("highResolution")
+                features.append("ocrHighResolution")
             
             print(f"DEBUG: Starting DI analysis for {document_url} (Range: {page_range}, HighRes: {high_res})")
             
