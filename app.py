@@ -1637,16 +1637,28 @@ elif menu == "디버그 (Debug)":
         st.subheader("1. Index Inspection")
         
         # Search for ALL pages
-        # Use 'eq' for exact match which is safer than search.ismatch for filenames with special chars
-        # Escape single quotes in filename
-        safe_filename = filename.replace("'", "''")
-        results = search_manager.search_client.search(
-            search_text="*",
-            filter=f"metadata_storage_name eq '{safe_filename}'",
-            select=["id", "metadata_storage_name", "metadata_storage_path", "project", "page_number", "content"],
-            top=50
-        )
-        results = list(results)
+        try:
+            # Attempt 1: Exact Match Filter (Most accurate)
+            safe_filename = filename.replace("'", "''")
+            results = search_manager.search_client.search(
+                search_text="*",
+                filter=f"metadata_storage_name eq '{safe_filename}'",
+                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "page_number", "content"],
+                top=50
+            )
+            results = list(results)
+        except Exception as e:
+            st.warning(f"Exact match filter failed ({str(e)}). Switching to fallback search...")
+            # Attempt 2: Fallback Text Search (Broader)
+            # Search for the filename as a phrase
+            results = search_manager.search_client.search(
+                search_text=f"\"{filename}\"",
+                search_mode="all",
+                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "page_number", "content"],
+                top=100
+            )
+            # Filter client-side to ensure we only get the target file
+            results = [doc for doc in results if doc['metadata_storage_name'] == filename]
         
         st.write(f"Found **{len(results)}** documents in index.")
         
