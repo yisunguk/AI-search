@@ -26,7 +26,7 @@ import extra_streamlit_components as stx
 # -----------------------------
 # 설정 및 비밀 관리
 # -----------------------------
-st.set_page_config(page_title="인텔리전트 다큐먼트", page_icon="🏗️", layout="centered")
+st.set_page_config(page_title="인텔리전트 다큐먼트", page_icon="🏗️", layout="wide")
 
 # Custom CSS for larger tab labels
 st.markdown("""
