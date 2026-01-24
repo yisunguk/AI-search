@@ -1815,37 +1815,9 @@ elif menu == "디버그 (Debug)":
                 "Path": first['metadata_storage_path'],
                 "Project": first['project']
             })
-        else:
-            st.error("No documents found in index matching this filename.")
-            
-            # Debug: List what IS in the index
-            st.divider()
-            st.subheader("🕵️ Index Content Peek (Top 20)")
-            try:
-                # Get top 20 docs to see what's actually there
-                peek_results = search_manager.search_client.search(
-                    search_text="*",
-                    select=["metadata_storage_name", "project", "metadata_storage_last_modified"],
-                    top=20
-                )
-                peek_list = list(peek_results)
-                if peek_list:
-                    st.write(f"Index contains at least {len(peek_list)} documents. Here are the top 20:")
-                    peek_data = []
-                    for d in peek_list:
-                        peek_data.append({
-                            "Name": d.get('metadata_storage_name'),
-                            "Project": d.get('project'),
-                            "Modified": d.get('metadata_storage_last_modified')
-                        })
-                    st.table(peek_data)
-                else:
-                    st.error("⚠️ The Index appears to be COMPLETELY EMPTY.")
-            except Exception as e:
-                st.error(f"Failed to peek index: {e}")
 
-        # 2. Blob Verification
-        st.subheader("2. Blob Verification")
+            # 2. Blob Verification
+            st.subheader("2. Blob Verification")
             path = first['metadata_storage_path']
             blob_path = None
             
@@ -1922,6 +1894,32 @@ elif menu == "디버그 (Debug)":
 
         else:
             st.error("No documents found in index matching this filename.")
+            
+            # Debug: List what IS in the index
+            st.divider()
+            st.subheader("🕵️ Index Content Peek (Top 20)")
+            try:
+                # Get top 20 docs to see what's actually there
+                peek_results = search_manager.search_client.search(
+                    search_text="*",
+                    select=["metadata_storage_name", "project", "metadata_storage_last_modified"],
+                    top=20
+                )
+                peek_list = list(peek_results)
+                if peek_list:
+                    st.write(f"Index contains at least {len(peek_list)} documents. Here are the top 20:")
+                    peek_data = []
+                    for d in peek_list:
+                        peek_data.append({
+                            "Name": d.get('metadata_storage_name'),
+                            "Project": d.get('project'),
+                            "Modified": d.get('metadata_storage_last_modified')
+                        })
+                    st.table(peek_data)
+                else:
+                    st.error("⚠️ The Index appears to be COMPLETELY EMPTY.")
+            except Exception as e:
+                st.error(f"Failed to peek index: {e}")
 
     # -----------------------------
     # 디버깅 도구 (Debug Tools)
