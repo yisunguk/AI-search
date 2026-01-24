@@ -1746,7 +1746,26 @@ elif menu == "디버그 (Debug)":
     blob_service_client = get_blob_service_client()
     container_client = blob_service_client.get_container_client(CONTAINER_NAME)
 
-    filename = st.text_input("Target Filename", value="제4권 도면(청주).pdf")
+    # Fetch list of files for selection
+    blob_list = []
+    try:
+        blobs = container_client.list_blobs()
+        for b in blobs:
+            if not b.name.endswith('/'): # Skip folders
+                blob_list.append(b.name)
+    except Exception as e:
+        st.error(f"Failed to list blobs: {e}")
+    
+    blob_list.sort(key=lambda x: x.split('/')[-1]) # Sort by filename
+    
+    target_blob = st.selectbox("Select Target File", blob_list)
+    
+    # Extract filename for search
+    if target_blob:
+        filename = target_blob.split('/')[-1]
+        st.caption(f"Selected Filename for Search: `{filename}`")
+    else:
+        filename = st.text_input("Target Filename", value="제4권 도면(청주).pdf")
 
     if st.button("Run Diagnostics"):
         st.divider()
