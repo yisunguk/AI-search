@@ -1774,37 +1774,38 @@ elif menu == "디버그 (Debug)":
         # 1. Index Inspection
         st.subheader("1. Index Inspection")
         
-        # Search for ALL pages
+        # Search for ALL pages (including chunks like "filename (p.1)")
         try:
-            # Attempt 1: Exact Match Filter (Most accurate)
-            safe_filename = filename.replace("'", "''")
-            results = search_manager.search_client.search(
-                search_text="*",
-                filter=f"metadata_storage_name eq '{safe_filename}'",
-                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content"],
-                top=50
-            )
-            results = list(results)
-        except Exception as e:
-            st.warning(f"Exact match filter failed ({str(e)}). Switching to fallback search...")
-            # Attempt 2: Fallback Text Search (Broader)
-            # Search for the filename as a phrase
+            # Search Strategy: Look for documents where metadata_storage_name starts with the filename
+            # This will catch both the main file and all page chunks
+            import unicodedata
+            norm_filename = unicodedata.normalize('NFC', filename)
+            
+            # Use text search for the filename and then filter client-side
             results = search_manager.search_client.search(
                 search_text=f"\"{filename}\"",
                 search_mode="all",
-                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content"],
-                top=100
+                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content", "page_number"],
+                top=1000  # Increase to capture all pages
             )
-            # Filter client-side to ensure we get the file AND its chunks
-            # Allow exact match OR "filename (p.N)" format
-            import unicodedata
-            norm_filename = unicodedata.normalize('NFC', filename)
+            
+            # Filter to get documents that start with our filename (including page chunks)
             results = [
                 doc for doc in results 
-                if unicodedata.normalize('NFC', doc['metadata_storage_name']).startswith(norm_filename)
+                if unicodedata.normalize('NFC', doc.get('metadata_storage_name', '')).startswith(norm_filename)
             ]
+            
+        except Exception as e:
+            st.warning(f"Search failed ({str(e)}). This might indicate an indexing issue.")
+            results = []
         
         st.write(f"Found **{len(results)}** documents in index.")
+        
+        # Show breakdown by type
+        if results:
+            main_docs = [d for d in results if '(p.' not in d.get('metadata_storage_name', '')]
+            page_docs = [d for d in results if '(p.' in d.get('metadata_storage_name', '')]
+            st.caption(f"📄 Main file: {len(main_docs)} | 📑 Page chunks: {len(page_docs)}")
         
         if results:
             # Analyze First Result
