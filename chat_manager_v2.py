@@ -695,6 +695,29 @@ Convert the user's natural language question into a keyword-based search query.
                 if explicit_keys:
                     print(f"DEBUG: Prioritized explicit page {explicit_page}, found {len(explicit_keys)} matching pages")
             
+            # DEBUG: Log top 30 pages with their ranks to see if page 7 is included
+            print(f"\n{'='*60}")
+            print(f"DEBUG: Page Ranking (showing top 30 out of {len(sorted_keys)} total pages)")
+            print(f"{'='*60}")
+            for idx, key in enumerate(sorted_keys[:30], 1):
+                filename, page = key
+                rank = page_ranks[key]
+                title = citations_map[key].get('title', 'No title')[:60]
+                content_preview = grouped_context[key][0][:100].replace('\n', ' ') if grouped_context[key] else ''
+                
+                # Check if this is a list page
+                is_list = False
+                for chunk in grouped_context[key]:
+                    if any(kw in chunk.upper() for kw in ["DRAWING LIST", "PIPING INSTRUMENT DIAGRAM LIST", "도면 목록"]):
+                        is_list = True
+                        break
+                
+                list_marker = "🎯 [LIST PAGE] " if is_list else ""
+                selected_marker = "✅ SELECTED " if idx <= context_limit else "❌ SKIPPED  "
+                
+                print(f"{selected_marker}{idx:2d}. {list_marker}Rank:{rank:4d} | {filename} p.{page} | {title}")
+            print(f"{'='*60}\n")
+            
             for key in sorted_keys[:context_limit]:
                 filename, page = key
                 chunks = grouped_context[key]
