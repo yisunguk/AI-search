@@ -12,6 +12,93 @@ AZURE_SEARCH_KEY = st.secrets["AZURE_SEARCH_KEY"]
 search_manager = AzureSearchManager(AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY)
 
 # ========================================
+# 🎯 2단계 검색 테스트 (신규 기능)
+# ========================================
+st.header("🎯 2단계 검색 테스트 (정확한 키워드 우선)")
+st.info("**목적**: 사용자 입력 그대로 먼저 검색하여 정확한 키워드 매칭을 우선순위로 둡니다.")
+
+test_query = st.text_input(
+    "테스트 검색어",
+    value="piping and instrument diagram list",
+    key="two_stage_query"
+)
+
+test_filename = st.text_input(
+    "대상 파일",
+    value="제4권 도면(청주).pdf",
+    key="two_stage_file"
+)
+
+if st.button("🚀 2단계 검색 실행", type="primary"):
+    st.markdown("---")
+    
+    # Build filter
+    filter_expr = None
+    if test_filename and test_filename.strip():
+        filter_expr = f"search.ismatch('{test_filename}', 'metadata_storage_name')"
+    
+    # Stage 1: Exact search
+    st.subheader("📍 Stage 1: 정확한 키워드 검색 (쿼리 확장 없음)")
+    st.code(f"Query: '{test_query}'")
+    
+    with st.spinner("Stage 1 검색 중..."):
+        stage1_results = search_manager.search(
+            test_query,  # 원본 그대로
+            filter_expr=filter_expr,
+            search_mode="any",
+            top=50
+        )
+    
+    st.success(f"✅ Stage 1 결과: {len(stage1_results)}개")
+    
+    if stage1_results:
+        st.markdown("**Top 10 결과:**")
+        for i, doc in enumerate(stage1_results[:10], 1):
+            doc_name = doc.get('metadata_storage_name', 'Unknown')
+            content_snippet = doc.get('content', '')[:100].replace('\n', ' ')
+            
+            # Check if this is page 7
+            is_page_7 = "(p.7)" in doc_name
+            marker = "🎯 **[TARGET PAGE]** " if is_page_7 else ""
+            
+            st.markdown(f"{i}. {marker}{doc_name}")
+            
+            # Detailed view for page 7
+            if is_page_7:
+                with st.expander("📄 7페이지 상세 내용"):
+                    st.markdown(f"**Content Preview:**")
+                    st.text_area("", doc.get('content', '')[:1000], height=200, key=f"p7_content_{i}")
+    else:
+        st.warning("Stage 1에서 결과를 찾지 못했습니다.")
+    
+    # Stage 2 simulation
+    st.markdown("---")
+    st.subheader("📍 Stage 2: 쿼리 확장 검색 (참고용)")
+    
+    THRESHOLD = 20
+    if len(stage1_results) >= THRESHOLD:
+        st.info(f"ℹ️ Stage 1에서 {len(stage1_results)}개 결과를 찾았으므로 Stage 2는 **실행되지 않습니다** (threshold: {THRESHOLD})")
+    else:
+        st.warning(f"⚠️ Stage 1에서 {len(stage1_results)}개만 찾았으므로 Stage 2 쿼리 확장이 필요합니다.")
+        
+        # Simulate query expansion
+        expanded_query = f"{test_query} PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE DRAWING"
+        st.code(f"Expanded Query: '{expanded_query}'")
+        
+        with st.spinner("Stage 2 검색 중..."):
+            stage2_results = search_manager.search(
+                expanded_query,
+                filter_expr=filter_expr,
+                search_mode="any",
+                top=50
+            )
+        
+        st.success(f"✅ Stage 2 추가 결과: {len(stage2_results)}개")
+
+st.markdown("---")
+st.markdown("---")
+
+# ========================================
 # 사용자 정의 검색 입력
 # ========================================
 st.header("📝 사용자 지정 검색")
