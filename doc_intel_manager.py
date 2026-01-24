@@ -1,7 +1,7 @@
 import os
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.documentintelligence import DocumentIntelligenceClient
-from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, ContentFormat
+from azure.ai.documentintelligence.models import ContentFormat
 
 class DocumentIntelligenceManager:
     def __init__(self, endpoint, key):
@@ -35,9 +35,10 @@ class DocumentIntelligenceManager:
             
             print(f"DEBUG: Starting DI analysis for {document_url} (Range: {page_range}, HighRes: {high_res})")
             
+            # Use dictionary for body to avoid ImportError with AnalyzeDocumentRequest
             poller = self.client.begin_analyze_document(
                 "prebuilt-layout",
-                AnalyzeDocumentRequest(url_source=document_url),
+                analyze_request={"urlSource": document_url},
                 pages=page_range,
                 output_content_format=ContentFormat.MARKDOWN,
                 features=features
