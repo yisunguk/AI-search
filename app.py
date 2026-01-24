@@ -1775,8 +1775,14 @@ elif menu == "디버그 (Debug)":
                 select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content"],
                 top=100
             )
-            # Filter client-side to ensure we only get the target file
-            results = [doc for doc in results if doc['metadata_storage_name'] == filename]
+            # Filter client-side to ensure we get the file AND its chunks
+            # Allow exact match OR "filename (p.N)" format
+            import unicodedata
+            norm_filename = unicodedata.normalize('NFC', filename)
+            results = [
+                doc for doc in results 
+                if unicodedata.normalize('NFC', doc['metadata_storage_name']).startswith(norm_filename)
+            ]
         
         st.write(f"Found **{len(results)}** documents in index.")
         
