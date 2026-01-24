@@ -695,6 +695,43 @@ Convert the user's natural language question into a keyword-based search query.
                 if explicit_keys:
                     print(f"DEBUG: Prioritized explicit page {explicit_page}, found {len(explicit_keys)} matching pages")
             
+            # CRITICAL FIX: If query is LIST-related, prioritize actual LIST pages
+            # This ensures P&ID List pages appear FIRST in the context, not buried in the middle
+            query_upper = user_message.upper()
+            is_list_query = any(keyword in query_upper for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록", "비교", "COMPARE"])
+            
+            if is_list_query:
+                print(f"DEBUG: LIST-related query detected. Prioritizing LIST pages...")
+                list_page_keys = []
+                other_keys = []
+                
+                for key in sorted_keys:
+                    is_list_page = False
+                    for chunk in grouped_context[key]:
+                        chunk_upper = chunk.upper()
+                        # Check if this page actually contains list content
+                        if any(kw in chunk_upper for kw in ["DRAWING LIST", "PIPING INSTRUMENT DIAGRAM LIST", "P&ID LIST", "도면 목록"]):
+                            # Also verify it has table-like structure (multiple entries)
+                            if any(table_kw in chunk_upper for table_kw in ["DWG", "DRAWING NO", "도면번호", "FOR LIST"]):
+                                is_list_page = True
+                                break
+                    
+                    if is_list_page:
+                        list_page_keys.append(key)
+                    else:
+                        other_keys.append(key)
+                
+                # Put LIST pages at the very top
+                sorted_keys = list_page_keys + other_keys
+                if list_page_keys:
+                    print(f"DEBUG: ✅ Moved {len(list_page_keys)} LIST pages to the TOP of context")
+                    for idx, key in enumerate(list_page_keys[:5], 1):
+                        filename, page = key
+                        print(f"   {idx}. {filename} p.{page} (Rank: {page_ranks[key]})")
+                else:
+                    print(f"DEBUG: ⚠️ No LIST pages found despite LIST query. This may indicate indexing/OCR issue.")
+
+            
             # DEBUG: Log top 30 pages with their ranks to see if page 7 is included
             print(f"\n{'='*60}")
             print(f"DEBUG: Page Ranking (showing top 30 out of {len(sorted_keys)} total pages)")
