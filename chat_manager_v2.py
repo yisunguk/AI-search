@@ -702,11 +702,13 @@ Convert the user's natural language question into a keyword-based search query.
             
             if is_list_query:
                 print(f"DEBUG: LIST-related query detected. Prioritizing LIST pages...")
-                list_page_keys = []
+                list_page_data = []  # Store (key, priority_score)
                 other_keys = []
                 
                 for key in sorted_keys:
                     is_list_page = False
+                    priority_score = 0
+                    
                     for chunk in grouped_context[key]:
                         chunk_upper = chunk.upper()
                         # Check if this page actually contains list content
@@ -714,20 +716,35 @@ Convert the user's natural language question into a keyword-based search query.
                             # Also verify it has table-like structure (multiple entries)
                             if any(table_kw in chunk_upper for table_kw in ["DWG", "DRAWING NO", "도면번호", "FOR LIST"]):
                                 is_list_page = True
+                                
+                                # PRIORITY SCORING: Rank comprehensive lists higher
+                                # 1. "PIPING AND INSTRUMENT DIAGRAM" = main P&ID list (highest priority)
+                                if "PIPING AND INSTRUMENT DIAGRAM" in chunk_upper or "PIPING INSTRUMENT DIAGRAM" in chunk_upper:
+                                    priority_score += 1000
+                                
+                                # 2. Earlier page numbers are typically more comprehensive
+                                # (e.g., p.7 is likely the main list, p.51 might be a sub-list)
+                                page_num = key[1]
+                                priority_score += (1000 - page_num)  # Lower page number = higher priority
+                                
                                 break
                     
                     if is_list_page:
-                        list_page_keys.append(key)
+                        list_page_data.append((key, priority_score))
                     else:
                         other_keys.append(key)
+                
+                # Sort LIST pages by priority (highest first)
+                list_page_data.sort(key=lambda x: x[1], reverse=True)
+                list_page_keys = [key for key, _ in list_page_data]
                 
                 # Put LIST pages at the very top
                 sorted_keys = list_page_keys + other_keys
                 if list_page_keys:
-                    print(f"DEBUG: ✅ Moved {len(list_page_keys)} LIST pages to the TOP of context")
-                    for idx, key in enumerate(list_page_keys[:5], 1):
+                    print(f"DEBUG: ✅ Moved {len(list_page_keys)} LIST pages to the TOP of context (sorted by priority)")
+                    for idx, (key, score) in enumerate(list_page_data[:5], 1):
                         filename, page = key
-                        print(f"   {idx}. {filename} p.{page} (Rank: {page_ranks[key]})")
+                        print(f"   {idx}. {filename} p.{page} (Priority: {score}, Rank: {page_ranks[key]})")
                 else:
                     print(f"DEBUG: ⚠️ No LIST pages found despite LIST query. This may indicate indexing/OCR issue.")
 
