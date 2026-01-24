@@ -2618,6 +2618,94 @@ if menu == "관리자 설정":
             with st.expander("⚠️ 경고 로그 확인"):
                 for warn in warnings:
                     st.warning(f"- {warn}")
+    
+    st.divider()
+    
+    # ------------------------------------------------------------------
+    # 🔍 디버그 툴 - Index Content Peek
+    # ------------------------------------------------------------------
+    st.subheader("🔍 디버그 툴")
+    st.markdown("인덱스에 저장된 문서를 확인하여 스키마 필드가 올바르게 채워졌는지 검증합니다.")
+    
+    with st.expander("Index Content Peek", expanded=False):
+        st.markdown("인덱스에서 최근 문서를 가져와 필드 값을 확인합니다.")
+        
+        # 프로젝트 필터 옵션
+        filter_project = st.text_input(
+            "프로젝트 필터 (선택사항)", 
+            value="drawings_analysis",
+            help="특정 프로젝트의 문서만 조회 (비워두면 모든 문서)"
+        )
+        
+        peek_limit = st.slider("조회할 문서 수", min_value=1, max_value=20, value=5)
+        
+        if st.button("📄 Peek Index", key="peek_index_btn"):
+            with st.spinner("인덱스 조회 중..."):
+                try:
+                    manager = get_search_manager()
+                    
+                    # Search with filter
+                    if filter_project:
+                        results = manager.search_client.search(
+                            search_text="*",
+                            filter=f"project eq '{filter_project}'",
+                            top=peek_limit,
+                            select=["id", "content", "title", "drawing_no", "page_number", "filename", "metadata_storage_name", "project"]
+                        )
+                    else:
+                        results = manager.search_client.search(
+                            search_text="*",
+                            top=peek_limit,
+                            select=["id", "content", "title", "drawing_no", "page_number", "filename", "metadata_storage_name", "project"]
+                        )
+                    
+                    docs = list(results)
+                    
+                    if not docs:
+                        st.warning("인덱스에 문서가 없습니다.")
+                    else:
+                        st.success(f"총 {len(docs)}개 문서를 찾았습니다.")
+                        
+                        for i, doc in enumerate(docs):
+                            with st.expander(f"📄 Document {i+1}: {doc.get('filename', 'N/A')} - Page {doc.get('page_number', 'N/A')}", expanded=(i==0)):
+                                # 중요 필드 하이라이트
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown("**핵심 메타데이터:**")
+                                    st.json({
+                                        "title": doc.get("title"),
+                                        "drawing_no": doc.get("drawing_no"),
+                                        "page_number": doc.get("page_number"),
+                                        "filename": doc.get("filename"),
+                                        "project": doc.get("project")
+                                    })
+                                
+                                with col2:
+                                    st.markdown("**필드 상태 검증:**")
+                                    title_status = "✅" if doc.get("title") else "❌"
+                                    drawing_status = "✅" if doc.get("drawing_no") else "❌"
+                                    page_status = "✅" if doc.get("page_number") is not None else "❌"
+                                    
+                                    st.markdown(f"""
+                                    - `title`: {title_status} {doc.get("title") or "NULL"}
+                                    - `drawing_no`: {drawing_status} {doc.get("drawing_no") or "NULL"}
+                                    - `page_number`: {page_status} {doc.get("page_number") if doc.get("page_number") is not None else "NULL"}
+                                    """)
+                                
+                                # Content preview
+                                st.markdown("**Content Preview (처음 500자):**")
+                                content_preview = doc.get("content", "")[:500]
+                                st.text_area("", content_preview, height=150, key=f"content_{i}", disabled=True)
+                                
+                                # Full JSON
+                                with st.expander("전체 JSON 보기"):
+                                    st.json(dict(doc))
+                
+                except Exception as e:
+                    st.error(f"인덱스 조회 실패: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
 
 if menu == "사용자 설정":
     from modules.user_settings_module import render_user_settings
