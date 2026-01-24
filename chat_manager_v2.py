@@ -306,7 +306,9 @@ Convert the user's natural language question into a keyword-based search query.
                      import re
                      escaped_f = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_f)
                      # Use search.ismatch for exact filename matching (more reliable for SearchableFields)
-                     conditions.append(f"search.ismatch('\"{escaped_f}\"', 'metadata_storage_name')")
+                     # CRITICAL FIX: Remove double quotes to allow looser matching (like Debug Tool)
+                     # Double quotes enforce strict phrase match which might fail with special chars/tokenization
+                     conditions.append(f"search.ismatch('{escaped_f}', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
