@@ -1643,7 +1643,7 @@ elif menu == "디버그 (Debug)":
             results = search_manager.search_client.search(
                 search_text="*",
                 filter=f"metadata_storage_name eq '{safe_filename}'",
-                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "page_number", "content"],
+                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content"],
                 top=50
             )
             results = list(results)
@@ -1654,7 +1654,7 @@ elif menu == "디버그 (Debug)":
             results = search_manager.search_client.search(
                 search_text=f"\"{filename}\"",
                 search_mode="all",
-                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "page_number", "content"],
+                select=["id", "metadata_storage_name", "metadata_storage_path", "project", "content"],
                 top=100
             )
             # Filter client-side to ensure we only get the target file
