@@ -1064,8 +1064,7 @@ elif menu == "도면/스펙 비교":
                                 "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
                                 "metadata_storage_size": file.size,
                                 "metadata_storage_content_type": file.type,
-                                "project": "drawings_analysis",  # Tag for filtering
-                                "filename": safe_filename
+                                "project": "drawings_analysis"  # Tag for filtering
                             }
                             documents_to_index.append(document)
                         
@@ -1410,8 +1409,7 @@ elif menu == "도면/스펙 비교":
                                                     "metadata_storage_last_modified": datetime.utcnow().isoformat() + "Z",
                                                     "metadata_storage_size": blob_info['size'],
                                                     "metadata_storage_content_type": "application/pdf",
-                                                    "project": "drawings_analysis",
-                                                    "filename": safe_filename
+                                                    "project": "drawings_analysis"
                                                 }
                                                 documents_to_index.append(document)
                                             
