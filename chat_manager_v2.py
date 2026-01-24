@@ -342,16 +342,75 @@ Convert the user's natural language question into a keyword-based search query.
             # For "도면/스펙 비교" tab, we usually want EXACTLY these files.
             # But let's combine to allow for keyword-based ranking within the files.
             
-            # 2. Query Rewriting
-            search_query = self._rewrite_query(user_message)
+            # 2. TWO-STAGE SEARCH STRATEGY for better precision
+            # Stage 1: Exact phrase search (high precision)
+            # Stage 2: Expanded query (high recall, only if needed)
             
-            # 3. Search
-            search_results = self.search_manager.search(
-                search_query, 
+            print(f"DEBUG: ===== TWO-STAGE SEARCH STARTING =====")
+            print(f"DEBUG: User query: '{user_message}'")
+            
+            search_results = []
+            exact_match_count = 0
+            
+            # Stage 1: Search with user's EXACT query (no expansion)
+            print(f"DEBUG: [Stage 1] Exact phrase search...")
+            exact_results = self.search_manager.search(
+                user_message,  # Use original query, NO rewriting
                 filter_expr=final_filter,
                 use_semantic_ranker=use_semantic_ranker,
-                search_mode=search_mode
+                search_mode="any",  # At least one keyword must match
+                top=50  # Get enough to find exact matches
             )
+            
+            if exact_results:
+                exact_match_count = len(exact_results)
+                search_results.extend(exact_results)
+                print(f"DEBUG: [Stage 1] Found {exact_match_count} exact match results")
+                print(f"DEBUG: [Stage 1] Top 5 results:")
+                for i, res in enumerate(exact_results[:5], 1):
+                    print(f"  {i}. {res.get('metadata_storage_name', 'Unknown')}")
+            else:
+                print(f"DEBUG: [Stage 1] No exact matches found")
+            
+            # Stage 2: Query expansion (only if Stage 1 didn't find enough)
+            EXACT_MATCH_THRESHOLD = 20  # If we have this many exact matches, skip expansion
+            
+            if exact_match_count < EXACT_MATCH_THRESHOLD:
+                print(f"DEBUG: [Stage 2] Expanding query (only {exact_match_count} exact matches)...")
+                search_query = self._rewrite_query(user_message)
+                print(f"DEBUG: [Stage 2] Expanded query: '{search_query}'")
+                
+                expanded_results = self.search_manager.search(
+                    search_query,
+                    filter_expr=final_filter,
+                    use_semantic_ranker=use_semantic_ranker,
+                    search_mode=search_mode
+                )
+                
+                if expanded_results:
+                    print(f"DEBUG: [Stage 2] Found {len(expanded_results)} additional results")
+                    search_results.extend(expanded_results)
+                else:
+                    print(f"DEBUG: [Stage 2] No additional results from expansion")
+            else:
+                print(f"DEBUG: [Stage 2] SKIPPED - exact search found {exact_match_count} results (>= {EXACT_MATCH_THRESHOLD})")
+            
+            # Deduplication (preserve order = exact matches stay at top)
+            seen_ids = set()
+            deduped_results = []
+            for result in search_results:
+                # Create unique ID from name + content snippet
+                result_id = (
+                    result.get('metadata_storage_name', '') + 
+                    str(result.get('content', '')[:50])
+                )
+                if result_id not in seen_ids:
+                    seen_ids.add(result_id)
+                    deduped_results.append(result)
+            
+            search_results = deduped_results
+            print(f"DEBUG: After deduplication: {len(search_results)} unique results")
+            print(f"DEBUG: ===== TWO-STAGE SEARCH COMPLETE =====\n")
             
             # Combine with direct results (avoid duplicates)
             if direct_results:
