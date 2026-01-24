@@ -241,7 +241,8 @@ Convert the user's natural language question into a keyword-based search query.
             for chunk in data:
                 # Construct a path that preserves the folder structure for citation
                 # If user_folder is provided, use it. Otherwise assume root or handle gracefully.
-                folder_prefix = f"{user_folder}/" if user_folder else ""
+                # NOTE: Files are stored in 'drawings/' subdirectory
+                folder_prefix = f"{user_folder}/drawings/" if user_folder else "drawings/"
                 
                 results.append({
                     'metadata_storage_name': f"{filename} (p.{chunk.get('page_number', 1)})",
