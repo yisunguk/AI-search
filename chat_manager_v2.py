@@ -596,7 +596,11 @@ Convert the user's natural language question into a keyword-based search query.
                     grouped_context[key] = []
                     
                     # Clean up path for citation
-                    blob_path = filename # Default fallback
+                    # Default fallback with correct folder structure
+                    if user_folder:
+                        blob_path = f"{user_folder}/drawings/{filename}"
+                    else:
+                        blob_path = f"drawings/{filename}"
                     
                     # Debug path extraction
                     # print(f"DEBUG: Extracting blob path from: {path} (Container: {self.container_name})")
@@ -823,8 +827,8 @@ USER QUESTION:
                         return cit
                         
                     # 3. Prefix match (for truncated text like "Fuel Gas Coalescing...")
-                    # Remove "..." if present
-                    clean_fname = fname_text_lower.replace("...", "").strip()
+                    # Remove "..." and "…" if present
+                    clean_fname = fname_text_lower.replace("...", "").replace("…", "").strip()
                     if len(clean_fname) > 5 and basename.startswith(clean_fname):
                         return cit
                         
@@ -839,7 +843,8 @@ USER QUESTION:
 
         # Regex to find patterns like (Filename: p.1)
         # We look for: ( [anything not )] : p. [digits] )
-        pattern = r'\(([^):]+):\s*p\.(\d+)\)'
+        # Added handling for spaces after p. and unicode ellipsis
+        pattern = r'\(([^):]+):\s*p\.\s*(\d+)\)'
         
         def replace_match(match):
             full_match = match.group(0)
