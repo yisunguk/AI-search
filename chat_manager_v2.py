@@ -887,7 +887,9 @@ USER QUESTION:
                 blob_name=blob_name,
                 account_key=blob_service_client.credential.account_key,
                 permission=BlobSasPermissions(read=True),
-                expiry=datetime.utcnow() + timedelta(hours=1)
+                expiry=datetime.utcnow() + timedelta(hours=1),
+                content_disposition="inline",
+                content_type="application/pdf"
             )
             
             # CRITICAL FIX: URL encode the blob name to handle Korean characters and spaces
