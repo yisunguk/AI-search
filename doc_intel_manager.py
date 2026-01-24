@@ -35,9 +35,10 @@ class DocumentIntelligenceManager:
             print(f"DEBUG: Starting DI analysis for {document_url} (Range: {page_range}, HighRes: {high_res})")
             
             # Use dictionary for body to avoid ImportError with AnalyzeDocumentRequest
+            # Pass as positional argument to avoid TypeError
             poller = self.client.begin_analyze_document(
                 "prebuilt-layout",
-                analyze_request={"urlSource": document_url},
+                {"urlSource": document_url},
                 pages=page_range,
                 output_content_format="markdown",
                 features=features
