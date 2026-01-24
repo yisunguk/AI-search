@@ -776,18 +776,92 @@ USER QUESTION:
                 elif not response_text or not response_text.strip():
                     print(f"DEBUG: Empty response. Finish reason: {finish_reason}")
                     response_text = f"죄송합니다. 답변을 생성하지 못했습니다. (응답 없음, 사유: {finish_reason})"
-
             except Exception as e:
                 print(f"DEBUG: LLM call failed: {e}")
                 return f"LLM 호출 중 오류가 발생했습니다: {str(e)}\n\n(컨텍스트 길이: {len(context)} 자)", citations, context, final_filter, search_results
+
+            # 8. Post-process: Linkify Citations in Text
+            response_text = self._linkify_citations(response_text, citations)
 
             return response_text, citations, context, final_filter, search_results
 
         except Exception as e:
             print(f"Error in get_chat_response: {e}")
             return f"오류가 발생했습니다: {str(e)}", [], "", None, []
-    
-    def generate_sas_url(self, blob_name):
+
+    def _linkify_citations(self, text, citations):
+        """
+        Convert text citations like '(Filename: p.1)' into Markdown links.
+        """
+        if not text or not citations:
+            return text
+            
+        import re
+        
+        # Helper to find citation
+        def find_citation(fname_text, page_text):
+            try:
+                page_num = int(page_text)
+                fname_text_lower = fname_text.lower().strip()
+                
+                for cit in citations:
+                    # Check page match first
+                    if cit.get('page') != page_num:
+                        continue
+                        
+                    # Check filename match
+                    # cit['filepath'] is usually "drawings/filename.pdf" or "filename.pdf"
+                    filepath = cit.get('filepath', '')
+                    basename = filepath.split('/')[-1].lower()
+                    
+                    # 1. Exact basename match
+                    if fname_text_lower == basename:
+                        return cit
+                    
+                    # 2. Match without extension
+                    if fname_text_lower == os.path.splitext(basename)[0]:
+                        return cit
+                        
+                    # 3. Prefix match (for truncated text like "Fuel Gas Coalescing...")
+                    # Remove "..." if present
+                    clean_fname = fname_text_lower.replace("...", "").strip()
+                    if len(clean_fname) > 5 and basename.startswith(clean_fname):
+                        return cit
+                        
+                    # 4. Title match (if LLM used title)
+                    title = cit.get('title', '').lower()
+                    if title and (fname_text_lower in title or title in fname_text_lower):
+                        return cit
+                        
+            except:
+                pass
+            return None
+
+        # Regex to find patterns like (Filename: p.1)
+        # We look for: ( [anything not )] : p. [digits] )
+        pattern = r'\(([^):]+):\s*p\.(\d+)\)'
+        
+        def replace_match(match):
+            full_match = match.group(0)
+            fname_text = match.group(1)
+            page_text = match.group(2)
+            
+            cit = find_citation(fname_text, page_text)
+            if cit:
+                # Generate SAS URL
+                filepath = cit.get('filepath')
+                if filepath:
+                    url = self.generate_blob_sas(filepath)
+                    if url:
+                        # Append page fragment
+                        url += f"#page={page_text}"
+                        return f"[{full_match}]({url})"
+            
+            return full_match
+
+        return re.sub(pattern, replace_match, text)
+
+    def generate_blob_sas(self, blob_name):
         """
         Generate SAS URL for blob document
         """
