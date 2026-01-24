@@ -22,6 +22,7 @@ class AzureOpenAIChatManager:
         self.container_name = container_name
         
         
+        
     def generate_sas_url(self, blob_name):
         """
         Generate a SAS URL for a specific blob
