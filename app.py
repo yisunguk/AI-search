@@ -1065,7 +1065,6 @@ elif menu == "도면/스펙 비교":
                                 "metadata_storage_size": file.size,
                                 "metadata_storage_content_type": file.type,
                                 "project": "drawings_analysis",  # Tag for filtering
-                                "page_number": page_chunk['page_number'],
                                 "filename": safe_filename
                             }
                             documents_to_index.append(document)
@@ -1412,7 +1411,6 @@ elif menu == "도면/스펙 비교":
                                                     "metadata_storage_size": blob_info['size'],
                                                     "metadata_storage_content_type": "application/pdf",
                                                     "project": "drawings_analysis",
-                                                    "page_number": page_chunk['page_number'],
                                                     "filename": safe_filename
                                                 }
                                                 documents_to_index.append(document)
