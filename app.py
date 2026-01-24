@@ -1530,8 +1530,20 @@ elif menu == "도면/스펙 비교":
                                     try:
                                         # Extract blob path from metadata_storage_path
                                         from urllib.parse import unquote
-                                        blob_path_part = res_path.split(f"/{CONTAINER_NAME}/")[1].split('#')[0]
-                                        blob_path_part = unquote(blob_path_part)
+                                        
+                                        if "https://direct_fetch/" in res_path:
+                                            # Handle custom direct fetch scheme
+                                            path_without_scheme = res_path.replace("https://direct_fetch/", "")
+                                            blob_path_part = path_without_scheme.split('#')[0]
+                                            blob_path_part = unquote(blob_path_part)
+                                        elif CONTAINER_NAME in res_path:
+                                            # Handle standard Azure Blob URL
+                                            blob_path_part = res_path.split(f"/{CONTAINER_NAME}/")[1].split('#')[0]
+                                            blob_path_part = unquote(blob_path_part)
+                                        else:
+                                            # Fallback or relative path
+                                            blob_path_part = res_path
+                                            
                                         sas_url = chat_manager.generate_sas_url(blob_path_part)
                                     except:
                                         sas_url = "#"

@@ -224,10 +224,15 @@ Convert the user's natural language question into a keyword-based search query.
             # Convert JSON chunks to search-result-like objects
             results = []
             for chunk in data:
+                # Construct a path that preserves the folder structure for citation
+                # If user_folder is provided, use it. Otherwise assume root or handle gracefully.
+                folder_prefix = f"{user_folder}/" if user_folder else ""
+                
                 results.append({
                     'metadata_storage_name': f"{filename} (p.{chunk.get('page_number', 1)})",
                     'content': chunk.get('content', ''),
-                    'metadata_storage_path': f"https://direct_fetch/{filename}#page={chunk.get('page_number', 1)}",
+                    # Use a custom scheme to pass the full path info
+                    'metadata_storage_path': f"https://direct_fetch/{folder_prefix}{filename}#page={chunk.get('page_number', 1)}",
                     'project': 'drawings_analysis'
                 })
             
@@ -508,6 +513,8 @@ Convert the user's natural language question into a keyword-based search query.
                 
                 # CRITICAL: If page is still None, this is a "rogue" document (whole file indexed without page splitting).
                 # We default to Page 1 to ensure we don't miss data.
+                # CRITICAL: If page is still None, this is a "rogue" document (whole file indexed without page splitting).
+                # We default to Page 1 to ensure we don't miss data.
                 if page is None:
                     print(f"DEBUG: Rogue document found (no page number), defaulting to Page 1: {filename}")
                     page = 1
@@ -518,10 +525,20 @@ Convert the user's natural language question into a keyword-based search query.
                 # BOOST ranking for pages with "LIST", "INDEX", "TABLE" keywords
                 boost = 0
                 content_upper = content.upper()
-                if any(keyword in content_upper for keyword in ["PIPING AND INSTRUMENT DIAGRAM", "P&I DIAGRAM", "P & I DIAGRAM"]):
-                    if any(list_keyword in content_upper for list_keyword in ["LIST", "INDEX", "TABLE OF CONTENTS"]):
-                        boost = -100  # Strong boost for list pages
-                        print(f"DEBUG: BOOSTING page {key} (contains LIST/INDEX)")
+                
+                # Enhanced Boosting Logic
+                is_list_page = False
+                if any(keyword in content_upper for keyword in ["PIPING AND INSTRUMENT DIAGRAM", "P&I DIAGRAM", "P & I DIAGRAM", "DRAWING LIST", "도면 목록", "도면 리스트"]):
+                    if any(list_keyword in content_upper for list_keyword in ["LIST", "INDEX", "TABLE OF CONTENTS", "목록", "리스트"]):
+                        is_list_page = True
+                
+                # Direct check for "DRAWING LIST" in content which is a strong signal
+                if "DRAWING LIST" in content_upper or "도면 목록" in content_upper:
+                    is_list_page = True
+
+                if is_list_page:
+                    boost = -200  # Stronger boost for list pages
+                    print(f"DEBUG: BOOSTING page {key} (contains LIST/INDEX/TABLE) - Rank adjustment: {boost}")
                 
                 adjusted_rank = rank + boost
                 if key not in page_ranks:
@@ -533,14 +550,35 @@ Convert the user's natural language question into a keyword-based search query.
                     grouped_context[key] = []
                     
                     # Clean up path for citation
-                    blob_path = filename
-                    if path and self.container_name in path:
-                        try:
-                            parts = path.split(f"/{self.container_name}/")
-                            if len(parts) > 1:
-                                blob_path = parts[1].split('#')[0]
-                                blob_path = unquote(blob_path)
-                        except: pass
+                    blob_path = filename # Default fallback
+                    
+                    # Debug path extraction
+                    # print(f"DEBUG: Extracting blob path from: {path} (Container: {self.container_name})")
+                    
+                    if path:
+                        # Case 1: Direct Fetch (Custom Scheme)
+                        if path.startswith("https://direct_fetch/"):
+                            # Format: https://direct_fetch/{user_folder}/{filename}#page=...
+                            try:
+                                path_without_scheme = path.replace("https://direct_fetch/", "")
+                                path_clean = path_without_scheme.split('#')[0]
+                                blob_path = unquote(path_clean)
+                            except Exception as e:
+                                print(f"DEBUG: Error parsing direct fetch path: {e}")
+                        
+                        # Case 2: Azure Blob URL
+                        elif self.container_name in path:
+                            try:
+                                parts = path.split(f"/{self.container_name}/")
+                                if len(parts) > 1:
+                                    blob_path = parts[1].split('#')[0]
+                                    blob_path = unquote(blob_path)
+                            except Exception as e:
+                                print(f"DEBUG: Error parsing blob path: {e}")
+                        
+                        # Case 3: Path is already relative (rare but possible)
+                        elif not path.startswith("http"):
+                             blob_path = path
                         
                     citations_map[key] = {
                         'filepath': blob_path,
