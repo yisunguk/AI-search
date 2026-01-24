@@ -2382,6 +2382,38 @@ if menu == "관리자 설정":
     
     st.info("💡 **폴더별 인덱싱**: 각 폴더는 독립적으로 인덱싱됩니다. 다른 폴더의 데이터에 영향을 주지 않습니다.")
     
+    # ------------------------------------------------------------------
+    # 인덱스 스키마 업데이트 버튼
+    # ------------------------------------------------------------------
+    st.subheader("📝 인덱스 스키마 업데이트")
+    st.markdown("""
+    도면 메타데이터 필드(`title`, `drawing_no`)를 인덱스에 추가합니다.
+    - 기존 데이터는 유지됩니다
+    - 새 필드를 활용하려면 파일을 재분석하거나 새로 업로드하세요
+    """)
+    
+    if st.button("🔄 인덱스 스키마 재생성"):
+        with st.spinner("인덱스 스키마 업데이트 중..."):
+            manager = get_search_manager()
+            success, msg = manager.create_index()
+            
+            if success:
+                st.success(f"✅ {msg}")
+                st.info("""
+                **다음 단계:**
+                1. 아래 '🔍 디버그 툴'에서 인덱스를 확인하세요
+                2. 기존 파일의 `🔄` 버튼을 클릭해 재분석하거나
+                3. 새 파일을 업로드하세요
+                
+                **새로 추가된 필드:**
+                - `title` (도면명)
+                - `drawing_no` (도면번호)
+                """)
+            else:
+                st.error(f"❌ 스키마 업데이트 실패: {msg}")
+    
+    st.divider()
+    
     confirm_reset = st.checkbox("위 폴더를 인덱싱 대상으로 설정하고 싶습니다.", key="confirm_reset")
     
     if st.button("🚀 폴더 인덱싱 설정 (Data Source, Indexer)", disabled=not confirm_reset):
