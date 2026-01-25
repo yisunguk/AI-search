@@ -83,11 +83,6 @@ def render_login_page(auth_manager: AuthManager, cookie_manager):
     _, col_center, _ = st.columns([1, 1.5, 1])
     
     with col_center:
-        st.markdown("""
-        <div style="background-color: #f8f9fa; padding: 2rem; border-radius: 15px; border: 1px solid #e9ecef; box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-bottom: 2rem;">
-            <h2 style="text-align: center; margin-top: 0; margin-bottom: 1.5rem; font-weight: 600; color: #333;">로그인</h2>
-        """, unsafe_allow_html=True)
-        
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("이메일", placeholder="example@email.com")
             password = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
@@ -117,26 +112,9 @@ def render_login_page(auth_manager: AuthManager, cookie_manager):
                             st.error(message)
         
         st.markdown("""
-        </div>
-        <p style="text-align: center; color: #6c757d; font-size: 0.9rem;">
+        <p style="text-align: center; color: #6c757d; font-size: 0.9rem; margin-top: 1rem;">
             ℹ️ 계정 생성 및 비밀번호 초기화는 관리자에게 문의하세요.
         </p>
         """, unsafe_allow_html=True)
-        
-        # Debug info in expander
-        with st.expander("🛠️ 시스템 디버그 정보", expanded=False):
-            user_count = len(auth_manager.users)
-            if user_count == 0:
-                st.error("⚠️ 사용자 정보가 로드되지 않았습니다. Secrets 설정을 확인하세요.")
-                try:
-                    st.write("Available Secret Keys:", list(st.secrets.keys()))
-                except:
-                    st.write("Secrets access failed")
-            else:
-                st.caption(f"Debug: {user_count} users loaded from secrets.")
-                try:
-                    emails = [str(u.get('email', 'No Email')) for u in auth_manager.users.values()]
-                    st.code(f"Loaded Emails: {emails}")
-                except Exception as e:
-                    st.caption(f"Error displaying emails: {e}")
+
 
