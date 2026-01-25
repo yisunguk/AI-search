@@ -232,6 +232,62 @@ def delete_progress(safe_filename):
     except Exception as e:
         print(f"Error deleting progress file: {e}")
 
+# File Persistence for Resume
+FILES_DIR = os.path.join(TEMP_DIR, "files")
+if not os.path.exists(FILES_DIR):
+    os.makedirs(FILES_DIR)
+
+def save_uploaded_file_temp(uploaded_file, safe_filename):
+    """Save uploaded file to temp dir for resume capability"""
+    try:
+        filepath = os.path.join(FILES_DIR, safe_filename)
+        with open(filepath, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        return filepath
+    except Exception as e:
+        print(f"Error saving temp file: {e}")
+        return None
+
+def get_temp_file_path(safe_filename):
+    return os.path.join(FILES_DIR, safe_filename)
+
+def delete_temp_file(safe_filename):
+    """Delete temp file after completion"""
+    try:
+        filepath = os.path.join(FILES_DIR, safe_filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"DEBUG: Temp file deleted for {safe_filename}")
+    except Exception as e:
+        print(f"Error deleting temp file: {e}")
+
+class LocalFile:
+    """Mock Streamlit UploadedFile for local files"""
+    def __init__(self, path, name, type="application/pdf"):
+        self.path = path
+        self.name = name
+        self.type = type
+        self.size = os.path.getsize(path)
+        self._file = open(path, "rb")
+
+    def read(self, size=-1):
+        return self._file.read(size)
+
+    def seek(self, offset, whence=0):
+        return self._file.seek(offset, whence)
+
+    def tell(self):
+        return self._file.tell()
+        
+    def getbuffer(self):
+        # Return bytes
+        self.seek(0)
+        return self.read()
+
+    def close(self):
+        self._file.close()
+
+
 
 # -----------------------------
 # UI 구성
@@ -1175,13 +1231,71 @@ elif menu == "도면/스펙 비교":
             # High Resolution OCR Toggle
             use_high_res = st.toggle("고해상도 OCR 적용 (도면 미세 글자 추출용)", value=False, help="복잡한 도면의 작은 글씨를 더 정확하게 읽습니다. 분석 시간이 더 오래 걸릴 수 있습니다.")
         
+            # High Resolution OCR Toggle
+            use_high_res = st.toggle("고해상도 OCR 적용 (도면 미세 글자 추출용)", value=False, help="복잡한 도면의 작은 글씨를 더 정확하게 읽습니다. 분석 시간이 더 오래 걸릴 수 있습니다.")
+        
+            # --- RESUME UI SECTION ---
+            # Check for interrupted sessions
+            import glob
+            resumable_files = []
+            if os.path.exists(FILES_DIR):
+                for filepath in glob.glob(os.path.join(FILES_DIR, "*")):
+                    filename = os.path.basename(filepath)
+                    # Check if progress exists
+                    if load_progress(filename):
+                        resumable_files.append(filename)
+            
+            files_to_process = []
+            
+            if resumable_files:
+                st.warning(f"⚠️ 중단된 분석 작업이 {len(resumable_files)}건 발견되었습니다.")
+                for r_file in resumable_files:
+                    progress = load_progress(r_file)
+                    processed = progress.get('processed_pages', 0)
+                    total = progress.get('total_pages', '?')
+                    last_updated = progress.get('last_updated', 'Unknown')
+                    
+                    # Format timestamp
+                    try:
+                        dt = datetime.fromisoformat(last_updated)
+                        time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        time_str = last_updated
+                    
+                    with st.expander(f"📄 {r_file} ({processed}/{total} 페이지 완료) - {time_str}", expanded=True):
+                        col_res1, col_res2 = st.columns(2)
+                        if col_res1.button(f"▶️ 이어서 분석하기 (Resume)", key=f"resume_{r_file}"):
+                            # Create mock file object
+                            local_path = get_temp_file_path(r_file)
+                            if os.path.exists(local_path):
+                                mock_file = LocalFile(local_path, r_file)
+                                files_to_process.append(mock_file)
+                                st.session_state.is_resuming = True
+                            else:
+                                st.error("원본 임시 파일을 찾을 수 없습니다.")
+                        
+                        if col_res2.button(f"🗑️ 취소 및 삭제 (Discard)", key=f"discard_{r_file}"):
+                            delete_progress(r_file)
+                            delete_temp_file(r_file)
+                            st.rerun()
+
             uploaded_files = st.file_uploader("PDF 도면, 스펙, 사양서 등을 업로드하세요", accept_multiple_files=True, type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'], key=f"drawing_{st.session_state.drawing_uploader_key}")
         
-            if uploaded_files:
+            if uploaded_files or files_to_process:
                 if "analysis_status" not in st.session_state:
                     st.session_state.analysis_status = {}
                 
-                if st.button("업로드 및 분석 시작"):
+                # If resuming, we skip the "Start" button check or auto-click it
+                start_analysis = False
+                if files_to_process:
+                    start_analysis = True
+                    target_files = files_to_process
+                elif uploaded_files:
+                    if st.button("업로드 및 분석 시작"):
+                        start_analysis = True
+                        target_files = uploaded_files
+                
+                if start_analysis:
                     blob_service_client = get_blob_service_client()
                     container_client = blob_service_client.get_container_client(CONTAINER_NAME)
                     doc_intel_manager = get_doc_intel_manager()
@@ -1190,13 +1304,17 @@ elif menu == "도면/스펙 비교":
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
-                    total_files = len(uploaded_files)
+                    total_files = len(target_files)
                     
-                    for idx, file in enumerate(uploaded_files):
+                    for idx, file in enumerate(target_files):
                         try:
                             # Normalize filename to NFC (to match search query logic)
                             import unicodedata
                             safe_filename = unicodedata.normalize('NFC', file.name)
+                            
+                            # Save to temp dir for resume capability (only if it's a fresh upload)
+                            if not isinstance(file, LocalFile):
+                                save_uploaded_file_temp(file, safe_filename)
                             
                             # Initialize status
                             st.session_state.analysis_status[safe_filename] = {
@@ -1370,6 +1488,7 @@ elif menu == "도면/스펙 비교":
                             # Success cleanup
                             if indexing_success:
                                 delete_progress(safe_filename)
+                                delete_temp_file(safe_filename)
                             
                             st.session_state.analysis_status[safe_filename]["status"] = "Ready"
                             progress_bar.progress((idx + 1) / total_files)
