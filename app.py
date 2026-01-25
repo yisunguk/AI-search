@@ -1587,7 +1587,7 @@ elif menu == "도면/스펙 비교":
                         for b in blob_list:
                             st.session_state[f"chk_{b['name']}"] = new_state
 
-                    select_all = st.checkbox("전체 선택", value=True, key="select_all_files", on_change=toggle_all)
+                    select_all = st.checkbox("전체 선택", value=False, key="select_all_files", on_change=toggle_all)
                 
                     # Display as expandable list
                     with st.expander("📄 문서 목록 및 선택", expanded=True):
@@ -1951,7 +1951,8 @@ elif menu == "도면/스펙 비교":
             st.divider()
         
             # DEBUG: Show selected files
-            st.write(f"DEBUG: Selected Files ({len(selected_filenames)}): {selected_filenames}")
+            if user_role == 'admin':
+                st.write(f"DEBUG: Selected Files ({len(selected_filenames)}): {selected_filenames}")
         
             # Chat Interface (Similar to main chat but focused)
             if "rag_chat_messages" not in st.session_state:
