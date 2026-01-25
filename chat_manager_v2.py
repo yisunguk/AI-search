@@ -619,17 +619,10 @@ Convert the user's natural language question into a keyword-based search query.
                     if final_filter:
                         file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
                     
-                    # 1. Fetch first 10 pages (likely to contain Index/TOC)
-                    print(f"DEBUG: Fetching first 10 pages for '{target_file}'...")
-                    index_pages = self.search_manager.search(
-                        "*",
-                        filter_expr=file_specific_filter,
-                        top=10,
-                        search_mode="all"
-                    )
-                    if index_pages:
-                        search_results.extend(index_pages)
-                        print(f"DEBUG: Added {len(index_pages)} initial pages for '{target_file}'")
+                    # 1. Fetch first 10 pages (likely to contain Index/TOC) - REMOVED
+                    # This was causing irrelevant pages (p.1-p.30) to flood the context even for specific queries.
+                    # We rely on the search engine to find the index if the user asks for it.
+                    pass
 
                     # 2. If query is list-related, specifically search for LIST pages
                     if any(keyword in search_query.upper() for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록", "비교", "COMPARE"]):
