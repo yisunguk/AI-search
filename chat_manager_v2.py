@@ -205,8 +205,7 @@ Convert the user's natural language question into a keyword-based search query.
                 temperature=0.1
             )
             rewritten = response.choices[0].message.content.strip()
-            print(f"DEBUG: Rewritten query: '{user_message}' -> '{rewritten}'")
-            return rewritten
+        except Exception as e:
             print(f"DEBUG: Query rewriting failed: {e}")
             return user_message
 
