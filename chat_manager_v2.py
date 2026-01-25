@@ -830,7 +830,8 @@ USER QUESTION:
             cited_pages = []
             import re
             # Find patterns like (Filename: p.N)
-            matches = re.findall(r'\(([^):]+):\s*p\.\s*(\d+)\)', response_text)
+            # Updated regex to allow parentheses in filenames (non-greedy match until : p.)
+            matches = re.findall(r'\((.*?):\s*p\.\s*(\d+)\)', response_text)
             for fname, pnum in matches:
                 cited_pages.append(int(pnum))
             
@@ -938,7 +939,8 @@ USER QUESTION:
             return None
 
         # Pattern 1: (Filename: p.1)
-        pattern1 = r'\(([^):]+):\s*p\.\s*(\d+)\)'
+        # Updated regex to allow parentheses in filenames (non-greedy match until : p.)
+        pattern1 = r'\((.*?):\s*p\.\s*(\d+)\)'
         
         def replace_match1(match):
             full_match = match.group(0)
