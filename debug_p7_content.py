@@ -1,53 +1,68 @@
-import streamlit as st
+import os
 from search_manager import AzureSearchManager
+import streamlit as st
 
-def debug_p7():
-    st.title("Debug Page 7 Content")
-    
-    # Load secrets
-    try:
-        AZURE_SEARCH_ENDPOINT = st.secrets["AZURE_SEARCH_ENDPOINT"]
-        AZURE_SEARCH_KEY = st.secrets["AZURE_SEARCH_KEY"]
-    except Exception as e:
-        st.error(f"Secrets load failed: {e}")
-        return
+# Mock secrets for local execution if needed, or rely on env vars
+# Assuming running in environment where secrets are available or can be loaded
+try:
+    AZURE_SEARCH_ENDPOINT = st.secrets["AZURE_SEARCH_ENDPOINT"]
+    AZURE_SEARCH_KEY = st.secrets["AZURE_SEARCH_KEY"]
+except:
+    # Fallback for local testing if secrets not in streamlit config
+    AZURE_SEARCH_ENDPOINT = os.environ.get("AZURE_SEARCH_ENDPOINT")
+    AZURE_SEARCH_KEY = os.environ.get("AZURE_SEARCH_KEY")
 
-    search_manager = AzureSearchManager(AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY)
+if not AZURE_SEARCH_ENDPOINT or not AZURE_SEARCH_KEY:
+    print("Error: Azure Search credentials not found.")
+    exit(1)
+
+search_manager = AzureSearchManager(AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY)
+
+filename = "제4권 도면(청주).pdf"
+print(f"Searching for Page 7 of {filename}...")
+
+# 1. Fetch Page 7 specifically
+results = search_manager.search(
+    "*",
+    filter_expr=f"search.ismatch('{filename}', 'metadata_storage_name')",
+    top=200
+)
+
+page_7_doc = None
+for doc in results:
+    if "(p.7)" in doc['metadata_storage_name']:
+        page_7_doc = doc
+        break
+
+if page_7_doc:
+    print(f"\n✅ Found Page 7: {page_7_doc['metadata_storage_name']}")
+    print("-" * 50)
+    print(f"CONTENT PREVIEW (First 500 chars):\n")
+    print(page_7_doc['content'][:500])
+    print("-" * 50)
     
-    # Target file and page
-    filename = "제4권 도면(청주).pdf"
-    page_suffix = "(p.7)"
-    
-    st.write(f"Searching for {filename} {page_suffix}...")
-    print(f"Searching for {filename} {page_suffix}...")
-    
-    results = search_manager.search(
-        "*",
-        filter_expr=f"startswith(metadata_storage_name, '{filename}')",
-        top=50
-    )
-    
-    found = False
-    for doc in results:
-        name = doc['metadata_storage_name']
-        if page_suffix in name:
-            st.success(f"[FOUND] {name}")
-            print(f"[FOUND] {name}")
-            st.text_area("Content", doc['content'], height=400)
-            print("-" * 40)
-            print(doc['content'])
-            print("-" * 40)
-            found = True
-            break
+    # Check for keywords
+    content = page_7_doc['content'].upper()
+    keywords = ["PIPING", "INSTRUMENT", "DIAGRAM", "LIST", "FOR", "INDEX"]
+    print("\nKeyword Check:")
+    for kw in keywords:
+        if kw in content:
+            print(f"  ✅ {kw}")
+        else:
+            print(f"  ❌ {kw}")
             
-    if not found:
-        st.error(f"[NOT FOUND] Page 7 not found in top 50 results for '{filename}'.")
-        print(f"[NOT FOUND] Page 7 not found in top 50 results for '{filename}'.")
-        st.write("Found pages:")
-        print("Found pages:")
-        for doc in results:
-            st.write(f"- {doc['metadata_storage_name']}")
-            print(f"- {doc['metadata_storage_name']}")
+    # Check exact phrases
+    phrases = [
+        "PIPING AND INSTRUMENT DIAGRAM LIST",
+        "PIPING AND INSTRUMENT DIAGRAM FOR LIST",
+        "PIPING & INSTRUMENT DIAGRAM"
+    ]
+    print("\nPhrase Check:")
+    for phrase in phrases:
+        if phrase in content:
+            print(f"  ✅ '{phrase}'")
+        else:
+            print(f"  ❌ '{phrase}'")
 
-if __name__ == "__main__":
-    debug_p7()
+else:
+    print("❌ Page 7 NOT FOUND in index.")
