@@ -846,7 +846,7 @@ USER QUESTION:
             print(f"{'='*60}\n")
 
             # 8. Post-process: Linkify Citations in Text
-            response_text = self._linkify_citations(response_text, citations)
+            response_text = self._linkify_citations(response_text, citations, citations_map)
 
             # DEBUG: Add context visualization to the answer (hidden in expander)
             # This helps users/admins verify if the correct pages were used
@@ -880,9 +880,9 @@ USER QUESTION:
             print(f"Error in get_chat_response: {e}")
             return f"오류가 발생했습니다: {str(e)}", [], "", None, []
 
-    def _linkify_citations(self, text, citations):
+    def _linkify_citations(self, text, citations, citations_map=None):
         """
-        Convert text citations like '(Filename: p.1)' into Markdown links.
+        Convert text citations like '(Filename: p.1)' or '(p.1)' into Markdown links.
         """
         if not text or not citations:
             return text
@@ -893,67 +893,91 @@ USER QUESTION:
         def find_citation(fname_text, page_text):
             try:
                 page_num = int(page_text)
-                fname_text_lower = fname_text.lower().strip()
                 
-                for cit in citations:
-                    # Check page match first
-                    if cit.get('page') != page_num:
-                        continue
-                        
-                    # Check filename match
-                    # cit['filepath'] is usually "drawings/filename.pdf" or "filename.pdf"
-                    filepath = cit.get('filepath', '')
-                    basename = filepath.split('/')[-1].lower()
+                # Case 1: Filename is provided (e.g. "File.pdf")
+                if fname_text:
+                    fname_text_lower = fname_text.lower().strip()
                     
-                    # 1. Exact basename match
-                    if fname_text_lower == basename:
-                        return cit
-                    
-                    # 2. Match without extension
-                    if fname_text_lower == os.path.splitext(basename)[0]:
-                        return cit
+                    for cit in citations:
+                        # We do NOT check page match here because 'citations' list is deduplicated (one per file).
+                        # We just want to find the matching FILE.
                         
-                    # 3. Prefix match (for truncated text like "Fuel Gas Coalescing...")
-                    # Remove "..." and "…" if present
-                    clean_fname = fname_text_lower.replace("...", "").replace("…", "").strip()
-                    if len(clean_fname) > 5 and basename.startswith(clean_fname):
-                        return cit
+                        # Check filename match
+                        filepath = cit.get('filepath', '')
+                        basename = filepath.split('/')[-1].lower()
                         
-                    # 4. Title match (if LLM used title)
-                    title = cit.get('title', '').lower()
-                    if title and (fname_text_lower in title or title in fname_text_lower):
-                        return cit
+                        # 1. Exact basename match
+                        if fname_text_lower == basename:
+                            return cit
                         
+                        # 2. Match without extension
+                        if fname_text_lower == os.path.splitext(basename)[0]:
+                            return cit
+                            
+                        # 3. Prefix match
+                        clean_fname = fname_text_lower.replace("...", "").replace("…", "").strip()
+                        if len(clean_fname) > 5 and basename.startswith(clean_fname):
+                            return cit
+                            
+                        # 4. Title match
+                        title = cit.get('title', '').lower()
+                        if title and (fname_text_lower in title or title in fname_text_lower):
+                            return cit
+                
+                # Case 2: No filename provided (e.g. just "p.9")
+                # We try to find ANY file in citations_map that has this page.
+                elif citations_map:
+                    # citations_map keys are (filename, page)
+                    # We look for any key where page == page_num
+                    for key, cit in citations_map.items():
+                        if key[1] == page_num:
+                            return cit
+                            
             except:
                 pass
             return None
 
-        # Regex to find patterns like (Filename: p.1)
-        # We look for: ( [anything not )] : p. [digits] )
-        # Added handling for spaces after p. and unicode ellipsis
-        pattern = r'\(([^):]+):\s*p\.\s*(\d+)\)'
+        # Pattern 1: (Filename: p.1)
+        pattern1 = r'\(([^):]+):\s*p\.\s*(\d+)\)'
         
-        def replace_match(match):
+        def replace_match1(match):
             full_match = match.group(0)
             fname_text = match.group(1)
             page_text = match.group(2)
             
             cit = find_citation(fname_text, page_text)
             if cit:
-                # Generate SAS URL
                 filepath = cit.get('filepath')
                 if filepath:
                     url = self.generate_blob_sas(filepath)
                     if url:
-                        # Append page fragment
                         url += f"#page={page_text}"
-                        # Return Markdown link
-                        # We use the full match text as the link text
                         return f"[{full_match}]({url})"
-            
             return full_match
 
-        return re.sub(pattern, replace_match, text)
+        text = re.sub(pattern1, replace_match1, text)
+        
+        # Pattern 2: (p.1) - Standalone page number
+        pattern2 = r'\(p\.\s*(\d+)\)'
+        
+        def replace_match2(match):
+            full_match = match.group(0)
+            page_text = match.group(1)
+            
+            # Pass None for fname_text
+            cit = find_citation(None, page_text)
+            if cit:
+                filepath = cit.get('filepath')
+                if filepath:
+                    url = self.generate_blob_sas(filepath)
+                    if url:
+                        url += f"#page={page_text}"
+                        return f"[{full_match}]({url})"
+            return full_match
+
+        text = re.sub(pattern2, replace_match2, text)
+        
+        return text
 
     def generate_blob_sas(self, blob_name):
         """
