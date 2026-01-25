@@ -1256,6 +1256,7 @@ elif menu == "도면/스펙 비교":
                                 documents_to_index.append(document)
                             
                             # Batch upload all pages (50 pages at a time to avoid request size limits)
+                            indexing_success = True
                             if documents_to_index:
                                 batch_size = 50
                                 for i in range(0, len(documents_to_index), batch_size):
@@ -1264,12 +1265,23 @@ elif menu == "도면/스펙 비교":
                                     success, msg = search_manager.upload_documents(batch)
                                     if not success:
                                         st.error(f"인덱싱 실패 ({file.name}, 배치 {i//batch_size + 1}): {msg}")
+                                        indexing_success = False
                                         break
                                 
                                 # 5. Save Analysis JSON to Blob Storage (Dual Retrieval Strategy)
-                                # This allows exact retrieval by filename without AI Search
-                                status_text.text(f"분석 결과 저장 중 ({idx+1}/{total_files}): {safe_filename}...")
-                                search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
+                                # Only save if indexing was successful
+                                if indexing_success:
+                                    status_text.text(f"분석 결과 저장 중 ({idx+1}/{total_files}): {safe_filename}...")
+                                    search_manager.upload_analysis_json(container_client, user_folder, safe_filename, page_chunks)
+                                else:
+                                    st.warning(f"⚠️ 인덱싱 실패로 인해 '{safe_filename}'의 분석 결과(JSON)를 저장하지 않았습니다.")
+                                    # Delete the original file to prevent orphans
+                                    try:
+                                        st.warning(f"🧹 인덱싱 실패로 인해 원본 파일 '{safe_filename}'을 삭제합니다.")
+                                        blob_client.delete_blob()
+                                        st.info("원본 파일 삭제 완료.")
+                                    except Exception as e:
+                                        st.error(f"원본 파일 삭제 실패: {e}")
                             
                             st.session_state.analysis_status[safe_filename]["status"] = "Ready"
                             progress_bar.progress((idx + 1) / total_files)
