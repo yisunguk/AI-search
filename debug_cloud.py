@@ -338,3 +338,99 @@ else:
     
     **Issue:** Keyword matching is not working properly.
     """)
+st.markdown("---")
+st.markdown("---")
+
+# ========================================
+# 🔍 심층 랭킹 분석 (Deep Ranking Analysis)
+# ========================================
+st.header("🔍 심층 랭킹 분석 (Deep Ranking Analysis)")
+st.info("검색어에 대해 각 페이지가 왜 그 점수를 받았는지 상세히 분석합니다.")
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    deep_query = st.text_input("분석할 검색어", value="냉각수펌프 전기실", key="deep_query")
+with col2:
+    deep_file = st.selectbox(
+        "대상 파일 (필터)", 
+        options=["(전체)"] + available_files, 
+        index=0,
+        key="deep_file_select"
+    )
+
+if st.button("🔬 분석 실행", type="primary", use_container_width=True):
+    st.markdown("### 1. 쿼리 분석 (Query Analysis)")
+    
+    # 1. Sanitization Logic (Same as Chat Manager)
+    import re
+    sanitized_query = re.sub(r'\bAND\b', ' ', deep_query, flags=re.IGNORECASE)
+    sanitized_query = re.sub(r'[&+\-|!(){}\[\]^"~*?:\\]', ' ', sanitized_query)
+    sanitized_query = " ".join(sanitized_query.split())
+    
+    st.code(f"Original: '{deep_query}'\nSanitized: '{sanitized_query}'", language="text")
+    
+    keywords = sanitized_query.split()
+    st.write(f"**Keywords extracted:** {keywords}")
+    
+    # 2. Execute Search
+    st.markdown("### 2. 검색 결과 랭킹 (Top 20)")
+    
+    filter_expr = None
+    if deep_file != "(전체)":
+        filter_expr = f"search.ismatch('{deep_file}', 'metadata_storage_name')"
+        
+    with st.spinner("랭킹 분석 중..."):
+        results = search_manager.search(
+            sanitized_query,
+            filter_expr=filter_expr,
+            search_mode="all", # Strict mode
+            top=20,
+            use_semantic_ranker=False # Raw score analysis
+        )
+        
+    if not results:
+        st.warning("검색 결과가 없습니다.")
+    else:
+        rank_data = []
+        for i, doc in enumerate(results, 1):
+            name = doc.get('metadata_storage_name', 'Unknown')
+            content = doc.get('content', '')
+            score = doc.get('@search.score', 0)
+            
+            # Keyword Matching Analysis
+            content_upper = content.upper()
+            matched_kws = []
+            for kw in keywords:
+                if kw.upper() in content_upper:
+                    matched_kws.append(kw)
+            
+            match_status = "✅ All" if len(matched_kws) == len(keywords) else f"⚠️ {len(matched_kws)}/{len(keywords)}"
+            
+            # Highlight specific pages
+            highlight = ""
+            if "(p.17)" in name: highlight = "🔴 (Issue)"
+            if "(p.82)" in name: highlight = "🟢 (Target)"
+            
+            rank_data.append({
+                "Rank": i,
+                "Score": f"{score:.4f}",
+                "Page": f"{name} {highlight}",
+                "Match": match_status,
+                "Matched Keywords": ", ".join(matched_kws),
+                "Snippet": content[:100].replace("\n", " ") + "..."
+            })
+            
+        st.dataframe(pd.DataFrame(rank_data), use_container_width=True)
+        
+        # Detailed Comparison
+        st.markdown("### 3. 주요 페이지 상세 비교")
+        target_pages = [d for d in results if "(p.82)" in d.get('metadata_storage_name', '') or "(p.17)" in d.get('metadata_storage_name', '')]
+        
+        if target_pages:
+            for doc in target_pages:
+                name = doc.get('metadata_storage_name')
+                score = doc.get('@search.score')
+                st.markdown(f"#### 📄 {name} (Score: {score:.4f})")
+                st.text_area(f"Content of {name}", doc.get('content', ''), height=200)
+        else:
+            st.info("비교할 주요 페이지(p.17, p.82)가 Top 20 내에 없습니다.")
