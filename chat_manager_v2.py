@@ -221,15 +221,29 @@ Convert the user's natural language question into a keyword-based search query.
         # 1. Remove XML comments (e.g., <!-- PageNumber="8" -->)
         text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
         
-        # 2. Remove XML tags (e.g., <PageHeader ...>, </PageHeader>)
+        # 2. Preserve Table Structure (Replace tags with separators)
+        # Replace cell endings with pipe
+        text = re.sub(r'</td>', ' | ', text, flags=re.IGNORECASE)
+        text = re.sub(r'</th>', ' | ', text, flags=re.IGNORECASE)
+        
+        # Replace row endings and breaks with newline
+        text = re.sub(r'</tr>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</div>', '\n', text, flags=re.IGNORECASE)
+        
+        # 3. Remove remaining XML tags (e.g., <PageHeader ...>, <table>, etc.)
         text = re.sub(r'<[^>]+>', '', text)
         
-        # 3. Remove specific OCR noise
+        # 4. Remove specific OCR noise
         text = text.replace("AutoCAD SHX Text", "")
         text = text.replace("%%C", "Ø")
         
-        # 4. Collapse multiple spaces/newlines
-        text = re.sub(r'\n\s*\n', '\n\n', text)  # Keep max 2 newlines
+        # 5. Collapse multiple spaces/newlines
+        # Collapse spaces but keep newlines
+        text = re.sub(r'[ \t]+', ' ', text)
+        # Collapse multiple newlines
+        text = re.sub(r'\n\s*\n', '\n\n', text)
         
         return text.strip()
 
