@@ -742,7 +742,16 @@ Convert the user's natural language question into a keyword-based search query.
                     context_parts.append(f"[Document: {filename}, Page: {page}, Title: {title}]\n{page_content}\n")
                 else:
                     context_parts.append(f"[Document: {filename}, Page: {page}]\n{page_content}\n")
-                citations.append(citations_map[key])
+                
+                # Deduplicate citations by filepath
+                # Only add if not already present (based on filepath)
+                is_duplicate = False
+                for existing in citations:
+                    if existing.get('filepath') == citations_map[key].get('filepath'):
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    citations.append(citations_map[key])
             
             if not context_parts and not conversation_history:
                 debug_msg = ""
@@ -938,12 +947,8 @@ USER QUESTION:
                     if url:
                         # Append page fragment
                         url += f"#page={page_text}"
-                        # Use a shorter link text to prevent table layout breakage
-                        # Instead of replacing the whole (Filename: p.1), we just link the "p.1" part or similar?
-                        # User wants the citation to be clickable.
-                        # Let's keep the full text but ensure the URL is valid so Markdown renders it.
-                        # If Markdown fails to render, it shows the raw URL which is huge.
-                        # The issue in the screenshot was likely the URL not being quoted properly, breaking the Markdown syntax if it contained spaces or parens.
+                        # Return Markdown link
+                        # We use the full match text as the link text
                         return f"[{full_match}]({url})"
             
             return full_match
