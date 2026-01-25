@@ -1231,8 +1231,7 @@ elif menu == "도면/스펙 비교":
             # High Resolution OCR Toggle
             use_high_res = st.toggle("고해상도 OCR 적용 (도면 미세 글자 추출용)", value=False, help="복잡한 도면의 작은 글씨를 더 정확하게 읽습니다. 분석 시간이 더 오래 걸릴 수 있습니다.")
         
-            # High Resolution OCR Toggle
-            use_high_res = st.toggle("고해상도 OCR 적용 (도면 미세 글자 추출용)", value=False, help="복잡한 도면의 작은 글씨를 더 정확하게 읽습니다. 분석 시간이 더 오래 걸릴 수 있습니다.")
+
         
             # --- RESUME UI SECTION ---
             # Check for interrupted sessions
