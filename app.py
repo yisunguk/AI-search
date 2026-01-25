@@ -3177,9 +3177,8 @@ if menu == "디버그 (Debug)":
                 """)
     
     st.markdown("---")
-    
-    # ========================================
-    # 🎯 2단계 검색 테스트 (신규 기능)
+
+
     # ========================================
     st.header("🎯 2단계 검색 테스트 (정확한 키워드 우선)")
     st.info("**목적**: 사용자 입력 그대로 먼저 검색하여 정확한 키워드 매칭을 우선순위로 둡니다.")
@@ -3346,4 +3345,114 @@ if menu == "디버그 (Debug)":
                         # Full content
                         with st.expander("전체 내용 보기"):
                             st.text_area("", content, height=400, key=f"custom_full_{i}", disabled=True)
+
+    st.markdown("---")
+
+    # ---------------------------------------------------------
+    # NEW: Target Page Debug (Why is this page missing?)
+    # ---------------------------------------------------------
+    st.header("🎯 특정 페이지 검색 누락 원인 분석 (Target Page Debug)")
+    st.info("특정 페이지가 검색 결과에 나오지 않을 때, 해당 페이지가 인덱스에 존재하는지, 키워드가 포함되어 있는지 분석합니다.")
+    
+    col_target_1, col_target_2, col_target_3 = st.columns([2, 2, 1])
+    
+    with col_target_1:
+        target_query = st.text_input("검색 쿼리", value="냉각수펌프 전기실", key="target_debug_query")
+    with col_target_2:
+        target_filename = st.text_input("파일명 (정확히 입력)", value="제5권 물량내역서(청주).pdf", key="target_debug_file")
+    with col_target_3:
+        target_page = st.number_input("페이지 번호", value=82, key="target_debug_page")
+        
+    if st.button("🕵️‍♂️ 페이지 분석 실행"):
+        target_doc_name = f"{target_filename} (p.{target_page})"
+        st.write(f"**Target Document Name:** `{target_doc_name}`")
+        
+        # 1. Check if page exists in index
+        with st.spinner("인덱스에서 페이지 조회 중..."):
+            # Escape single quotes for OData
+            safe_doc_name = target_doc_name.replace("'", "''")
+            direct_check = search_manager.search(
+                "*",
+                filter_expr=f"metadata_storage_name eq '{safe_doc_name}'",
+                top=1
+            )
+            
+        if not direct_check:
+            st.error(f"❌ **페이지가 인덱스에 없습니다!** (`{target_doc_name}`)")
+            st.warning("파일명이나 페이지 번호를 확인해주세요. 또는 해당 파일이 인덱싱되지 않았을 수 있습니다.")
+        else:
+            doc = direct_check[0]
+            st.success(f"✅ **페이지가 인덱스에 존재합니다.** (ID: `{doc.get('id', 'N/A')}`)")
+            
+            content = doc.get('content', '')
+            st.markdown("### 📄 페이지 내용 (Content Preview)")
+            st.text_area("", content, height=300)
+            
+            # 2. Analyze Keyword Matching
+            st.markdown("### 🔍 키워드 매칭 분석")
+            keywords = target_query.split()
+            
+            match_data = []
+            content_upper = content.upper()
+            
+            all_matched = True
+            for kw in keywords:
+                kw_upper = kw.upper()
+                count = content_upper.count(kw_upper)
+                matched = count > 0
+                if not matched:
+                    all_matched = False
+                
+                match_data.append({
+                    "Keyword": kw,
+                    "Found": "✅ Yes" if matched else "❌ No",
+                    "Count": count
+                })
+            
+            st.dataframe(pd.DataFrame(match_data), use_container_width=True)
+            
+            if all_matched:
+                st.success("✅ 모든 키워드가 본문에 포함되어 있습니다. 검색 랭킹 문제일 가능성이 높습니다.")
+            else:
+                st.error("❌ 일부 키워드가 본문에 없습니다! 이래서 검색이 안 되는 것입니다.")
+                st.markdown("""
+                **해결 방법:**
+                1. **OCR 오류 확인**: 본문 텍스트를 자세히 읽어보세요. 오타가 있나요? (예: `전기실` -> `전 기 실` or `전기슬`)
+                2. **동의어 확장**: 사용자가 입력한 단어와 문서에 있는 단어가 다를 수 있습니다.
+                """)
+                
+            # 3. Run actual search to see Rank
+            st.markdown("### 📊 실제 검색 랭킹 확인")
+            with st.spinner("실제 검색 수행 중..."):
+                # Use same logic as Stage 1
+                import re
+                sanitized_query = re.sub(r'\bAND\b', ' ', target_query, flags=re.IGNORECASE)
+                sanitized_query = re.sub(r'[&+\-|!(){}\[\]^"~*?:\\]', ' ', sanitized_query)
+                sanitized_query = " ".join(sanitized_query.split())
+                
+                # Filter by filename to narrow down
+                safe_filename = target_filename.replace("'", "''")
+                escaped_filename = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_filename)
+                file_filter = f"search.ismatch('\"{escaped_filename}\"', 'metadata_storage_name')"
+                
+                search_results = search_manager.search(
+                    sanitized_query,
+                    filter_expr=file_filter,
+                    use_semantic_ranker=False,
+                    search_mode="all",
+                    top=200
+                )
+                
+                found_rank = None
+                for i, res in enumerate(search_results, 1):
+                    if res.get('metadata_storage_name') == target_doc_name:
+                        found_rank = i
+                        break
+                
+                if found_rank:
+                    st.info(f"ℹ️ 이 페이지는 현재 검색 결과 **{found_rank}위**에 있습니다.")
+                else:
+                    st.warning("⚠️ 이 페이지는 Top 200 검색 결과에 포함되지 않았습니다.")
+
+    st.markdown("---")
 
