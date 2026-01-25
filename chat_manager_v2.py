@@ -328,9 +328,8 @@ Convert the user's natural language question into a keyword-based search query.
                      import re
                      escaped_f = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_f)
                      # Use search.ismatch for exact filename matching (more reliable for SearchableFields)
-                     # CRITICAL FIX: Remove double quotes to allow looser matching (like Debug Tool)
-                     # Double quotes enforce strict phrase match which might fail with special chars/tokenization
-                     conditions.append(f"search.ismatch('{escaped_f}', 'metadata_storage_name')")
+                     # CRITICAL FIX: Restore double quotes for exact phrase match (like Debug Tool)
+                     conditions.append(f"search.ismatch('\"{escaped_f}\"', 'metadata_storage_name')")
                  
                  if conditions:
                     scope_filter = f"({' or '.join(conditions)})"
@@ -390,7 +389,17 @@ Convert the user's natural language question into a keyword-based search query.
             # SANITIZE QUERY: Remove "AND", "&", and special chars to avoid syntax issues
             # We want to match "PIPING", "INSTRUMENT", "DIAGRAM", "LIST" regardless of "AND" or "&"
             import re
-            sanitized_query = re.sub(r'\bAND\b', ' ', user_message, flags=re.IGNORECASE)
+            
+            # 1. Remove conversational stopwords (Korean & English)
+            stopwords = [
+                "내용을", "알려", "주세요", "해줘", "찾아", "보여", "검색", "대해", "관해", "설명", "요약", "정리",
+                "please", "find", "show", "me", "tell", "about", "search", "summary", "summarize", "explain"
+            ]
+            clean_query = user_message
+            for word in stopwords:
+                clean_query = clean_query.replace(word, "")
+            
+            sanitized_query = re.sub(r'\bAND\b', ' ', clean_query, flags=re.IGNORECASE)
             sanitized_query = re.sub(r'[&+\-|!(){}\[\]^"~*?:\\]', ' ', sanitized_query)
             sanitized_query = " ".join(sanitized_query.split()) # Normalize whitespace
             
