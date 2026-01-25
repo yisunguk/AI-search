@@ -81,8 +81,34 @@ class DocumentIntelligenceManager:
                     for span in page.spans:
                         page_content += result.content[span.offset : span.offset + span.length]
                 
+                # --- Layout Extraction (New) ---
+                layout_info = {
+                    "width": page.width,
+                    "height": page.height,
+                    "unit": page.unit,
+                    "lines": [],
+                    "words": []
+                }
+
+                if page.lines:
+                    for line in page.lines:
+                        layout_info["lines"].append({
+                            "content": line.content,
+                            "polygon": line.polygon
+                        })
+                
+                if page.words:
+                    for word in page.words:
+                        layout_info["words"].append({
+                            "content": word.content,
+                            "polygon": word.polygon,
+                            "confidence": word.confidence
+                        })
+
                 # Find tables on this page
                 page_tables_count = 0
+                page_tables_data = [] # Store table data with layout
+                
                 page_title = global_title
                 page_drawing_no = global_drawing_no
                 
@@ -90,6 +116,31 @@ class DocumentIntelligenceManager:
                     for table in result.tables:
                         if table.bounding_regions and table.bounding_regions[0].page_number == page_num:
                             page_tables_count += 1
+                            
+                            # Extract table cells with layout
+                            table_cells = []
+                            for cell in table.cells:
+                                table_cells.append({
+                                    "content": cell.content,
+                                    "row_index": cell.row_index,
+                                    "column_index": cell.column_index,
+                                    "row_span": cell.row_span,
+                                    "column_span": cell.column_span,
+                                    "bounding_regions": [
+                                        {"page_number": br.page_number, "polygon": br.polygon} 
+                                        for br in cell.bounding_regions
+                                    ] if cell.bounding_regions else []
+                                })
+                            
+                            page_tables_data.append({
+                                "row_count": table.row_count,
+                                "column_count": table.column_count,
+                                "cells": table_cells,
+                                "bounding_regions": [
+                                    {"page_number": br.page_number, "polygon": br.polygon}
+                                    for br in table.bounding_regions
+                                ] if table.bounding_regions else []
+                            })
                             
                             # Try to extract metadata from tables (Title Block) if not found in KV pairs
                             # or if we want page-specific metadata
@@ -113,7 +164,9 @@ class DocumentIntelligenceManager:
                     'page_number': page_num,
                     'tables_count': page_tables_count,
                     '도면명(TITLE)': page_title,       # Key expected by app.py
-                    '도면번호(DWG. NO.)': page_drawing_no # Key expected by app.py
+                    '도면번호(DWG. NO.)': page_drawing_no, # Key expected by app.py
+                    'layout': layout_info,          # New: Page Layout (Lines/Words)
+                    'tables': page_tables_data      # New: Detailed Table Data
                 })
             
             return page_chunks
