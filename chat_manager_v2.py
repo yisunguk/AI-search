@@ -518,38 +518,9 @@ Convert the user's natural language question into a keyword-based search query.
                 for i, res in enumerate(search_results[:10]):
                     print(f"  {i+1}. {res.get('metadata_storage_name', 'Unknown')}")
             
-            # Fallback: If specific file search failed, try without file filter (maybe user got name wrong)
-            if not search_results and specific_file_filter:
-                print("DEBUG: Specific file search failed, retrying globally...")
-                # Only retry if scope_filter allows it (i.e., search within selected files but ignore specific mention)
-                # If scope_filter is set, we must respect it.
-                retry_filter = filter_expr
-                if scope_filter:
-                    if retry_filter:
-                        retry_filter = f"({retry_filter}) and {scope_filter}"
-                    else:
-                        retry_filter = scope_filter
-                
-                search_results = self.search_manager.search(
-                    search_query, 
-                    filter_expr=retry_filter, 
-                    use_semantic_ranker=use_semantic_ranker,
-                    search_mode=search_mode
-                )
-                
-                # Filter by user_folder
-                if user_folder and search_results:
-                    from urllib.parse import unquote
-                    original_count = len(search_results)
-                    filtered_results = [
-                        doc for doc in search_results 
-                        if user_folder in unquote(doc.get('metadata_storage_path', ''))
-                    ]
-                    if filtered_results:
-                        search_results = filtered_results
-                        print(f"DEBUG: User folder filter (fallback 1): {original_count} -> {len(search_results)}")
-                    else:
-                        print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
+            # Fallback 1: REMOVED
+            # If specific file search fails, we do NOT retry globally.
+            pass
 
             # Fallback 2: REMOVED
             # If search fails, do NOT fetch the whole file. It confuses the LLM.
@@ -673,33 +644,10 @@ Convert the user's natural language question into a keyword-based search query.
             context_parts = []
             citations = []
             
-            # Strategy: Round Robin selection by Document to ensure diversity
-            # We want to avoid filling the context with just one document if multiple are relevant
-            
-            # Group keys by filename
-            docs_map = {}
-            for key in grouped_context:
-                fname = key[0]
-                if fname not in docs_map:
-                    docs_map[fname] = []
-                docs_map[fname].append(key)
-            
-            # Sort pages within each doc by RELEVANCE (min_rank) instead of page number
-            # This ensures we pick the most relevant pages first
-            for fname in docs_map:
-                docs_map[fname].sort(key=lambda x: page_ranks[x])
-            
-            # Interleave keys: Doc1_BestPage, Doc2_BestPage, Doc3_BestPage, Doc1_2ndBest, ...
-            sorted_keys = []
-            max_pages_per_doc = max(len(p) for p in docs_map.values()) if docs_map else 0
-            
-            sorted_filenames = sorted(docs_map.keys())
-            print(f"DEBUG: Context construction - {len(sorted_filenames)} documents, max {max_pages_per_doc} pages each")
-            
-            for i in range(max_pages_per_doc):
-                for fname in sorted_filenames:
-                    if i < len(docs_map[fname]):
-                        sorted_keys.append(docs_map[fname][i])
+            # Strategy: Simple sort by Rank
+            # We rely strictly on the search engine's ranking.
+            sorted_keys = sorted(grouped_context.keys(), key=lambda k: page_ranks[k])
+            print(f"DEBUG: Context construction - Sorted {len(sorted_keys)} pages by rank")
             
             # Limit total pages
             # Increased to 20 to allow for more context when comparing multiple documents
@@ -717,58 +665,9 @@ Convert the user's natural language question into a keyword-based search query.
                 if explicit_keys:
                     print(f"DEBUG: Prioritized explicit page {explicit_page}, found {len(explicit_keys)} matching pages")
             
-            # CRITICAL FIX: If query is LIST-related, prioritize actual LIST pages
-            # This ensures P&ID List pages appear FIRST in the context, not buried in the middle
-            query_upper = user_message.upper()
-            is_list_query = any(keyword in query_upper for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록", "비교", "COMPARE"])
-            
-            if is_list_query:
-                print(f"DEBUG: LIST-related query detected. Prioritizing LIST pages...")
-                list_page_data = []  # Store (key, priority_score)
-                other_keys = []
-                
-                for key in sorted_keys:
-                    is_list_page = False
-                    priority_score = 0
-                    
-                    for chunk in grouped_context[key]:
-                        chunk_upper = chunk.upper()
-                        # Check if this page actually contains list content
-                        if any(kw in chunk_upper for kw in ["DRAWING LIST", "PIPING INSTRUMENT DIAGRAM LIST", "P&ID LIST", "도면 목록"]):
-                            # Also verify it has table-like structure (multiple entries)
-                            if any(table_kw in chunk_upper for table_kw in ["DWG", "DRAWING NO", "도면번호", "FOR LIST"]):
-                                is_list_page = True
-                                
-                                # PRIORITY SCORING: Rank comprehensive lists higher
-                                # 1. "PIPING AND INSTRUMENT DIAGRAM" = main P&ID list (highest priority)
-                                if "PIPING AND INSTRUMENT DIAGRAM" in chunk_upper or "PIPING INSTRUMENT DIAGRAM" in chunk_upper:
-                                    priority_score += 1000
-                                
-                                # 2. Earlier page numbers are typically more comprehensive
-                                # (e.g., p.7 is likely the main list, p.51 might be a sub-list)
-                                page_num = key[1]
-                                priority_score += (1000 - page_num)  # Lower page number = higher priority
-                                
-                                break
-                    
-                    if is_list_page:
-                        list_page_data.append((key, priority_score))
-                    else:
-                        other_keys.append(key)
-                
-                # Sort LIST pages by priority (highest first)
-                list_page_data.sort(key=lambda x: x[1], reverse=True)
-                list_page_keys = [key for key, _ in list_page_data]
-                
-                # Put LIST pages at the very top
-                sorted_keys = list_page_keys + other_keys
-                if list_page_keys:
-                    print(f"DEBUG: ✅ Moved {len(list_page_keys)} LIST pages to the TOP of context (sorted by priority)")
-                    for idx, (key, score) in enumerate(list_page_data[:5], 1):
-                        filename, page = key
-                        print(f"   {idx}. {filename} p.{page} (Priority: {score}, Rank: {page_ranks[key]})")
-                else:
-                    print(f"DEBUG: ⚠️ No LIST pages found despite LIST query. This may indicate indexing/OCR issue.")
+            # LIST-related query logic - REMOVED
+            # We rely purely on the search engine ranking.
+            pass
 
             
             # DEBUG: Log top 30 pages with their ranks to see if page 7 is included
