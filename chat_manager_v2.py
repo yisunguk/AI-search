@@ -949,14 +949,6 @@ CONTEXT:
 USER QUESTION:
 {user_message}"""
             
-            # DEBUG: Save full prompt to file for inspection
-            try:
-                with open("last_prompt.txt", "w", encoding="utf-8") as f:
-                    f.write(full_prompt)
-                print("DEBUG: Saved full prompt to 'last_prompt.txt'")
-            except Exception as e:
-                print(f"DEBUG: Failed to save prompt: {e}")
-
             messages = []
             if conversation_history:
                 history = [msg for msg in conversation_history if msg['role'] != 'system']
