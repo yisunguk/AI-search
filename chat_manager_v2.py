@@ -207,9 +207,32 @@ Convert the user's natural language question into a keyword-based search query.
             rewritten = response.choices[0].message.content.strip()
             print(f"DEBUG: Rewritten query: '{user_message}' -> '{rewritten}'")
             return rewritten
-        except Exception as e:
             print(f"DEBUG: Query rewriting failed: {e}")
             return user_message
+
+    def _clean_content(self, text):
+        """
+        Clean indexed content by removing XML tags and OCR noise
+        """
+        if not text:
+            return ""
+            
+        import re
+        
+        # 1. Remove XML comments (e.g., <!-- PageNumber="8" -->)
+        text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+        
+        # 2. Remove XML tags (e.g., <PageHeader ...>, </PageHeader>)
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # 3. Remove specific OCR noise
+        text = text.replace("AutoCAD SHX Text", "")
+        text = text.replace("%%C", "Ø")
+        
+        # 4. Collapse multiple spaces/newlines
+        text = re.sub(r'\n\s*\n', '\n\n', text)  # Keep max 2 newlines
+        
+        return text.strip()
 
     def _get_direct_context_from_json(self, filename, user_folder=None):
         """
@@ -861,7 +884,8 @@ Convert the user's natural language question into a keyword-based search query.
                 page_content = "\n...\n".join(chunks)
                 
                 # Clean content
-                page_content = page_content.replace("AutoCAD SHX Text", "").replace("%%C", "Ø")
+                page_content = self._clean_content(page_content)
+                
                 # Increased limit to 8000 to allow for more context per page
                 if len(page_content) > 8000: page_content = page_content[:8000] + "..."
                 
