@@ -47,11 +47,16 @@ You must interpret the provided text as if you are looking at an engineering dia
 - **BOM/MTO (Bill of Materials)**:
     - Extract material descriptions, quantities, sizes, and weights from tabular text data.
 
-- **Drawing List / Index / Table of Contents (CRITICAL)**:
-    - If the user asks for a "List of Drawings", "P&ID List", or "Index", **FIRST** check if there is a dedicated "DRAWING LIST", "INDEX", or "LIST OF DRAWINGS" page in the context.
-    - **PRIORITY**: If such a page exists (e.g., "PIPING AND INSTRUMENT DIAGRAM FOR LIST"), extract the list **directly from that page**.
-    - Do NOT attempt to compile a list by looking at individual drawings unless no master list is found.
-    - The Master List is the Source of Truth. Use it.
+- **Bill of Quantities (BOQ) / 내역서 (CRITICAL)**:
+    - These pages contain detailed lists of equipment, materials, and labor costs.
+    - Look for sections like "4-2. 내역서", "공종", "명칭", "규격", "수량".
+    - **Extraction**: If asked for "내역서 내용", extract the items, their specifications (규격), and quantities.
+    - Even if an item doesn't have a Tag No, it is a valid entry if it appears in the BOQ.
+
+- **Drawing List / Index / Table of Contents**:
+    - If the user asks for a "List of Drawings", "P&ID List", or "Index", check if there is a dedicated "DRAWING LIST" or "INDEX" page.
+    - **PRIORITY**: Use the Master List for the overall structure, but **ALWAYS** cross-reference with individual content pages (like BOQ or SLD) for specific details.
+    - Do not ignore detailed content pages just because a Master List exists.
 
 ### 2. CRITICAL ANSWER STRATEGY
 1. **Answer Strategy**:
@@ -944,6 +949,14 @@ CONTEXT:
 USER QUESTION:
 {user_message}"""
             
+            # DEBUG: Save full prompt to file for inspection
+            try:
+                with open("last_prompt.txt", "w", encoding="utf-8") as f:
+                    f.write(full_prompt)
+                print("DEBUG: Saved full prompt to 'last_prompt.txt'")
+            except Exception as e:
+                print(f"DEBUG: Failed to save prompt: {e}")
+
             messages = []
             if conversation_history:
                 history = [msg for msg in conversation_history if msg['role'] != 'system']
@@ -994,6 +1007,28 @@ USER QUESTION:
             except Exception as e:
                 print(f"DEBUG: LLM call failed: {e}")
                 return f"LLM 호출 중 오류가 발생했습니다: {str(e)}\n\n(컨텍스트 길이: {len(context)} 자)", citations, context, final_filter, search_results
+
+            # DEBUG: Log citations to see what the LLM actually used
+            print(f"\n{'='*60}")
+            print(f"DEBUG: LLM Citations Analysis")
+            print(f"{'='*60}")
+            cited_pages = []
+            import re
+            # Find patterns like (Filename: p.N)
+            matches = re.findall(r'\(([^):]+):\s*p\.\s*(\d+)\)', response_text)
+            for fname, pnum in matches:
+                cited_pages.append(int(pnum))
+            
+            print(f"DEBUG: LLM cited pages: {cited_pages}")
+            
+            # Check if Page 82 was in context but NOT cited
+            context_pages = [k[1] for k in sorted_keys[:context_limit]]
+            for p in context_pages:
+                if p == 82 and 82 not in cited_pages:
+                    print(f"DEBUG: ⚠️ WARNING: Page 82 was in CONTEXT but NOT CITED by LLM.")
+                elif p == 82 and 82 in cited_pages:
+                    print(f"DEBUG: ✅ SUCCESS: Page 82 was in CONTEXT and CITED by LLM.")
+            print(f"{'='*60}\n")
 
             # 8. Post-process: Linkify Citations in Text
             response_text = self._linkify_citations(response_text, citations)
