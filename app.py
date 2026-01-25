@@ -3108,75 +3108,7 @@ if menu == "디버그 (Debug)":
         st.error(f"Failed to load Search Manager: {e}")
         st.stop()
     
-    # ---------------------------------------------------------
-    # NEW: Keyword Search Debug (Stage 1 Simulation)
-    # ---------------------------------------------------------
-    st.header("🔍 키워드 검색 및 LLM 컨텍스트 확인 (Keyword Search Debug)")
-    st.info("LLM이 특정 정보를 찾지 못할 때, 실제로 검색 엔진이 해당 정보를 찾아내는지 확인하는 도구입니다.")
-    
-    col_debug_search, col_debug_opts = st.columns([0.7, 0.3])
-    
-    with col_debug_search:
-        debug_keyword = st.text_input("검색할 키워드 입력 (예: 냉각수펌프 전기실)", value="냉각수펌프 전기실")
-    
-    with col_debug_opts:
-        debug_top_k = st.number_input("검색 개수 (Top K)", min_value=1, max_value=50, value=20)
-    
-    if st.button("🚀 키워드 검색 실행 (Stage 1 Logic)"):
-        with st.spinner(f"'{debug_keyword}' 검색 중..."):
-            # Use exact same logic as chat_manager Stage 1
-            # 1. Sanitize
-            import re
-            sanitized_query = re.sub(r'\bAND\b', ' ', debug_keyword, flags=re.IGNORECASE)
-            sanitized_query = re.sub(r'[&+\-|!(){}\[\]^"~*?:\\]', ' ', sanitized_query)
-            sanitized_query = " ".join(sanitized_query.split())
-            
-            st.write(f"**Sanitized Query:** `{sanitized_query}`")
-            
-            # 2. Search
-            results = search_manager.search(
-                sanitized_query,
-                use_semantic_ranker=False, # Stage 1 uses standard BM25
-                search_mode="all",         # Stage 1 uses AND logic
-                top=debug_top_k
-            )
-            
-            if results:
-                st.success(f"✅ 총 {len(results)}개의 문서를 찾았습니다.")
-                
-                debug_data = []
-                for rank, res in enumerate(results, 1):
-                    name = res.get('metadata_storage_name', 'Unknown')
-                    score = res.get('@search.score', 0)
-                    content = res.get('content', '')
-                    
-                    # Highlight keywords in content preview
-                    preview = content[:300].replace('\n', ' ') + "..."
-                    
-                    debug_data.append({
-                        "Rank": rank,
-                        "Score": f"{score:.4f}",
-                        "File": name,
-                        "Content Preview": preview
-                    })
-                
-                st.dataframe(pd.DataFrame(debug_data), use_container_width=True)
-                
-                # Detailed View
-                with st.expander("📄 상세 내용 보기 (Top 5)"):
-                    for i, res in enumerate(results[:5], 1):
-                        st.markdown(f"### {i}. {res.get('metadata_storage_name')}")
-                        st.text(res.get('content', '')[:1000])
-                        st.markdown("---")
-            else:
-                st.warning("⚠️ 검색 결과가 없습니다. (No results found)")
-                st.markdown("""
-                **가능한 원인:**
-                1. 문서에 해당 키워드가 정확히 포함되어 있지 않음 (OCR 오류 등)
-                2. 'AND' 조건으로 인해 모든 단어가 포함된 문서만 검색됨
-                """)
-    
-    st.markdown("---")
+
 
 
     # ========================================
@@ -3346,6 +3278,78 @@ if menu == "디버그 (Debug)":
                         with st.expander("전체 내용 보기"):
                             st.text_area("", content, height=400, key=f"custom_full_{i}", disabled=True)
 
+    st.markdown("---")
+
+    st.markdown("---")
+
+    # ---------------------------------------------------------
+    # NEW: Keyword Search Debug (Stage 1 Simulation)
+    # ---------------------------------------------------------
+    st.header("🔍 키워드 검색 및 LLM 컨텍스트 확인 (Keyword Search Debug)")
+    st.info("LLM이 특정 정보를 찾지 못할 때, 실제로 검색 엔진이 해당 정보를 찾아내는지 확인하는 도구입니다.")
+    
+    col_debug_search, col_debug_opts = st.columns([0.7, 0.3])
+    
+    with col_debug_search:
+        debug_keyword = st.text_input("검색할 키워드 입력 (예: 냉각수펌프 전기실)", value="냉각수펌프 전기실")
+    
+    with col_debug_opts:
+        debug_top_k = st.number_input("검색 개수 (Top K)", min_value=1, max_value=50, value=20)
+    
+    if st.button("🚀 키워드 검색 실행 (Stage 1 Logic)"):
+        with st.spinner(f"'{debug_keyword}' 검색 중..."):
+            # Use exact same logic as chat_manager Stage 1
+            # 1. Sanitize
+            import re
+            sanitized_query = re.sub(r'\bAND\b', ' ', debug_keyword, flags=re.IGNORECASE)
+            sanitized_query = re.sub(r'[&+\-|!(){}\[\]^"~*?:\\]', ' ', sanitized_query)
+            sanitized_query = " ".join(sanitized_query.split())
+            
+            st.write(f"**Sanitized Query:** `{sanitized_query}`")
+            
+            # 2. Search
+            results = search_manager.search(
+                sanitized_query,
+                use_semantic_ranker=False, # Stage 1 uses standard BM25
+                search_mode="all",         # Stage 1 uses AND logic
+                top=debug_top_k
+            )
+            
+            if results:
+                st.success(f"✅ 총 {len(results)}개의 문서를 찾았습니다.")
+                
+                debug_data = []
+                for rank, res in enumerate(results, 1):
+                    name = res.get('metadata_storage_name', 'Unknown')
+                    score = res.get('@search.score', 0)
+                    content = res.get('content', '')
+                    
+                    # Highlight keywords in content preview
+                    preview = content[:300].replace('\n', ' ') + "..."
+                    
+                    debug_data.append({
+                        "Rank": rank,
+                        "Score": f"{score:.4f}",
+                        "File": name,
+                        "Content Preview": preview
+                    })
+                
+                st.dataframe(pd.DataFrame(debug_data), use_container_width=True)
+                
+                # Detailed View
+                with st.expander("📄 상세 내용 보기 (Top 5)"):
+                    for i, res in enumerate(results[:5], 1):
+                        st.markdown(f"### {i}. {res.get('metadata_storage_name')}")
+                        st.text(res.get('content', '')[:1000])
+                        st.markdown("---")
+            else:
+                st.warning("⚠️ 검색 결과가 없습니다. (No results found)")
+                st.markdown("""
+                **가능한 원인:**
+                1. 문서에 해당 키워드가 정확히 포함되어 있지 않음 (OCR 오류 등)
+                2. 'AND' 조건으로 인해 모든 단어가 포함된 문서만 검색됨
+                """)
+    
     st.markdown("---")
 
     # ---------------------------------------------------------
