@@ -182,6 +182,58 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, permis
         return f"{base_url}?{sas_token}"
 
 # -----------------------------
+# Progress Management (Resume Capability)
+# -----------------------------
+import json
+
+TEMP_DIR = ".temp_analysis"
+if not os.path.exists(TEMP_DIR):
+    os.makedirs(TEMP_DIR)
+
+def get_progress_file_path(safe_filename):
+    return os.path.join(TEMP_DIR, f"{safe_filename}_progress.json")
+
+def save_progress(safe_filename, page_chunks, total_pages):
+    """Save intermediate analysis progress to disk"""
+    try:
+        filepath = get_progress_file_path(safe_filename)
+        data = {
+            "safe_filename": safe_filename,
+            "total_pages": total_pages,
+            "page_chunks": page_chunks,
+            "last_updated": datetime.utcnow().isoformat()
+        }
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        # print(f"DEBUG: Progress saved for {safe_filename} ({len(page_chunks)} chunks)")
+    except Exception as e:
+        print(f"Error saving progress: {e}")
+
+def load_progress(safe_filename):
+    """Load intermediate analysis progress from disk"""
+    try:
+        filepath = get_progress_file_path(safe_filename)
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            print(f"DEBUG: Progress loaded for {safe_filename} ({len(data.get('page_chunks', []))} chunks)")
+            return data
+    except Exception as e:
+        print(f"Error loading progress: {e}")
+    return None
+
+def delete_progress(safe_filename):
+    """Delete progress file after successful completion"""
+    try:
+        filepath = get_progress_file_path(safe_filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"DEBUG: Progress file deleted for {safe_filename}")
+    except Exception as e:
+        print(f"Error deleting progress file: {e}")
+
+
+# -----------------------------
 # UI 구성
 # -----------------------------
 
@@ -1198,9 +1250,36 @@ elif menu == "도면/스펙 비교":
                             chunk_size = 50
                             page_chunks = []
                             
+                            # RESUME LOGIC: Check for existing progress
+                            existing_progress = load_progress(safe_filename)
+                            processed_ranges = set()
+                            
+                            if existing_progress and existing_progress.get('total_pages') == total_pages:
+                                st.info(f"🔄 이전 분석 진행 상황을 발견했습니다. ({len(existing_progress.get('page_chunks', []))} 페이지 완료됨) 이어서 진행합니다.")
+                                page_chunks = existing_progress.get('page_chunks', [])
+                                
+                                # Mark processed ranges based on loaded chunks
+                                for chunk in page_chunks:
+                                    # We need to reconstruct which ranges are done. 
+                                    # Since we don't store ranges explicitly in chunks, we can infer or just skip logic below.
+                                    # Better approach: Calculate the range this chunk belongs to and mark it.
+                                    p_num = chunk['page_number']
+                                    # Calculate start page of the chunk this page belongs to
+                                    range_start = ((p_num - 1) // chunk_size) * chunk_size + 1
+                                    range_end = min(range_start + chunk_size - 1, total_pages)
+                                    processed_ranges.add(f"{range_start}-{range_end}")
+                                
+                                st.session_state.analysis_status[safe_filename]["processed_pages"] = len(page_chunks)
+                            
                             for start_page in range(1, total_pages + 1, chunk_size):
                                 end_page = min(start_page + chunk_size - 1, total_pages)
                                 page_range = f"{start_page}-{end_page}"
+                                
+                                # Skip if already processed
+                                if page_range in processed_ranges:
+                                    st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
+                                    # status_text.text(f"스킵 중 ({idx+1}/{total_files}): {file.name} - 페이지 {page_range} (이미 완료됨)")
+                                    continue
                                 
                                 st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Extracting"
                                 status_text.text(f"분석 중 ({idx+1}/{total_files}): {file.name} - 페이지 {page_range} 분석 중...")
@@ -1211,6 +1290,10 @@ elif menu == "도면/스펙 비교":
                                     try:
                                         chunks = doc_intel_manager.analyze_document(blob_url, page_range=page_range, high_res=use_high_res)
                                         page_chunks.extend(chunks)
+                                        
+                                        # Save progress immediately
+                                        save_progress(safe_filename, page_chunks, total_pages)
+                                        
                                         st.session_state.analysis_status[safe_filename]["chunks"][page_range] = "Ready"
                                         st.session_state.analysis_status[safe_filename]["processed_pages"] += len(chunks)
                                         break
@@ -1283,6 +1366,10 @@ elif menu == "도면/스펙 비교":
                                         st.info("원본 파일 삭제 완료.")
                                     except Exception as e:
                                         st.error(f"원본 파일 삭제 실패: {e}")
+                            
+                            # Success cleanup
+                            if indexing_success:
+                                delete_progress(safe_filename)
                             
                             st.session_state.analysis_status[safe_filename]["status"] = "Ready"
                             progress_bar.progress((idx + 1) / total_files)
