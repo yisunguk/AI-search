@@ -3393,20 +3393,34 @@ if menu == "디버그 (Debug)":
             # Apply same cleaning logic as Chat Manager
             import re
             cleaned_content = raw_content
+            
             # 1. Remove XML comments
             cleaned_content = re.sub(r'<!--.*?-->', '', cleaned_content, flags=re.DOTALL)
-            # 2. Preserve Table Structure
+            
+            # 2. Mark intended line breaks
+            LINE_BREAK = "___LB___"
+            cleaned_content = re.sub(r'</tr>', LINE_BREAK, cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'<br\s*/?>', LINE_BREAK, cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'</p>', LINE_BREAK, cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'</div>', LINE_BREAK, cleaned_content, flags=re.IGNORECASE)
+            
+            # 3. Replace cell endings with pipe
             cleaned_content = re.sub(r'</td>', ' | ', cleaned_content, flags=re.IGNORECASE)
             cleaned_content = re.sub(r'</th>', ' | ', cleaned_content, flags=re.IGNORECASE)
-            cleaned_content = re.sub(r'</tr>', '\n', cleaned_content, flags=re.IGNORECASE)
-            cleaned_content = re.sub(r'<br\s*/?>', '\n', cleaned_content, flags=re.IGNORECASE)
-            cleaned_content = re.sub(r'</p>', '\n', cleaned_content, flags=re.IGNORECASE)
-            cleaned_content = re.sub(r'</div>', '\n', cleaned_content, flags=re.IGNORECASE)
-            # 3. Remove remaining tags
+            
+            # 4. Remove all original newlines
+            cleaned_content = cleaned_content.replace('\n', ' ').replace('\r', ' ')
+            
+            # 5. Remove remaining tags
             cleaned_content = re.sub(r'<[^>]+>', '', cleaned_content)
-            # 4. Noise
+            
+            # 6. Restore intended line breaks
+            cleaned_content = cleaned_content.replace(LINE_BREAK, '\n')
+            
+            # 7. Noise
             cleaned_content = cleaned_content.replace("AutoCAD SHX Text", "").replace("%%C", "Ø")
-            # 5. Collapse whitespace
+            
+            # 8. Collapse whitespace
             cleaned_content = re.sub(r'[ \t]+', ' ', cleaned_content)
             cleaned_content = re.sub(r'\n\s*\n', '\n\n', cleaned_content)
             cleaned_content = cleaned_content.strip()

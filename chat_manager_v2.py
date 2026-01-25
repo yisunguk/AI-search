@@ -218,31 +218,37 @@ Convert the user's natural language question into a keyword-based search query.
             
         import re
         
-        # 1. Remove XML comments (e.g., <!-- PageNumber="8" -->)
+        # 1. Remove XML comments
         text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
         
-        # 2. Preserve Table Structure (Replace tags with separators)
-        # Replace cell endings with pipe
+        # 2. Mark intended line breaks (Row/Block endings)
+        # We use a placeholder to protect these breaks from the newline stripping step
+        LINE_BREAK = "___LB___"
+        
+        text = re.sub(r'</tr>', LINE_BREAK, text, flags=re.IGNORECASE)
+        text = re.sub(r'<br\s*/?>', LINE_BREAK, text, flags=re.IGNORECASE)
+        text = re.sub(r'</p>', LINE_BREAK, text, flags=re.IGNORECASE)
+        text = re.sub(r'</div>', LINE_BREAK, text, flags=re.IGNORECASE)
+        
+        # 3. Replace cell endings with pipe
         text = re.sub(r'</td>', ' | ', text, flags=re.IGNORECASE)
         text = re.sub(r'</th>', ' | ', text, flags=re.IGNORECASE)
         
-        # Replace row endings and breaks with newline
-        text = re.sub(r'</tr>', '\n', text, flags=re.IGNORECASE)
-        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
-        text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
-        text = re.sub(r'</div>', '\n', text, flags=re.IGNORECASE)
+        # 4. Remove all original newlines (to prevent vertical splitting of cells)
+        text = text.replace('\n', ' ').replace('\r', ' ')
         
-        # 3. Remove remaining XML tags (e.g., <PageHeader ...>, <table>, etc.)
+        # 5. Remove remaining tags
         text = re.sub(r'<[^>]+>', '', text)
         
-        # 4. Remove specific OCR noise
+        # 6. Restore intended line breaks
+        text = text.replace(LINE_BREAK, '\n')
+        
+        # 7. Remove specific OCR noise
         text = text.replace("AutoCAD SHX Text", "")
         text = text.replace("%%C", "Ø")
         
-        # 5. Collapse multiple spaces/newlines
-        # Collapse spaces but keep newlines
+        # 8. Collapse whitespace
         text = re.sub(r'[ \t]+', ' ', text)
-        # Collapse multiple newlines
         text = re.sub(r'\n\s*\n', '\n\n', text)
         
         return text.strip()
