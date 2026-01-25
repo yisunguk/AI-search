@@ -3098,9 +3098,15 @@ if menu == "사용자 설정":
 
 if menu == "디버그 (Debug)":
     st.title("🔍 Search Debug Tool (Cloud)")
+    st.write("Debug Menu Loaded...") # Debug print
     
     # Secrets (Already loaded in app.py as global variables, but we can reuse get_search_manager)
-    search_manager = get_search_manager()
+    try:
+        search_manager = get_search_manager()
+        st.write("Search Manager Loaded.") # Debug print
+    except Exception as e:
+        st.error(f"Failed to load Search Manager: {e}")
+        st.stop()
     
     # ---------------------------------------------------------
     # NEW: Keyword Search Debug (Stage 1 Simulation)
