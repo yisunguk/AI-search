@@ -1598,7 +1598,7 @@ elif menu == "도면/스펙 비교":
                                 # Initialize state if missing
                                 chk_key = f"chk_{blob_info['name']}"
                                 if chk_key not in st.session_state:
-                                    st.session_state[chk_key] = True # Default to True (Select All default)
+                                    st.session_state[chk_key] = False # Default to False
                                 
                                 is_selected = st.checkbox(f"select_{idx}", key=chk_key, label_visibility="collapsed")
                                 if is_selected:
