@@ -1076,7 +1076,8 @@ elif menu == "검색 & AI 채팅":
                                 prompt, 
                                 conversation_history, 
                                 search_mode=chat_search_mode, 
-                                use_semantic_ranker=chat_use_semantic
+                                use_semantic_ranker=chat_use_semantic,
+                                is_admin=(user_role == 'admin')
                             )
                             
                             # Display response
@@ -2020,7 +2021,8 @@ elif menu == "도면/스펙 비교":
                                 use_semantic_ranker=False,
                                 filter_expr=base_filter,
                                 available_files=current_files,
-                                user_folder=user_folder # Pass user folder for Python-side filtering
+                                user_folder=user_folder, # Pass user folder for Python-side filtering
+                                is_admin=(user_role == 'admin')
                             )
                         
                             st.markdown(response_text)

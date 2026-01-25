@@ -312,7 +312,7 @@ Convert the user's natural language question into a keyword-based search query.
             print(f"DEBUG: Direct JSON fetch error for {filename}: {e}")
             return []
 
-    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None, user_folder=None):
+    def get_chat_response(self, user_message, conversation_history=None, search_mode="any", use_semantic_ranker=False, filter_expr=None, available_files=None, user_folder=None, is_admin=False):
         """
         Get chat response with client-side RAG
         """
@@ -875,7 +875,10 @@ USER QUESTION:
             
             debug_info += "\n</details>"
             
-            return response_text + debug_info, citations, context, final_filter, search_results
+            # Only add debug info for admins
+            final_response = response_text + debug_info if is_admin else response_text
+            
+            return final_response, citations, context, final_filter, search_results
 
         except Exception as e:
             print(f"Error in get_chat_response: {e}")
