@@ -3388,16 +3388,48 @@ if menu == "디버그 (Debug)":
             doc = direct_check[0]
             st.success(f"✅ **페이지가 인덱스에 존재합니다.** (ID: `{doc.get('id', 'N/A')}`)")
             
-            content = doc.get('content', '')
-            st.markdown("### 📄 페이지 내용 (Content Preview)")
-            st.text_area("", content, height=300)
+            raw_content = doc.get('content', '')
             
-            # 2. Analyze Keyword Matching
-            st.markdown("### 🔍 키워드 매칭 분석")
+            # Apply same cleaning logic as Chat Manager
+            import re
+            cleaned_content = raw_content
+            # 1. Remove XML comments
+            cleaned_content = re.sub(r'<!--.*?-->', '', cleaned_content, flags=re.DOTALL)
+            # 2. Preserve Table Structure
+            cleaned_content = re.sub(r'</td>', ' | ', cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'</th>', ' | ', cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'</tr>', '\n', cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'<br\s*/?>', '\n', cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'</p>', '\n', cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r'</div>', '\n', cleaned_content, flags=re.IGNORECASE)
+            # 3. Remove remaining tags
+            cleaned_content = re.sub(r'<[^>]+>', '', cleaned_content)
+            # 4. Noise
+            cleaned_content = cleaned_content.replace("AutoCAD SHX Text", "").replace("%%C", "Ø")
+            # 5. Collapse whitespace
+            cleaned_content = re.sub(r'[ \t]+', ' ', cleaned_content)
+            cleaned_content = re.sub(r'\n\s*\n', '\n\n', cleaned_content)
+            cleaned_content = cleaned_content.strip()
+            
+            st.markdown("### 📄 페이지 내용 (Content Preview)")
+            
+            tab_clean, tab_raw = st.tabs(["✨ Cleaned (AI가 보는 화면)", "📝 Raw (원본 데이터)"])
+            
+            with tab_clean:
+                st.info("AI에게는 아래와 같이 **표 구조가 정리된 텍스트**가 전달됩니다.")
+                st.text_area("Cleaned Content", cleaned_content, height=400)
+                
+            with tab_raw:
+                st.warning("인덱스에 저장된 원본 데이터입니다 (HTML 태그 포함).")
+                st.text_area("Raw Content", raw_content, height=400)
+
+            
+            # 2. Analyze Keyword Matching (Check against CLEANED content)
+            st.markdown("### 🔍 키워드 매칭 분석 (Cleaned Content 기준)")
             keywords = target_query.split()
             
             match_data = []
-            content_upper = content.upper()
+            content_upper = cleaned_content.upper()
             
             all_matched = True
             for kw in keywords:
