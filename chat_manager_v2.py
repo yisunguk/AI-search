@@ -557,59 +557,9 @@ Convert the user's natural language question into a keyword-based search query.
                 
 
 
-            # 4. Force Inclusion of Selected Files (CRITICAL for Comparison)
-            # If user selected files but they didn't appear in the top results, force fetch them.
-            if available_files:
-                # Normalize available_files again just to be safe (though we did it above, let's use the local var)
-                normalized_files = [unicodedata.normalize('NFC', f) for f in available_files]
-                
-                # Get set of filenames already in results
-                found_filenames = set()
-                for res in search_results:
-                    fname = res.get('metadata_storage_name', '')
-                    # Normalize found filenames too
-                    found_filenames.add(unicodedata.normalize('NFC', fname))
-                
-                # Check for missing files
-                for target_file in normalized_files:
-                    # We check if the target file is "represented" in the results
-                    is_found = False
-                    for found in found_filenames:
-                        if found.startswith(target_file):
-                            is_found = True
-                            break
-                    
-                    # CRITICAL: Even if found, we ALWAYS fetch the first few pages (Index/Summary) 
-                    # and specifically search for LIST pages if the query suggests it.
-                    # This ensures we don't miss the P&ID List just because the title page was found.
-                    print(f"DEBUG: Essential context fetch for '{target_file}' (is_found={is_found})")
-                    safe_target = target_file.replace("'", "''")
-                    
-                    import re
-                    escaped_target = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\])', r'\\\1', safe_target)
-                    # Use search.ismatch for exact filename matching (more reliable for SearchableFields)
-                    file_specific_filter = f"search.ismatch('\"{escaped_target}\"', 'metadata_storage_name')"
-                    if final_filter:
-                        file_specific_filter = f"({final_filter}) and ({file_specific_filter})"
-                    
-                    # 1. Fetch first 10 pages (likely to contain Index/TOC) - REMOVED
-                    # This was causing irrelevant pages (p.1-p.30) to flood the context even for specific queries.
-                    # We rely on the search engine to find the index if the user asks for it.
-                    pass
-
-                    # 2. If query is list-related, specifically search for LIST pages
-                    if any(keyword in search_query.upper() for keyword in ["LIST", "INDEX", "TABLE", "리스트", "목록", "비교", "COMPARE"]):
-                        print(f"DEBUG: List-specific search for '{target_file}'...")
-                        list_query = "PIPING INSTRUMENT DIAGRAM LIST INDEX TABLE DRAWING LIST 도면 목록 리스트 목차 FOR LIST"
-                        list_results = self.search_manager.search(
-                            list_query,
-                            filter_expr=file_specific_filter,
-                            top=50,
-                            search_mode="any"
-                        )
-                        if list_results:
-                            search_results.extend(list_results)
-                            print(f"DEBUG: Added {len(list_results)} list-specific pages for '{target_file}'")
+            # 4. Force Inclusion of Selected Files - REMOVED
+            # We rely purely on the search engine ranking.
+            pass
 
             # 5. Page-Aware Context Grouping
             # Group chunks by (Filename, Page)
@@ -654,36 +604,9 @@ Convert the user's natural language question into a keyword-based search query.
                 
                 key = (filename, page)
                 
-                # Track the best rank for this page
-                # BOOST ranking for pages with "LIST", "INDEX", "TABLE" keywords
+                # Boosting Logic - REMOVED
+                # We rely purely on the search engine ranking.
                 boost = 0
-                content_upper = content.upper()
-                
-                # Enhanced Boosting Logic
-                is_list_page = False
-                if any(keyword in content_upper for keyword in ["PIPING AND INSTRUMENT DIAGRAM", "P&I DIAGRAM", "P & I DIAGRAM", "DRAWING LIST", "도면 목록", "도면 리스트"]):
-                    if any(list_keyword in content_upper for list_keyword in ["LIST", "INDEX", "TABLE OF CONTENTS", "목록", "리스트"]):
-                        is_list_page = True
-                
-                # Direct check for "DRAWING LIST" in content which is a strong signal
-                if "DRAWING LIST" in content_upper or "도면 목록" in content_upper:
-                    is_list_page = True
-
-                if is_list_page:
-                    boost = -200  # Stronger boost for list pages
-                    print(f"DEBUG: BOOSTING page {key} (contains LIST/INDEX/TABLE) - Rank adjustment: {boost}")
-                
-                # Title-based boosting: If query keywords match the page title, boost heavily
-                if page_title:
-                    title_upper = page_title.upper()
-                    query_upper = user_message.upper()
-                    # Check for keyword overlap
-                    query_keywords = set(re.findall(r'\w+', query_upper))
-                    title_keywords = set(re.findall(r'\w+', title_upper))
-                    overlap = query_keywords & title_keywords
-                    if len(overlap) >= 2:  # At least 2 keywords match
-                        boost -= 100  # Strong boost for title match
-                        print(f"DEBUG: TITLE MATCH BOOST for page {key} (Title: {page_title[:50]}...) - Rank adjustment: {boost}")
                 
                 adjusted_rank = rank + boost
                 if key not in page_ranks:
