@@ -555,19 +555,7 @@ Convert the user's natural language question into a keyword-based search query.
             # If search fails, do NOT fetch the whole file. It confuses the LLM.
             pass
                 
-                # Filter by user_folder
-                if user_folder and search_results:
-                    from urllib.parse import unquote
-                    original_count = len(search_results)
-                    filtered_results = [
-                        doc for doc in search_results 
-                        if user_folder in unquote(doc.get('metadata_storage_path', ''))
-                    ]
-                    if filtered_results:
-                        search_results = filtered_results
-                        print(f"DEBUG: User folder filter (fallback 2): {original_count} -> {len(search_results)}")
-                    else:
-                        print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
+
 
             # 4. Force Inclusion of Selected Files (CRITICAL for Comparison)
             # If user selected files but they didn't appear in the top results, force fetch them.
