@@ -415,16 +415,9 @@ Convert the user's natural language question into a keyword-based search query.
             # We want to match "PIPING", "INSTRUMENT", "DIAGRAM", "LIST" regardless of "AND" or "&"
             import re
             
-            # 1. Remove conversational stopwords (Korean & English)
-            stopwords = [
-                "내용을", "알려", "주세요", "해줘", "찾아", "보여", "검색", "대해", "관해", "설명", "요약", "정리",
-                "please", "find", "show", "me", "tell", "about", "search", "summary", "summarize", "explain"
-            ]
-            clean_query = user_message
-            for word in stopwords:
-                clean_query = clean_query.replace(word, "")
-            
-            sanitized_query = re.sub(r'\bAND\b', ' ', clean_query, flags=re.IGNORECASE)
+            # CRITICAL: Match app.py logic exactly (No stopword removal)
+            # The Debug Tool uses the raw query (sanitized), so we should too.
+            sanitized_query = re.sub(r'\bAND\b', ' ', user_message, flags=re.IGNORECASE)
             sanitized_query = re.sub(r'[&+\-|!(){}\[\]^"~*?:\\]', ' ', sanitized_query)
             sanitized_query = " ".join(sanitized_query.split()) # Normalize whitespace
             
@@ -452,7 +445,9 @@ Convert the user's natural language question into a keyword-based search query.
                 print(f"DEBUG: [Stage 1] No exact matches found")
             
             # Stage 2: Query expansion (only if Stage 1 didn't find enough)
-            EXACT_MATCH_THRESHOLD = 20  # If we have this many exact matches, skip expansion
+            # CRITICAL: Lower threshold to 3. If we found 3+ exact matches, that's usually enough context.
+            # We don't want to dilute high-quality exact matches with loose semantic matches.
+            EXACT_MATCH_THRESHOLD = 3
             
             if exact_match_count < EXACT_MATCH_THRESHOLD:
                 print(f"DEBUG: [Stage 2] Expanding query (only {exact_match_count} exact matches)...")
