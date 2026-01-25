@@ -4,6 +4,7 @@ Renders login UI
 """
 
 import streamlit as st
+import time
 from utils.auth_manager import AuthManager
 from datetime import datetime, timedelta
 
@@ -18,16 +19,6 @@ def render_login_page(auth_manager: AuthManager, cookie_manager):
     # Custom CSS for login page
     st.markdown("""
     <style>
-        /* Center login box */
-        .login-container {
-            max-width: 400px;
-            margin: 100px auto;
-            padding: 40px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
         /* Header styling */
         .login-header {
             text-align: center;
