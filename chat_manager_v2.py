@@ -532,11 +532,39 @@ Convert the user's natural language question into a keyword-based search query.
             # We rely purely on the search engine ranking.
             pass
 
+            # ============================================================
+            # KEYWORD COUNT RERANKING (Client-Side)
+            # ============================================================
+            # The user requested to prioritize pages with the most keyword matches.
+            # We ignore the search engine's score and sort by keyword frequency.
+            
+            import re
+            # Extract keywords (simple whitespace split + alphanumeric check)
+            query_keywords = [kw for kw in user_message.upper().split() if len(kw) > 1]
+            
+            # Calculate score for each result
+            for res in search_results:
+                content = res.get('content', '').upper()
+                match_count = 0
+                for kw in query_keywords:
+                    # Simple count
+                    match_count += content.count(kw)
+                res['@keyword_score'] = match_count
+            
+            # Sort by keyword score (descending)
+            search_results.sort(key=lambda x: x.get('@keyword_score', 0), reverse=True)
+            
+            print(f"DEBUG: Reranked {len(search_results)} results by keyword count.")
+            for i, res in enumerate(search_results[:5]):
+                print(f"  {i+1}. {res.get('metadata_storage_name')} (Score: {res.get('@keyword_score')})")
+            # ============================================================
+
             # 5. Page-Aware Context Grouping
             # Group chunks by (Filename, Page)
             grouped_context = {} # Key: (filename, page), Value: list of chunks
             citations_map = {} # Key: (filename, page), Value: citation info
             page_ranks = {} # Key: (filename, page), Value: min_rank (lower is better)
+            page_scores = {} # Key: (filename, page), Value: keyword_score (higher is better)
             
             for rank, result in enumerate(search_results):
                 filename = result.get('metadata_storage_name', 'Unknown')
@@ -582,8 +610,11 @@ Convert the user's natural language question into a keyword-based search query.
                 adjusted_rank = rank + boost
                 if key not in page_ranks:
                     page_ranks[key] = adjusted_rank
+                    page_scores[key] = result.get('@keyword_score', 0)
                 else:
                     page_ranks[key] = min(page_ranks[key], adjusted_rank)
+                    # Keep the highest score if duplicate
+                    page_scores[key] = max(page_scores.get(key, 0), result.get('@keyword_score', 0))
                 
                 if key not in grouped_context:
                     grouped_context[key] = []
@@ -817,6 +848,7 @@ USER QUESTION:
             for idx, key in enumerate(sorted_keys[:context_limit], 1):
                 filename, page = key
                 rank = page_ranks.get(key, 999)
+                score = page_scores.get(key, 0)
                 
                 # Check if it was a list page
                 is_list = False
@@ -829,7 +861,7 @@ USER QUESTION:
                 marker = "🎯 LIST" if is_list else ""
                 if idx == 1: marker += " (Top)"
                 
-                debug_info += f"| {idx} | {filename} (p.{page}) | {rank} {marker} | Context |\n"
+                debug_info += f"| {idx} | {filename} (p.{page}) | {score} (Matches) {marker} | Context |\n"
             
             debug_info += "\n</details>"
             
