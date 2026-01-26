@@ -408,7 +408,7 @@ class AzureSearchManager:
                 "search_text": query,
                 "filter": filter_expr,
                 "include_total_count": True,
-                "select": ["metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified", "metadata_storage_content_type"],
+                "select": ["metadata_storage_name", "content", "metadata_storage_path", "metadata_storage_last_modified", "metadata_storage_content_type", "metadata_storage_size"],
                 "highlight_fields": "content,content_exact",
                 "highlight_pre_tag": "<mark style='background-color: #ffd700; color: black; font-weight: bold;'>",
                 "highlight_post_tag": "</mark>",
