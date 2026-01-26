@@ -379,7 +379,7 @@ def get_user_folder_name(user_info):
 user_folder = get_user_folder_name(user_info)
 
 # Define role-based menu permissions (Fallback / Admin)
-ALL_MENUS = ["홈", "번역하기", "파일 보관함", "검색 & AI 채팅", "도면/스펙 비교", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정", "디버그 (Debug)"]
+ALL_MENUS = ["홈", "번역하기", "파일 보관함", "문서 업로드 & AI 채팅", "도면/스펙 비교", "엑셀데이터 자동추출", "사진대지 자동작성", "작업계획 및 투입비 자동작성", "관리자 설정", "사용자 설정", "디버그 (Debug)"]
 GUEST_MENUS = ["홈", "사용자 설정"]
 
 if user_role == 'admin':
@@ -390,7 +390,8 @@ else:
     
     # Map old menu names to new names (Migration fix)
     available_menus = [
-        "도면/스펙 비교" if menu == "도면/스펙 분석" else menu 
+        "도면/스펙 비교" if menu == "도면/스펙 분석" else 
+        "문서 업로드 & AI 채팅" if menu == "검색 & AI 채팅" else menu 
         for menu in available_menus
     ]
     # Ensure "홈" and "사용자 설정" are always available
@@ -408,6 +409,10 @@ with st.sidebar:
     st.markdown(f"### 👤 {user_info.get('name', 'User')}")
     st.caption(f"**{user_info.get('email', '')}**")
     st.caption(f"권한: {user_role.upper()}")
+    
+    # Debug: Show permissions and menus
+    # st.caption(f"Perms: {user_perms}")
+    # st.caption(f"Menus: {available_menus}")
     
     if st.button("🚪 로그아웃", key="logout_btn", use_container_width=True):
         st.session_state.is_logged_in = False
@@ -785,7 +790,7 @@ elif menu == "파일 보관함":
         except Exception as e:
             st.error(f"파일 목록을 불러오는 중 오류 발생: {e}")
 
-elif menu == "검색 & AI 채팅":
+elif menu == "문서 업로드 & AI 채팅":
     from utils.chat_history_utils import load_history, save_history, get_session_title
     SEARCH_HISTORY_FILE = "search_chat_history.json"
 
@@ -870,139 +875,113 @@ elif menu == "검색 & AI 채팅":
             st.rerun()
 
     with col_main:
-        st.title("검색 & AI 채팅")
+        st.title("문서 업로드 & AI 채팅")
         # Tabs for Search and Chat to preserve state
-        tab1, tab2 = st.tabs(["🔍 문서 검색", "🤖 AI 채팅"])
+        tab1, tab2 = st.tabs(["📤 문서 업로드", "🤖 AI 채팅"])
         
         with tab1:
-
-            st.subheader("🔍 PDF 문서 검색")
+            # File Uploader (Simplified)
+            st.markdown("### 📄 문서 업로드")
+            doc_upload = st.file_uploader("문서를 업로드해 주세요.", type=['pdf', 'docx', 'txt', 'pptx'], key="doc_search_upload")
             
-            # File Uploader for Document Search
-            with st.expander("📤 문서 업로드 (내 문서)", expanded=False):
-                doc_upload = st.file_uploader("검색할 문서 업로드", type=['pdf', 'docx', 'txt', 'pptx'], key="doc_search_upload")
-                if doc_upload and st.button("업로드", key="btn_doc_upload"):
-                    try:
-                        blob_service_client = get_blob_service_client()
-                        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+            if doc_upload and st.button("업로드", key="btn_doc_upload"):
+                try:
+                    blob_service_client = get_blob_service_client()
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    
+                    # Upload to {user_folder}/documents/ (Flat structure)
+                    blob_name = f"{user_folder}/documents/{doc_upload.name}"
+                    blob_client = container_client.get_blob_client(blob_name)
+                    blob_client.upload_blob(doc_upload, overwrite=True)
+                    st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
+                except Exception as e:
+                    st.error(f"업로드 실패: {e}")
+            
+            st.divider()
+            
+            # Indexed Document List
+            st.subheader("📚 인덱싱된 문서 목록")
+            
+            try:
+                search_manager = get_search_manager()
+                
+                # Construct prefix URL for filtering
+                account_name = get_blob_service_client().account_name
+                encoded_user_folder = urllib.parse.quote(user_folder)
+                prefix_url = f"https://{account_name}.blob.core.windows.net/{CONTAINER_NAME}/{encoded_user_folder}/"
+                
+                # Filter logic
+                if user_role == 'admin':
+                    filter_expr = None
+                else:
+                    # Workaround: Use range query instead of startswith if startswith is not supported
+                    # prefix_url ends with '/' (ASCII 47). Next char is '0' (ASCII 48).
+                    # So we want path >= prefix_url AND path < prefix_url_with_next_char
+                    # Actually, let's just use the next char logic safely.
+                    # Or just try startswith again with debug? No, let's try the range.
+                    # prefix_url = .../
+                    # upper_bound = ...0
+                    upper_bound = prefix_url[:-1] + '0'
+                    filter_expr = f"metadata_storage_path ge '{prefix_url}' and metadata_storage_path lt '{upper_bound}'"
+                
+                # Debug
+                # st.write(f"Debug Filter: {filter_expr}")
+                
+                # Search all documents (*)
+                results = search_manager.search("*", filter_expr=filter_expr, top=1000)
+                
+                # Filter out .json files first
+                filtered_results = []
+                for res in results:
+                    file_name = res.get('metadata_storage_name', 'Unknown')
+                    if not file_name.lower().endswith('.json'):
+                        filtered_results.append(res)
+                
+                if not filtered_results:
+                    st.info("인덱싱된 문서가 없습니다.")
+                else:
+                    st.caption(f"총 {len(filtered_results)}개의 문서가 검색되었습니다.")
+                    
+                    # Display as a table
+                    doc_data = []
+                    for res in filtered_results:
+                        file_name = res.get('metadata_storage_name', 'Unknown')
+                        size = res.get('metadata_storage_size', 0)
+                        last_modified = res.get('metadata_storage_last_modified', '')
+                        path = res.get('metadata_storage_path', '')
                         
-                        # file_uuid = str(uuid.uuid4())[:8]
-                        # Upload to {user_folder}/documents/ (Flat structure)
-                        blob_name = f"{user_folder}/documents/{doc_upload.name}"
-                        blob_client = container_client.get_blob_client(blob_name)
-                        blob_client.upload_blob(doc_upload, overwrite=True)
-                        st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
-                    except Exception as e:
-                        st.error(f"업로드 실패: {e}")
-            
-            # Search Input
-            query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...")
-            
-            # Search Options (Expander)
-            with st.expander("⚙️ 검색 옵션 설정", expanded=False):
-                c1, c2 = st.columns(2)
-                with c1:
-                    use_semantic = st.checkbox("시맨틱 랭커", value=False, help="의미 기반 검색 (Standard Tier 이상)")
-                with c2:
-                    search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=0, horizontal=True, help="all: 모든 단어 포함, any: 하나라도 포함")
-                    search_mode = "all" if "all" in search_mode_opt else "any"
-            
-            
-            if query:
-                with st.spinner("검색 중..."):
-                    search_manager = get_search_manager()
+                        # Convert size to MB
+                        size_mb = f"{int(size) / (1024 * 1024):.2f} MB"
+                        
+                        # Format date
+                        try:
+                            dt = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
+                            date_str = dt.strftime("%Y-%m-%d %H:%M")
+                        except:
+                            date_str = last_modified
+                            
+                        doc_data.append({
+                            "Name": file_name,
+                            "Size": size_mb,
+                            "Last Modified": date_str,
+                            "path": path # Hidden for logic
+                        })
                     
-                    # Filter by user folder
-                    # Construct prefix URL: https://{account}.blob.core.windows.net/{container}/{user_folder}/
-                    account_name = get_blob_service_client().account_name
-                    # Need to handle spaces in user_folder for URL
-                    encoded_user_folder = urllib.parse.quote(user_folder)
-                    prefix_url = f"https://{account_name}.blob.core.windows.net/{CONTAINER_NAME}/{encoded_user_folder}/"
+                    # Use dataframe for better display
+                    import pandas as pd
+                    df = pd.DataFrame(doc_data)
                     
-                    # OData filter: startswith(metadata_storage_path, 'prefix_url')
-                    # Also allow 'all' access for admin if needed, but user requested isolation.
-                    # Search Filter Logic
-                    if user_role == 'admin':
-                        # Admin can search everything
-                        filter_expr = None
-                    else:
-                        # Regular users are restricted to their folder
-                        filter_expr = f"startswith(metadata_storage_path, '{prefix_url}')"
-                    
-                    results = search_manager.search(query, filter_expr=filter_expr, use_semantic_ranker=use_semantic, search_mode=search_mode)
-                    
-                    if not results:
-                        st.info("검색 결과가 없습니다.")
-                    else:
-                        st.success(f"총 {len(results)}개의 문서를 찾았습니다.")
-                        for result in results:
-                            with st.container():
-                                file_name = result.get('metadata_storage_name', 'Unknown File')
-                                path = result.get('metadata_storage_path', '')
-                                
-                                # 하이라이트 처리
-                                highlights = result.get('@search.highlights')
-                                if highlights:
-                                    # content 또는 content_exact에서 하이라이트 추출
-                                    # 여러 개의 하이라이트가 있을 수 있으므로 합쳐서 보여줌
-                                    snippets = []
-                                    if 'content' in highlights:
-                                        snippets.extend(highlights['content'])
-                                    if 'content_exact' in highlights:
-                                        snippets.extend(highlights['content_exact'])
-                                    
-                                    # 중복 제거 및 길이 제한
-                                    unique_snippets = list(set(snippets))[:3]
-                                    content_snippet = " ... ".join(unique_snippets)
-                                else:
-                                    # 하이라이트 없으면 기본 스니펫
-                                    content_snippet = result.get('content', '')[:300] + "..."
-                                
-                                blob_path = ""
-                                try:
-                                    if CONTAINER_NAME in path:
-                                        blob_path = path.split(f"/{CONTAINER_NAME}/")[-1]
-                                        blob_path = urllib.parse.unquote(blob_path)
-                                except:
-                                    pass
-                                    
-                                st.markdown(f"### 📄 {file_name}")
-                                st.markdown(f"> {content_snippet}", unsafe_allow_html=True) # HTML 태그(bold) 허용
-                                
-                                if blob_path:
-                                    try:
-                                        blob_service_client = get_blob_service_client()
-                                        
-                                        # Content-Type 결정 (확장자 우선 적용)
-                                        # 메타데이터가 application/octet-stream인 경우가 많아 확장자로 강제 설정
-                                        if file_name.lower().endswith('.pdf'):
-                                            content_type = "application/pdf"
-                                        else:
-                                            content_type = result.get('metadata_storage_content_type')
-                                            if not content_type or content_type == "application/octet-stream":
-                                                import mimetypes
-                                                content_type, _ = mimetypes.guess_type(file_name)
-                                        
-                                        # Blob SAS 생성 (Content-Disposition: inline 설정 + Content-Type 강제)
-                                        sas_token = generate_blob_sas(
-                                            account_name=blob_service_client.account_name,
-                                            container_name=CONTAINER_NAME,
-                                            blob_name=blob_path,
-                                            account_key=blob_service_client.credential.account_key,
-                                            permission=BlobSasPermissions(read=True),
-                                            expiry=datetime.utcnow() + timedelta(hours=1),
-                                            content_disposition="inline", # 브라우저에서 열기 강제
-                                            content_type=content_type # 올바른 MIME 타입 설정
-                                        )
-                                        
-                                        sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
-                                        
-                                        # 새 탭에서 열기 (target="_blank")
-                                        st.markdown(f'<a href="{sas_url}" target="_blank">📄 문서 열기 (새 탭)</a>', unsafe_allow_html=True)
-                                    except Exception as e:
-                                        st.caption(f"문서 링크 생성 실패: {e}")
-                                
-                                st.divider()
+                    # Display table with selection (optional, maybe just list)
+                    # For now, just a clean dataframe display
+                    st.dataframe(
+                        df[["Name", "Size", "Last Modified"]],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+            except Exception as e:
+                st.error(f"문서 목록을 불러오는 중 오류가 발생했습니다: {e}")
+                if 'filter_expr' in locals():
+                    st.code(filter_expr)
         
         with tab2:
             st.subheader("🤖 AI 문서 도우미 (GPT-5.2)")
@@ -1133,10 +1112,6 @@ elif menu == "검색 & AI 채팅":
                         except Exception as e:
                             st.error(f"오류가 발생했습니다: {str(e)}")
         
-        if st.session_state.chat_messages:
-            if st.button("🗑️ 대화 초기화"):
-                st.session_state.chat_messages = []
-                st.rerun()
 
 elif menu == "도면/스펙 비교":
     DRAWING_HISTORY_FILE = "drawing_chat_history.json"
