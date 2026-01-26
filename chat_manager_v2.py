@@ -403,6 +403,8 @@ Convert the user's natural language question into a keyword-based search query.
             print(f"DEBUG: ===== TWO-STAGE SEARCH STARTING =====")
             print(f"DEBUG: User query: '{user_message}'")
             
+            search_query = user_message # Initialize to avoid UnboundLocalError if Stage 2 is skipped
+            
             search_results = []
             exact_match_count = 0
             
@@ -509,7 +511,11 @@ Convert the user's natural language question into a keyword-based search query.
                     search_results = filtered_results
                     print(f"DEBUG: User folder filter: {original_count} -> {len(search_results)}")
                 else:
-                    print(f"DEBUG: User folder filter would remove all {original_count} results, SKIPPING filter")
+                    # CRITICAL SECURITY FIX: Do NOT skip filter if it removes everything.
+                    # If the user has no documents in the search results, they should see NOTHING,
+                    # rather than seeing other users' documents.
+                    print(f"DEBUG: User folder filter removed all {original_count} results. Returning empty list.")
+                    search_results = []
             
             # Debug: Check search results
             print(f"DEBUG: Search query='{search_query}', Results count={len(search_results) if search_results else 0}")

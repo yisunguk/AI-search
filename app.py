@@ -1077,6 +1077,8 @@ elif menu == "검색 & AI 채팅":
                                 conversation_history, 
                                 search_mode=chat_search_mode, 
                                 use_semantic_ranker=chat_use_semantic,
+                                filter_expr=None,
+                                user_folder=user_folder, # Pass Name-based folder (matches Blob/Index path)
                                 is_admin=(user_role == 'admin')
                             )
                             
