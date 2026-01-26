@@ -425,16 +425,9 @@ class AzureSearchManager:
                     "query_type": "semantic",
                     "semantic_configuration_name": "my-semantic-config",
                     "query_answer": "extractive",
-                    "query_caption": "extractive",
-                    "query_language": "ko-kr"
+                    "query_caption": "extractive"
                 })
 
-            # Add highlighting support
-            search_params.update({
-                "highlight_fields": "content",
-                "highlight_pre_tag": "<b>",
-                "highlight_post_tag": "</b>"
-            })
 
             results = self.search_client.search(**search_params)
             return list(results)

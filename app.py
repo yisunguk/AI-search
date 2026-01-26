@@ -877,7 +877,7 @@ elif menu == "문서 업로드 & AI 채팅":
     with col_main:
         st.title("문서 업로드 & AI 채팅")
         # Tabs for Search and Chat to preserve state
-        tab1, tab2 = st.tabs(["📤 문서 업로드", "🤖 AI 채팅"])
+        tab1, tab2, tab3 = st.tabs(["📤 문서 업로드", "🔎 AI 검색", "🤖 AI 채팅"])
         
         with tab1:
             # File Uploader (Simplified)
@@ -984,6 +984,138 @@ elif menu == "문서 업로드 & AI 채팅":
                     st.code(filter_expr)
         
         with tab2:
+            st.subheader("🔎 AI 문서 검색 (키워드)")
+            st.caption("Azure AI Search를 활용한 빠른 키워드 검색 (LLM 미사용)")
+            
+            col_search, col_btn = st.columns([0.85, 0.15])
+            with col_search:
+                ai_search_query = st.text_input("검색어 입력", placeholder="검색할 키워드를 입력하세요...", key="ai_search_query")
+            with col_btn:
+                st.write("") # Spacer
+                st.write("") # Spacer
+                btn_search = st.button("검색", key="btn_ai_search", type="primary", use_container_width=True)
+            
+            if ai_search_query or btn_search:
+                if not ai_search_query:
+                    st.warning("검색어를 입력해주세요.")
+                else:
+                    with st.spinner("검색 중..."):
+                        try:
+                            search_manager = get_search_manager()
+                            
+                            # Construct prefix URL for filtering (Reuse logic)
+                            account_name = get_blob_service_client().account_name
+                            encoded_user_folder = urllib.parse.quote(user_folder)
+                            prefix_url = f"https://{account_name}.blob.core.windows.net/{CONTAINER_NAME}/{encoded_user_folder}/"
+                            
+                            # Filter logic (Reuse logic)
+                            if user_role == 'admin':
+                                filter_expr = None
+                            else:
+                                # Workaround: Use range query
+                                upper_bound = prefix_url[:-1] + '0'
+                                filter_expr = f"metadata_storage_path ge '{prefix_url}' and metadata_storage_path lt '{upper_bound}'"
+                            
+                            # Search
+                            results = search_manager.search(ai_search_query, filter_expr=filter_expr, use_semantic_ranker=True, search_mode="any")
+                            
+                            if not results:
+                                st.info("검색 결과가 없습니다.")
+                            else:
+                                st.success(f"총 {len(results)}개의 문서를 찾았습니다.")
+                                for result in results:
+                                    with st.container():
+                                        file_name = result.get('metadata_storage_name', 'Unknown File')
+                                        path = result.get('metadata_storage_path', '')
+                                        
+                                        # Highlights
+                                        highlights = result.get('@search.highlights')
+                                        if highlights:
+                                            snippets = []
+                                            if 'content' in highlights:
+                                                snippets.extend(highlights['content'])
+                                            if 'content_exact' in highlights:
+                                                snippets.extend(highlights['content_exact'])
+                                            unique_snippets = list(set(snippets))[:3]
+                                            content_snippet = " ... ".join(unique_snippets)
+                                        else:
+                                            content_snippet = result.get('content', '')[:300] + "..."
+                                        
+                                        # Text Cleaning Logic (User Provided)
+                                        import re
+                                        def clean_text(text):
+                                            # 1. Keep multiple newlines (\n\n) for paragraph separation
+                                            # 2. Replace single newlines (\n) with space
+                                            # Exception: Keep newline if preceded by a period (.)
+                                            
+                                            # Replace single newline (not preceded by period, not followed by newline) with space
+                                            cleaned = re.sub(r'(?<!\.)\n(?!\n)', ' ', text)
+                                            
+                                            # Remove excessive spaces
+                                            cleaned = re.sub(r' +', ' ', cleaned)
+                                            
+                                            return cleaned.strip()
+                                        
+                                        content_snippet = clean_text(content_snippet)
+                                        
+                                        blob_path = ""
+                                        try:
+                                            if CONTAINER_NAME in path:
+                                                blob_path = path.split(f"/{CONTAINER_NAME}/")[-1]
+                                                blob_path = urllib.parse.unquote(blob_path)
+                                        except:
+                                            pass
+                                            
+                                        st.markdown(f"### 📄 {file_name}")
+                                        st.markdown(f"> {content_snippet}", unsafe_allow_html=True)
+                                        
+                                        if blob_path:
+                                            try:
+                                                blob_service_client = get_blob_service_client()
+                                                # SAS generation logic (simplified/copied)
+                                                if file_name.lower().endswith('.pdf'):
+                                                    content_type = "application/pdf"
+                                                else:
+                                                    content_type = result.get('metadata_storage_content_type')
+                                                    if not content_type or content_type == "application/octet-stream":
+                                                        import mimetypes
+                                                        content_type, _ = mimetypes.guess_type(file_name)
+                                                
+                                                sas_token = generate_blob_sas(
+                                                    account_name=blob_service_client.account_name,
+                                                    container_name=CONTAINER_NAME,
+                                                    blob_name=blob_path,
+                                                    account_key=blob_service_client.credential.account_key,
+                                                    permission=BlobSasPermissions(read=True),
+                                                    expiry=datetime.utcnow() + timedelta(hours=1),
+                                                    content_disposition="inline",
+                                                    content_type=content_type
+                                                )
+                                                sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path)}?{sas_token}"
+                                                
+                                                # Use Office Online Viewer for Office files
+                                                lower_name = file_name.lower()
+                                                if lower_name.endswith(('.pptx', '.ppt', '.docx', '.doc', '.xlsx', '.xls')):
+                                                    encoded_sas_url = urllib.parse.quote(sas_url)
+                                                    final_url = f"https://view.officeapps.live.com/op/view.aspx?src={encoded_sas_url}"
+                                                    link_text = "📄 웹에서 보기 (Office Viewer)"
+                                                elif lower_name.endswith('.pdf'):
+                                                    # Use Google Docs Viewer for PDFs to bypass browser download settings
+                                                    encoded_sas_url = urllib.parse.quote(sas_url)
+                                                    final_url = f"https://docs.google.com/viewer?url={encoded_sas_url}"
+                                                    link_text = "📄 웹에서 보기 (PDF Viewer)"
+                                                else:
+                                                    final_url = sas_url
+                                                    link_text = "📄 문서 열기 (새 탭)"
+                                                    
+                                                st.markdown(f'<a href="{final_url}" target="_blank">{link_text}</a>', unsafe_allow_html=True)
+                                            except Exception as e:
+                                                st.caption(f"링크 생성 실패: {e}")
+                                        st.divider()
+                        except Exception as e:
+                            st.error(f"검색 중 오류 발생: {e}")
+
+        with tab3:
             st.subheader("🤖 AI 문서 도우미 (GPT-5.2)")
             st.caption("Azure OpenAI(GPT-5.2)와 문서 검색을 활용한 정확한 답변 제공")
             
