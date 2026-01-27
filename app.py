@@ -2450,14 +2450,22 @@ elif menu == "도면/스펙 비교":
                                 # DEBUG: Show raw response before linkification
                                 # st.code(response_text, language="markdown")
                                 
-                                # Pass 1: Strict match (Closed parentheses) - Most common and safe
+                                # Pass 1: Strict match (Double Brackets [[...]]) - NEW STANDARD
+                                # Matches [[File: p.1]] or [[File - p.1]]
+                                # Also consumes trailing URL if present (e.g. [[...]] (url))
+                                pattern_double = r'\[\[(.*?)[:\-]\s*p\.?\s*(\d+)\]\](?:\s*\((?:https?|blob):[^)]+\))?'
+                                response_text = re.sub(pattern_double, replace_citation, response_text)
+
+                                # Pass 2: Strict match (Closed parentheses/brackets) - LEGACY FALLBACK
                                 # Updated to consume trailing URL if present (e.g. [Title: p.1](url)) to avoid double links
-                                pattern_strict = r'[\[\(]([^\[\]\(\)]+?:\s*p\.?\s*(\d+))[\]\)](?:\s*\((?:https?|blob):[^)]+\))?'
+                                # Also updated to allow parentheses in filename (e.g. (File(v1): p.1))
+                                # Updated to allow hyphen separator (e.g. [File - p.1])
+                                pattern_strict = r'[\[\(]([^\[\]]+?[:\-]\s*p\.?\s*(\d+))[\]\)](?:\s*\((?:https?|blob):[^)]+\))?'
                                 response_text = re.sub(pattern_strict, replace_citation, response_text)
                                 
-                                # Pass 2: Truncated match (Open parentheses at end of string) - Fallback
+                                # Pass 3: Truncated match (Open parentheses at end of string) - Fallback
                                 # Only matches if it's at the very end of the string or followed by newline
-                                pattern_truncated = r'[\[\(]([^\[\]\(\)]+?:\s*p\.?\s*(\d+))(?:\s*\((?:https?|blob):[^)]+\))?$'
+                                pattern_truncated = r'[\[\(]([^\[\]]+?[:\-]\s*p\.?\s*(\d+))(?:\s*\((?:https?|blob):[^)]+\))?$'
                                 response_text = re.sub(pattern_truncated, replace_citation, response_text)
 
                                 # Append Reference Definitions to the end of the response
@@ -2520,17 +2528,17 @@ elif menu == "도면/스펙 비교":
                                             )
                                             sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path_part, safe='/')}?{sas_token}"
 
-                                            # Use Office Online Viewer for Office files
+                                            # Use Office Online Viewer for Office files ONLY
+                                            # PDF files use direct SAS URL (browser viewer) for better page linking
                                             lower_name = res_name.lower()
                                             if lower_name.endswith(('.pptx', '.ppt', '.docx', '.doc', '.xlsx', '.xls')):
                                                 encoded_sas_url = urllib.parse.quote(sas_url)
                                                 final_url = f"https://view.officeapps.live.com/op/view.aspx?src={encoded_sas_url}"
                                                 link_text = "📄 웹에서 보기 (Office Viewer)"
                                             elif lower_name.endswith('.pdf'):
-                                                # Use Google Docs Viewer for PDFs to bypass browser download settings
-                                                encoded_sas_url = urllib.parse.quote(sas_url)
-                                                final_url = f"https://docs.google.com/viewer?url={encoded_sas_url}"
-                                                link_text = "📄 웹에서 보기 (PDF Viewer)"
+                                                # Direct SAS URL for PDF (No Google Viewer)
+                                                final_url = sas_url
+                                                link_text = "📄 문서 열기 (새 탭)"
                                             else:
                                                 final_url = sas_url
                                                 link_text = "📄 문서 열기 (새 탭)"
