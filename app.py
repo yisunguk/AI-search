@@ -100,18 +100,14 @@ def get_chat_manager():
     if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
         st.error("Azure OpenAI Endpoint 또는 Key가 설정되지 않았습니다.")
         st.stop()
-    
-    # Get search manager for Client-Side RAG
-    search_manager = get_search_manager()
-    
     return AzureOpenAIChatManager(
-        endpoint=AZURE_OPENAI_ENDPOINT,
-        api_key=AZURE_OPENAI_KEY,
-        deployment_name=AZURE_OPENAI_DEPLOYMENT,
-        api_version=AZURE_OPENAI_API_VERSION,
-        search_manager=search_manager,
-        storage_connection_string=STORAGE_CONN_STR,
-        container_name=CONTAINER_NAME
+        AZURE_OPENAI_ENDPOINT, 
+        AZURE_OPENAI_KEY, 
+        AZURE_OPENAI_DEPLOYMENT, 
+        AZURE_OPENAI_API_VERSION,
+        get_search_manager(),
+        STORAGE_CONN_STR,
+        CONTAINER_NAME
     )
 
 def get_doc_intel_manager():
@@ -120,66 +116,86 @@ def get_doc_intel_manager():
         st.stop()
     return DocumentIntelligenceManager(AZURE_DOC_INTEL_ENDPOINT, AZURE_DOC_INTEL_KEY)
 
-def generate_sas_url(blob_service_client, container_name, blob_name=None, permission="r", expiry_hours=1, content_disposition=None):
+def generate_sas_url(blob_service_client, container_name, blob_name=None, page=None, permission="r", expiry_hours=1, content_disposition=None):
     """
-    Blob 또는 Container에 대한 SAS URL 생성
-    blob_name이 있으면 Blob SAS, 없으면 Container SAS (Write용)
+    Generates a SAS URL for a blob and wraps it in a web viewer (Google Docs/Office) if applicable.
+    If blob_name is None, generates a Container SAS.
     """
-    import urllib.parse
-    
-    account_name = blob_service_client.account_name
-    
-    # Connection String으로 생성된 경우 credential은 dict일 수 있음
-    if hasattr(blob_service_client.credential, 'account_key'):
-        account_key = blob_service_client.credential.account_key
-    else:
-        account_key = blob_service_client.credential['account_key']
-    
-    # 시계 오차(Clock Skew) 방지를 위해 시작 시간을 15분 전으로 설정
-    start = datetime.utcnow() - timedelta(minutes=15)
-    expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
-    
-    if blob_name:
-        # Blob SAS 사용 (파일 직접 열기 지원을 위해 content_disposition 설정)
-        import mimetypes
-        content_type, _ = mimetypes.guess_type(blob_name)
-        if not content_type:
-            content_type = "application/octet-stream"
+    try:
+        account_name = blob_service_client.account_name
+        
+        # Handle credential types
+        if hasattr(blob_service_client.credential, 'account_key'):
+            account_key = blob_service_client.credential.account_key
+        else:
+            account_key = blob_service_client.credential['account_key']
+        
+        start = datetime.utcnow() - timedelta(minutes=15)
+        expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
+        
+        if blob_name:
+            # Clean blob name (remove page suffixes like " (p.1)")
+            import re
+            clean_name = re.sub(r'\s*\(\s*p\.?\s*\d+\s*\)', '', blob_name).strip()
             
-        # PDF는 inline, 나머지는 attachment (또는 브라우저 기본 동작)
-        # 엑셀 등은 브라우저가 알아서 다운로드 처리함
-        if content_disposition is None:
-            content_disposition = "inline" if content_type == "application/pdf" else "attachment"
+            # Determine content type
+            import mimetypes
+            content_type, _ = mimetypes.guess_type(clean_name)
+            
+            # Force PDF content type if extension matches (to ensure browser opens it)
+            if clean_name.lower().endswith('.pdf'):
+                content_type = "application/pdf"
+                content_disposition = "inline"
+            elif not content_type:
+                content_type = "application/octet-stream"
 
-        sas_token = generate_blob_sas(
-            account_name=account_name,
-            container_name=container_name,
-            blob_name=blob_name,
-            account_key=account_key,
-            permission=BlobSasPermissions(read=True),
-            start=start,
-            expiry=expiry,
-            content_disposition=content_disposition, 
-            content_type=content_type
-        )
-        
-        base_url = f"https://{account_name}.blob.core.windows.net/{container_name}"
-        encoded_blob_name = urllib.parse.quote(blob_name, safe='/')
-        return f"{base_url}/{encoded_blob_name}?{sas_token}"
-        
-    else:
-        # Container SAS 사용 (폴더 작업용)
-        sas_token = generate_container_sas(
-            account_name=account_name,
-            container_name=container_name,
-            account_key=account_key,
-            permission=ContainerSasPermissions(write=True, list=True, read=True, delete=True),
-            start=start,
-            expiry=expiry
-        )
-        
-        base_url = f"https://{account_name}.blob.core.windows.net/{container_name}"
-        return f"{base_url}?{sas_token}"
+            if content_disposition is None:
+                content_disposition = "attachment"
+
+            sas_token = generate_blob_sas(
+                account_name=account_name,
+                container_name=container_name,
+                blob_name=clean_name,
+                account_key=account_key,
+                permission=BlobSasPermissions(read=True),
+                start=start,
+                expiry=expiry,
+                content_disposition=content_disposition,
+                content_type=content_type
+            )
+            sas_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{urllib.parse.quote(clean_name, safe='/')}?{sas_token}"
+            
+            lower_name = clean_name.lower()
+            if lower_name.endswith(('.pptx', '.ppt', '.docx', '.doc', '.xlsx', '.xls')):
+                encoded_sas_url = urllib.parse.quote(sas_url)
+                return f"https://view.officeapps.live.com/op/view.aspx?src={encoded_sas_url}"
+            elif lower_name.endswith('.pdf'):
+                # Use native browser viewer (better performance/reliability than Google Viewer)
+                # encoded_sas_url = urllib.parse.quote(sas_url)
+                # final_url = f"https://docs.google.com/viewer?url={encoded_sas_url}"
+                
+                # Direct SAS URL with content_disposition=inline opens in browser PDF viewer
+                final_url = sas_url
+                if page:
+                    final_url += f"#page={page}"
+                return final_url
+            else:
+                return sas_url
+        else:
+            # Container SAS
+            sas_token = generate_container_sas(
+                account_name=account_name,
+                container_name=container_name,
+                account_key=account_key,
+                permission=ContainerSasPermissions(write=True, list=True, read=True, delete=True),
+                start=start,
+                expiry=expiry
+            )
+            return f"https://{account_name}.blob.core.windows.net/{container_name}?{sas_token}"
+            
+    except Exception as e:
+        st.error(f"SAS URL 생성 중 오류 발생 ({blob_name}): {e}")
+        return "#"
 
 # -----------------------------
 # Progress Management (Resume Capability)
@@ -1024,12 +1040,8 @@ elif menu == "물어보면 답하는 문서 AI":
                     search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=1, horizontal=True, key="search_mode_opt", help="any: 키워드 중 하나라도 포함되면 검색 (추천)")
                     search_mode = "all" if "all" in search_mode_opt else "any"
 
-            # Initialize Keyword Search History
-            if "keyword_chat_messages" not in st.session_state:
-                st.session_state.keyword_chat_messages = []
-
-            # Display Keyword Search History
-            for msg in st.session_state.keyword_chat_messages:
+            # Display Chat History (Shared with AI Chat)
+            for msg in st.session_state.chat_messages:
                 with st.chat_message(msg["role"]):
                     if msg["role"] == "user":
                         st.markdown(msg["content"])
@@ -1059,15 +1071,35 @@ elif menu == "물어보면 답하는 문서 AI":
                                         else:
                                             content_snippet = result.get('content', '')[:300] + "..."
                                         
-                                        # Text Cleaning Logic
+                                        # Text Cleaning Logic (Restored & Improved)
                                         import re
                                         def clean_text(text):
+                                            # 1. Escape Markdown special characters except HTML tags we want to keep (like <mark>)
                                             text = text.replace('~', '\\~')
-                                            text = re.sub(r'(?<!\.)\n(?!\n)', ' ', text)
-                                            return text
+                                            
+                                            # 2. Handle HTML Tables (convert to Markdown-ish for display)
+                                            text = re.sub(r'</td>', ' | ', text, flags=re.IGNORECASE)
+                                            text = re.sub(r'</th>', ' | ', text, flags=re.IGNORECASE)
+                                            text = re.sub(r'</tr>', '\n', text, flags=re.IGNORECASE)
+                                            
+                                            # 3. If text contains pipes (|), it might be a table. Preserve structure.
+                                            if "|" in text:
+                                                # Remove other HTML tags except <mark>
+                                                text = re.sub(r'<(?!/?mark\b)[^>]+>', '', text)
+                                                text = re.sub(r'^\s*(\|[\s\|]*)+\s*$', '', text, flags=re.MULTILINE)
+                                                text = re.sub(r'\n\s*\n', '\n', text)
+                                                return text.strip()
+
+                                            # 4. Remove other HTML tags except <mark>
+                                            text = re.sub(r'<(?!/?mark\b)[^>]+>', '', text)
+                                            
+                                            # 5. Replace single newlines with space
+                                            cleaned = re.sub(r'(?<!\.)\n(?!\n)', ' ', text)
+                                            cleaned = re.sub(r' +', ' ', cleaned)
+                                            return cleaned.strip()
                                             
                                         st.markdown(f"### 📄 {file_name}")
-                                        st.write(clean_text(content_snippet))
+                                        st.markdown(f"> {clean_text(content_snippet)}", unsafe_allow_html=True)
                                         
                                         # Generate SAS link
                                         try:
@@ -1116,7 +1148,7 @@ elif menu == "물어보면 답하는 문서 AI":
 
             # Chat Input for Search
             if query := st.chat_input("검색할 키워드를 입력하세요...", key="keyword_chat_input"):
-                st.session_state.keyword_chat_messages.append({"role": "user", "content": query})
+                st.session_state.chat_messages.append({"role": "user", "content": query})
                 
                 with st.spinner("검색 중..."):
                     try:
@@ -1136,11 +1168,22 @@ elif menu == "물어보면 답하는 문서 AI":
                         # Filter out .json files
                         filtered_results = [res for res in results if not res.get('metadata_storage_name', '').lower().endswith('.json')]
                         
-                        st.session_state.keyword_chat_messages.append({
+                        st.session_state.chat_messages.append({
                             "role": "assistant",
                             "content": f"'{query}'에 대한 검색 결과입니다.",
                             "results": filtered_results
                         })
+                        
+                        # --- Auto-Save History ---
+                        current_id = st.session_state.current_search_session_id
+                        current_title = st.session_state.search_chat_history_data[current_id]["title"]
+                        if current_title == "새로운 대화" and len(st.session_state.chat_messages) > 0:
+                            new_title = get_session_title(st.session_state.chat_messages)
+                            st.session_state.search_chat_history_data[current_id]["title"] = new_title
+                        
+                        st.session_state.search_chat_history_data[current_id]["messages"] = st.session_state.chat_messages
+                        st.session_state.search_chat_history_data[current_id]["timestamp"] = datetime.now().isoformat()
+                        save_history(SEARCH_HISTORY_FILE, st.session_state.search_chat_history_data)
                         st.rerun()
                     except Exception as e:
                         st.error(f"검색 중 오류 발생: {e}")
@@ -1172,16 +1215,17 @@ elif menu == "물어보면 답하는 문서 AI":
                         st.caption("📚 **참조 문서:**")
                         for i, citation in enumerate(message["citations"], 1):
                             filepath = citation.get('filepath', 'Unknown')
-                            url = citation.get('url', '')
-                            
-                            # Generate SAS URL if we have blob path
-                            if url:
-                                display_url = url
-                            else:
-                                # Try to generate SAS URL from filepath
+                            # Use pre-generated final_url if available, otherwise generate one
+                            display_url = citation.get('final_url')
+                            if not display_url:
                                 try:
                                     blob_service_client = get_blob_service_client()
-                                    display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                                    display_url = generate_sas_url(
+                                        blob_service_client, 
+                                        CONTAINER_NAME, 
+                                        filepath, 
+                                        page=citation.get('page')
+                                    )
                                 except:
                                     display_url = "#"
                             
@@ -1242,39 +1286,25 @@ elif menu == "물어보면 답하는 문서 AI":
                             if citations:
                                 for cit in citations:
                                     filepath = cit.get('filepath', 'Unknown')
+                                    # CRITICAL: Clean filepath from page suffixes like " (p.1)" or " (p.1) (p.1)"
+                                    import re
+                                    clean_filepath = re.sub(r'\s*\(\s*p\.?\s*\d+\s*\)', '', filepath).strip()
+                                    
                                     page = cit.get('page')
                                     url = cit.get('url', '')
                                     
                                     # Generate Web Viewer URL
-                                    final_url = "#"
-                                    if url:
-                                        final_url = url
-                                    else:
-                                        try:
-                                            blob_service_client = get_blob_service_client()
-                                            sas_token = generate_blob_sas(
-                                                account_name=blob_service_client.account_name,
-                                                container_name=CONTAINER_NAME,
-                                                blob_name=filepath,
-                                                account_key=blob_service_client.credential.account_key,
-                                                permission=BlobSasPermissions(read=True),
-                                                expiry=datetime.utcnow() + timedelta(hours=1),
-                                                content_disposition="inline",
-                                                content_type="application/pdf"
-                                            )
-                                            sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(filepath)}?{sas_token}"
-                                            
-                                            lower_name = filepath.lower()
-                                            if lower_name.endswith(('.pptx', '.ppt', '.docx', '.doc', '.xlsx', '.xls')):
-                                                encoded_sas_url = urllib.parse.quote(sas_url)
-                                                final_url = f"https://view.officeapps.live.com/op/view.aspx?src={encoded_sas_url}"
-                                            elif lower_name.endswith('.pdf'):
-                                                encoded_sas_url = urllib.parse.quote(sas_url)
-                                                final_url = f"https://docs.google.com/viewer?url={encoded_sas_url}"
-                                            else:
-                                                final_url = sas_url
-                                        except:
-                                            final_url = "#"
+                                    try:
+                                        blob_service_client = get_blob_service_client()
+                                        final_url = generate_sas_url(
+                                            blob_service_client, 
+                                            CONTAINER_NAME, 
+                                            clean_filepath, 
+                                            page=page
+                                        )
+                                    except Exception as e:
+                                        st.error(f"URL 생성 실패 ({clean_filepath}): {e}")
+                                        final_url = "#"
                                     
                                     cit['final_url'] = final_url
                                     processed_citations.append(cit)
@@ -1283,32 +1313,78 @@ elif menu == "물어보면 답하는 문서 AI":
                                     if page:
                                         citation_links[(filename, str(page))] = final_url
                             
-                            # 2. Replace text citations with Markdown links
+                            # 2. Replace text citations with Markdown links (Support both [] and ())
                             if response_text:
                                 import re
-                                pattern = r'\((.*?):\s*p\.?\s*(\d+)\)'
+                                # Pattern to match [filename: p.1] or (filename: p.1)
+                                # Improved: Allow parentheses in filenames (common in EPC drawings)
+                                # CRITICAL FIX: Exclude pipe (|) to prevent crossing table boundaries
+                                pattern = r'[\[\(]([^\[\]|]+?:\s*p\.?\s*(\d+))[\]\)]'
                                 
                                 def replace_citation(match):
-                                    fname = match.group(1).strip()
-                                    p_num = match.group(2)
+                                    content = match.group(1).strip()
+                                    
+                                    # Remove "문서명:" prefix if present (Common in Korean LLM outputs)
+                                    content = re.sub(r'^문서명\s*:\s*', '', content)
+                                    
+                                    # Split by last colon to separate filename and page
+                                    if ':' in content:
+                                        fname = content.rsplit(':', 1)[0].strip()
+                                        p_num = match.group(2)
+                                    else:
+                                        return match.group(0)
+                                        
                                     original_text = match.group(0)
                                     
-                                    if (fname, p_num) in citation_links:
-                                        return f"[{original_text}]({citation_links[(fname, p_num)]})"
+                                    # Try to find matching citation with fuzzy logic
+                                    target_url = None
+                                    
+                                    # 1. Clean LLM filename for comparison
+                                    clean_llm = re.sub(r'\.pdf$', '', fname.lower().strip())
                                     
                                     for (k_fname, k_page), url in citation_links.items():
-                                        if k_page == p_num and (k_fname == fname or os.path.splitext(k_fname)[0] == fname):
-                                            return f"[{original_text}]({url})"
-                                            
+                                        # 2. Clean known filename (remove .pdf and (p.N) suffixes)
+                                        clean_known = re.sub(r'\.pdf$', '', k_fname.lower().strip())
+                                        clean_known = re.sub(r'\s*\(\s*p\.?\s*\d+\s*\)', '', clean_known).strip()
+                                        
+                                        # CRITICAL FIX: Skip empty filenames to prevent false positive matches
+                                        if not clean_known:
+                                            continue
+
+                                        # 3. Match page and filename (fuzzy)
+                                        if str(k_page) == str(p_num):
+                                            # Exact match or containment (handling "문서명: " residue if regex failed)
+                                            if clean_llm == clean_known or clean_llm in clean_known or clean_known in clean_llm:
+                                                target_url = url
+                                                # CRITICAL FIX: Capture the matched filename to replace text
+                                                matched_filename = k_fname
+                                                break
+                                    
+                                    if target_url:
+                                        # Use Markdown link for table compatibility
+                                        # Escape parentheses in URL to avoid breaking Markdown link
+                                        safe_url = target_url.replace('(', '%28').replace(')', '%29')
+                                        
+                                        # CRITICAL FIX: Replace original text (e.g. "Same Document") with actual filename
+                                        # Reconstruct text: (Filename: p.N)
+                                        if matched_filename:
+                                            new_text = f"({matched_filename}: p.{p_num})"
+                                            return f"**[{new_text}]({safe_url})**"
+                                        
+                                        return f"**[{original_text}]({safe_url})**"
+                                    
                                     return original_text
 
+                                # DEBUG: Show raw response before linkification
+                                st.code(response_text, language="markdown")
+                                
                                 response_text = re.sub(pattern, replace_citation, response_text)
 
                                 # 3. Escape tildes
                                 response_text = response_text.replace('~', '\\~')
                         
                             # Display response
-                            st.markdown(response_text)
+                            st.markdown(response_text, unsafe_allow_html=True)
                             
                             # Display citations
                             if processed_citations:
@@ -1316,13 +1392,19 @@ elif menu == "물어보면 답하는 문서 AI":
                                 st.caption("📚 **참조 문서:**")
                                 for i, citation in enumerate(processed_citations, 1):
                                     filepath = citation.get('filepath', 'Unknown')
+                                    filename = os.path.basename(filepath)
                                     display_url = citation.get('final_url', '#')
                                     
                                     link_text = "문서 보기"
                                     if "docs.google.com" in display_url: link_text = "PDF Viewer"
                                     elif "view.officeapps" in display_url: link_text = "Office Viewer"
                                     
-                                    st.markdown(f"{i}. [{filepath}]({display_url}) - {link_text}")
+                                    st.markdown(f"{i}. [{filename}]({display_url}) - {link_text}")
+                            
+                            # Debug: Show Citation Links (Hidden by default)
+                            # with st.expander("🔍 링크 디버깅 (Debug Links)", expanded=False):
+                            #     st.write("Citation Links Keys:", list(citation_links.keys()))
+                            #     st.write("Processed Citations:", processed_citations)
                             
                             # Add assistant response to chat history
                             st.session_state.chat_messages.append({
@@ -2172,6 +2254,17 @@ elif menu == "도면/스펙 비교":
             # DEBUG: Show selected files
             if user_role == 'admin':
                 st.write(f"DEBUG: Selected Files ({len(selected_filenames)}): {selected_filenames}")
+
+            # -----------------------------
+            # Advanced Search Options (RAG) - Added to match AI Q&A
+            # -----------------------------
+            with st.expander("⚙️ 고급 검색 옵션 (RAG 설정)", expanded=False):
+                c1, c2 = st.columns(2)
+                with c1:
+                    rag_use_semantic = st.checkbox("시맨틱 랭커 사용", value=True, key="rag_use_semantic", help="의미 기반 검색을 사용하여 정확도를 높입니다.")
+                with c2:
+                    rag_search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=1, horizontal=True, key="rag_search_mode", help="any: 키워드 중 하나라도 포함되면 검색 (추천)")
+                    rag_search_mode = "all" if "all" in rag_search_mode_opt else "any"
         
             # Chat Interface (Similar to main chat but focused)
             if "rag_chat_messages" not in st.session_state:
@@ -2185,16 +2278,17 @@ elif menu == "도면/스펙 비교":
                         st.caption("📚 **참조 문서:**")
                         for i, citation in enumerate(message["citations"], 1):
                             filepath = citation.get('filepath', 'Unknown')
-                            url = citation.get('url', '')
-                        
-                            # Generate SAS URL for browser viewing
-                            if url:
-                                display_url = url
-                            else:
-                                # Try to generate SAS URL from filepath
+                            # Use pre-generated final_url if available, otherwise generate one
+                            display_url = citation.get('final_url')
+                            if not display_url:
                                 try:
                                     blob_service_client = get_blob_service_client()
-                                    display_url = generate_sas_url(blob_service_client, CONTAINER_NAME, filepath)
+                                    display_url = generate_sas_url(
+                                        blob_service_client, 
+                                        CONTAINER_NAME, 
+                                        filepath, 
+                                        page=citation.get('page')
+                                    )
                                 except:
                                     display_url = "#"
                         
@@ -2237,8 +2331,8 @@ elif menu == "도면/스펙 비교":
                             response_text, citations, context, final_filter, search_results = chat_manager.get_chat_response(
                                 prompt, 
                                 conversation_history,
-                                search_mode="any",
-                                use_semantic_ranker=False,
+                                search_mode=rag_search_mode,
+                                use_semantic_ranker=rag_use_semantic,
                                 filter_expr=base_filter,
                                 available_files=current_files,
                                 user_folder=user_folder,
@@ -2256,84 +2350,126 @@ elif menu == "도면/스펙 비교":
                             if citations:
                                 for cit in citations:
                                     filepath = cit.get('filepath', 'Unknown')
+                                    # CRITICAL: Clean filepath from page suffixes like " (p.1)" or " (p.1) (p.1)"
+                                    import re
+                                    clean_filepath = re.sub(r'\s*\(\s*p\.?\s*\d+\s*\)', '', filepath).strip()
+                                    
                                     page = cit.get('page')
                                     url = cit.get('url', '')
                                     
                                     # Generate Web Viewer URL
-                                    final_url = "#"
-                                    if url:
-                                        final_url = url
-                                    else:
-                                        try:
-                                            blob_service_client = get_blob_service_client()
-                                            sas_token = generate_blob_sas(
-                                                account_name=blob_service_client.account_name,
-                                                container_name=CONTAINER_NAME,
-                                                blob_name=filepath,
-                                                account_key=blob_service_client.credential.account_key,
-                                                permission=BlobSasPermissions(read=True),
-                                                expiry=datetime.utcnow() + timedelta(hours=1),
-                                                content_disposition="inline",
-                                                content_type="application/pdf"
-                                            )
-                                            sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(filepath)}?{sas_token}"
-                                            
-                                            lower_name = filepath.lower()
-                                            if lower_name.endswith(('.pptx', '.ppt', '.docx', '.doc', '.xlsx', '.xls')):
-                                                encoded_sas_url = urllib.parse.quote(sas_url)
-                                                final_url = f"https://view.officeapps.live.com/op/view.aspx?src={encoded_sas_url}"
-                                            elif lower_name.endswith('.pdf'):
-                                                encoded_sas_url = urllib.parse.quote(sas_url)
-                                                final_url = f"https://docs.google.com/viewer?url={encoded_sas_url}"
-                                            else:
-                                                final_url = sas_url
-                                        except:
-                                            final_url = "#"
+                                    try:
+                                        blob_service_client = get_blob_service_client()
+                                        final_url = generate_sas_url(
+                                            blob_service_client, 
+                                            CONTAINER_NAME, 
+                                            clean_filepath, 
+                                            page=page
+                                        )
+                                    except Exception as e:
+                                        st.error(f"URL 생성 실패 ({clean_filepath}): {e}")
+                                        final_url = "#"
                                     
-                                    # Store for bottom list
                                     cit['final_url'] = final_url
                                     processed_citations.append(cit)
                                     
-                                    # Store for inline replacement
-                                    # Key: (filename, page)
-                                    # We need to handle potential filename variations (e.g. with/without extension)
                                     filename = os.path.basename(filepath)
                                     if page:
                                         citation_links[(filename, str(page))] = final_url
                             
-                            # 2. Replace text citations with Markdown links
-                            # Pattern: (filename: p.page) or (filename: p. page)
+                            # 2. Replace text citations with Markdown links (Support both [] and ())
                             if response_text:
                                 import re
-                                # Regex to capture: (Group 1: filename), (Group 2: page number)
-                                # Example: (제4권 도면(청주).pdf: p.7)
-                                # We allow for some flexibility in whitespace
-                                pattern = r'\((.*?):\s*p\.?\s*(\d+)\)'
+                                
+                                # Reference dictionary to store URLs
+                                link_references = {}
                                 
                                 def replace_citation(match):
-                                    fname = match.group(1).strip()
-                                    p_num = match.group(2)
+                                    content = match.group(1).strip()
+                                    
+                                    # Remove "문서명:" prefix if present (Common in Korean LLM outputs)
+                                    content = re.sub(r'^문서명\s*:\s*', '', content)
+
+                                    # Split by last colon to separate filename and page
+                                    if ':' in content:
+                                        fname = content.rsplit(':', 1)[0].strip()
+                                        p_num = match.group(2)
+                                    else:
+                                        return match.group(0)
+                                        
                                     original_text = match.group(0)
                                     
-                                    # Try to find a matching URL
-                                    # 1. Exact match
-                                    if (fname, p_num) in citation_links:
-                                        return f"[{original_text}]({citation_links[(fname, p_num)]})"
+                                    # Try to find matching citation with fuzzy logic
+                                    target_url = None
+                                    matched_filename = None
                                     
-                                    # 2. Try matching without extension if not found
-                                    # The LLM might output "Drawing" instead of "Drawing.pdf"
+                                    # 1. Clean LLM filename for comparison
+                                    clean_llm = re.sub(r'\.pdf$', '', fname.lower().strip())
+                                    
                                     for (k_fname, k_page), url in citation_links.items():
-                                        if k_page == p_num and (k_fname == fname or os.path.splitext(k_fname)[0] == fname):
-                                            return f"[{original_text}]({url})"
-                                            
-                                    return original_text # Return unchanged if no link found
+                                        # 2. Clean known filename (remove .pdf and (p.N) suffixes)
+                                        clean_known = re.sub(r'\.pdf$', '', k_fname.lower().strip())
+                                        clean_known = re.sub(r'\s*\(\s*p\.?\s*\d+\s*\)', '', clean_known).strip()
+                                        
+                                        # CRITICAL FIX: Skip empty filenames to prevent false positive matches
+                                        if not clean_known:
+                                            continue
 
-                                response_text = re.sub(pattern, replace_citation, response_text)
+                                        # 3. Match page and filename (fuzzy)
+                                        if str(k_page) == str(p_num):
+                                            # Exact match or containment (handling "문서명: " residue if regex failed)
+                                            if clean_llm == clean_known or clean_llm in clean_known or clean_known in clean_llm:
+                                                target_url = url
+                                                # CRITICAL FIX: Capture the matched filename to replace text
+                                                matched_filename = k_fname
+                                                break
+                                    
+                                    if target_url:
+                                        # Use Markdown link for table compatibility
+                                        # Escape parentheses in URL to avoid breaking Markdown link
+                                        safe_url = target_url.replace('(', '%28').replace(')', '%29')
+                                        
+                                        # Generate Reference ID
+                                        ref_id = f"ref{len(link_references) + 1}"
+                                        link_references[ref_id] = safe_url
+                                        
+                                        # CRITICAL FIX: Replace original text (e.g. "Same Document") with actual filename
+                                        # Reconstruct text: Filename (p.N) - No outer parens, No .pdf
+                                        if matched_filename:
+                                            # Remove .pdf extension for cleaner display
+                                            display_filename = re.sub(r'\.pdf$', '', matched_filename, flags=re.IGNORECASE)
+                                            # Use hyphen instead of parentheses to avoid Markdown link issues
+                                            new_text = f"{display_filename} - p.{p_num}"
+                                            # Return Reference Link
+                                            return f"[{new_text}][{ref_id}]"
+                                        
+                                        return f"[{original_text}][{ref_id}]"
+                                    
+                                    return original_text
+
+                                # DEBUG: Show raw response before linkification
+                                # st.code(response_text, language="markdown")
+                                
+                                # Pass 1: Strict match (Closed parentheses) - Most common and safe
+                                # Updated to consume trailing URL if present (e.g. [Title: p.1](url)) to avoid double links
+                                pattern_strict = r'[\[\(]([^\[\]\(\)]+?:\s*p\.?\s*(\d+))[\]\)](?:\s*\((?:https?|blob):[^)]+\))?'
+                                response_text = re.sub(pattern_strict, replace_citation, response_text)
+                                
+                                # Pass 2: Truncated match (Open parentheses at end of string) - Fallback
+                                # Only matches if it's at the very end of the string or followed by newline
+                                pattern_truncated = r'[\[\(]([^\[\]\(\)]+?:\s*p\.?\s*(\d+))(?:\s*\((?:https?|blob):[^)]+\))?$'
+                                response_text = re.sub(pattern_truncated, replace_citation, response_text)
+
+                                # Append Reference Definitions to the end of the response
+                                if link_references:
+                                    response_text += "\n\n"
+                                    for ref_id, url in link_references.items():
+                                        response_text += f"[{ref_id}]: {url}\n"
 
                                 # 3. Escape tildes (AFTER linkification to avoid breaking links if they contained tildes, though unlikely in URLs)
                                 response_text = response_text.replace('~', '\\~')
                         
-                            st.markdown(response_text)
+                            st.markdown(response_text, unsafe_allow_html=True)
                             
                             # Display Google-like search results (Snippets + Links)
                             if search_results:
@@ -2382,7 +2518,7 @@ elif menu == "도면/스펙 비교":
                                                 content_disposition="inline",
                                                 content_type="application/pdf" # Default to PDF for viewer hint
                                             )
-                                            sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path_part)}?{sas_token}"
+                                            sas_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{urllib.parse.quote(blob_path_part, safe='/')}?{sas_token}"
 
                                             # Use Office Online Viewer for Office files
                                             lower_name = res_name.lower()
@@ -2411,16 +2547,74 @@ elif menu == "도면/스펙 비교":
 
                             if processed_citations:
                                 st.markdown("---")
-                                st.caption("📚 **참조 문서:**")
-                                for i, citation in enumerate(processed_citations, 1):
-                                    filepath = citation.get('filepath', 'Unknown')
-                                    display_url = citation.get('final_url', '#')
+                                st.caption("📚 **참조 문서 (페이지별 링크):**")
+                                
+                                # Group citations by filename
+                                from collections import defaultdict
+                                pages_by_file = defaultdict(set)
+                                
+                                for cit in processed_citations:
+                                    fp = cit.get('filepath', 'Unknown')
+                                    pg = cit.get('page')
                                     
-                                    link_text = "문서 보기"
-                                    if "docs.google.com" in display_url: link_text = "PDF Viewer"
-                                    elif "view.officeapps" in display_url: link_text = "Office Viewer"
+                                    # Clean filepath
+                                    clean_fp = re.sub(r'\s*\(\s*p\.?\s*\d+\s*\)', '', fp).strip()
                                     
-                                    st.markdown(f"{i}. [{filepath}]({display_url}) - {link_text}")
+                                    if pg:
+                                        try:
+                                            pg_int = int(pg)
+                                            pages_by_file[clean_fp].add(pg_int)
+                                        except:
+                                            pass
+                                    else:
+                                        # Ensure file is listed even if no specific page
+                                        if clean_fp not in pages_by_file:
+                                            pages_by_file[clean_fp] = set()
+
+                                # Display grouped citations
+                                for i, (fp, pages) in enumerate(sorted(pages_by_file.items()), 1):
+                                    filename = os.path.basename(fp)
+                                    
+                                    # Generate Doc URL (Page 1)
+                                    try:
+                                        blob_service_client = get_blob_service_client()
+                                        doc_url = generate_sas_url(
+                                            blob_service_client, 
+                                            CONTAINER_NAME, 
+                                            fp, 
+                                            page=1
+                                        )
+                                    except:
+                                        doc_url = "#"
+                                    
+                                    # Base line: Document Title
+                                    line = f"**{i}. [{filename}]({doc_url})**"
+                                    
+                                    # Append Page Links
+                                    sorted_pages = sorted(pages)
+                                    if sorted_pages:
+                                        page_links = []
+                                        for p in sorted_pages:
+                                            try:
+                                                p_url = generate_sas_url(
+                                                    blob_service_client, 
+                                                    CONTAINER_NAME, 
+                                                    fp, 
+                                                    page=p
+                                                )
+                                                page_links.append(f"[p.{p}]({p_url})")
+                                            except:
+                                                pass
+                                        
+                                        if page_links:
+                                            line += " — " + " · ".join(page_links)
+                                    
+                                    st.markdown(line)
+                            
+                            # Debug: Show Citation Links (Hidden by default)
+                            # with st.expander("🔍 링크 디버깅 (Debug Links)", expanded=False):
+                            #     st.write("Citation Links Keys:", list(citation_links.keys()))
+                            #     st.write("Processed Citations:", processed_citations)
                         
                             # Debug: Show Context
                             with st.expander("🔍 검색된 컨텍스트 확인 (Debug Context)", expanded=False):
