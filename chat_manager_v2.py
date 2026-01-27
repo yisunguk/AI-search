@@ -69,10 +69,10 @@ You must interpret the provided text as if you are looking at an engineering dia
     - For facts from documents: Cite with (문서명: p.페이지번호)
     - For general knowledge: Clearly state "일반적인 엔지니어링 지식에 따르면..." or "문서에는 명시되지 않았으나, 일반적으로..."
 
-3. **Table/Data Interpretation**: 
-    - Engineering documents often contain tables where keys and values might be visually separated.
-    - Look for patterns like "Item: Value" or columns in a table row.
-    - Even if the text is fragmented, try to reconstruct the specification from nearby words.
+3. **Table/Data Interpretation (MARKDOWN PRIORITY)**: 
+    - **Markdown Tables**: If the CONTEXT contains Markdown tables (e.g., `| Col1 | Col2 |`), you MUST PRESERVE this structure in your answer. Do not convert them to lists or plain text unless explicitly asked.
+    - **Fragmented Tables**: If the text looks like a table but is fragmented (e.g., "Item: Value"), reconstruct it into a proper Markdown table.
+    - **Look for patterns**: "Item: Value" or columns in a table row.
 
 4. **Machine Identifiers**: For Tag Nos like "10-P-101A", copy them EXACTLY.
 
@@ -235,12 +235,19 @@ Convert the user's natural language question into a keyword-based search query.
         text = re.sub(r'</p>', LINE_BREAK, text, flags=re.IGNORECASE)
         text = re.sub(r'</div>', LINE_BREAK, text, flags=re.IGNORECASE)
         
-        # 3. Replace cell endings with pipe
+        # 3. Replace cell endings with pipe (HTML Table to Markdown-ish)
         text = re.sub(r'</td>', ' | ', text, flags=re.IGNORECASE)
         text = re.sub(r'</th>', ' | ', text, flags=re.IGNORECASE)
         
         # 4. Remove all original newlines (to prevent vertical splitting of cells)
-        text = text.replace('\n', ' ').replace('\r', ' ')
+        # CRITICAL: For Markdown tables, we MUST preserve newlines that separate rows.
+        # If the content is already Markdown (from DI), stripping newlines destroys the table.
+        # Heuristic: If we see pipes (|), we assume it might be a Markdown table and be careful.
+        if "|" in text:
+            # Don't strip newlines blindly if it looks like a table
+            pass 
+        else:
+            text = text.replace('\n', ' ').replace('\r', ' ')
         
         # 5. Remove remaining tags
         text = re.sub(r'<[^>]+>', '', text)
@@ -252,9 +259,17 @@ Convert the user's natural language question into a keyword-based search query.
         text = text.replace("AutoCAD SHX Text", "")
         text = text.replace("%%C", "Ø")
         
-        # 8. Collapse whitespace
-        text = re.sub(r'[ \t]+', ' ', text)
-        text = re.sub(r'\n\s*\n', '\n\n', text)
+        # 8. Escape Markdown special characters that might cause issues
+        # Especially tilde (~) which can cause accidental strikethrough
+        text = text.replace('~', '\\~')
+        
+        # 9. Remove empty table rows (lines with only pipes and whitespace)
+        # Example: "| | |" or "|   |"
+        text = re.sub(r'^\s*(\|[\s\|]*)+\s*$', '', text, flags=re.MULTILINE)
+        
+        # 10. Collapse whitespace (but preserve table structure)
+        # Collapse multiple newlines to single newline to avoid excessive vertical space
+        text = re.sub(r'\n\s*\n', '\n', text)
         
         return text.strip()
 
@@ -500,7 +515,8 @@ Convert the user's natural language question into a keyword-based search query.
                 print(f"DEBUG: Combined search results with {added_count} direct results. Total: {len(search_results)}")
             
             # Filter by user_folder (Python-side enforcement)
-            if user_folder and search_results:
+            # CRITICAL: Admin can see all files, so we skip this filter if is_admin is True
+            if user_folder and search_results and not is_admin:
                 from urllib.parse import unquote
                 original_count = len(search_results)
                 filtered_results = [
