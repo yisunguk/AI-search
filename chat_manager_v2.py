@@ -74,6 +74,11 @@ You must interpret the provided text as if you are looking at an engineering dia
       |---|---|---|---|
       | [Item Name] | [Detailed Answer] | [Engineering Context] | [[문서명.pdf: p.페이지번호]] |
 
+    **IMPORTANT TABLE RULES**:
+    - **One Row Per Item**: If the answer is a list (e.g., Drawing Index, Equipment List), create a **SEPARATE ROW** for EACH item.
+    - **Do NOT merge items**: Do NOT put multiple items (like "1)... 2)...") in a single cell. Split them into multiple rows.
+    - **Clean Content**: Do not use `<br>` tags. Use separate rows instead.
+
 2. **Information Source Labeling**:
     - **Source**: You MUST put the citation in the format `[[문서명.pdf: p.페이지번호]]`.
     - **IMPORTANT**: Use DOUBLE BRACKETS `[[...]]`. Do NOT use single brackets `[...]` or parentheses `(...)`.
