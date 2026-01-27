@@ -150,7 +150,7 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, page=N
                 content_type = "application/octet-stream"
 
             if content_disposition is None:
-                content_disposition = "attachment"
+                content_disposition = "inline"
 
             sas_token = generate_blob_sas(
                 account_name=account_name,
@@ -2253,7 +2253,8 @@ elif menu == "도면/스펙 비교":
         
             # DEBUG: Show selected files
             if user_role == 'admin':
-                st.write(f"DEBUG: Selected Files ({len(selected_filenames)}): {selected_filenames}")
+                # st.write(f"DEBUG: Selected Files ({len(selected_filenames)}): {selected_filenames}")
+                pass
 
             # -----------------------------
             # Advanced Search Options (RAG) - Added to match AI Q&A
