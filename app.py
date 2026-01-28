@@ -30,7 +30,7 @@ import extra_streamlit_components as stx
 # -----------------------------
 st.set_page_config(page_title="인텔리전트 다큐먼트", page_icon="🏗️", layout="wide")
 
-# Custom CSS for larger tab labels
+# Custom CSS for larger tab labels and document list alignment
 st.markdown("""
 <style>
     /* Increase font size for tab labels */
@@ -40,6 +40,36 @@ st.markdown("""
     button[data-baseweb="tab"] p {
         font-size: 20px !important;
         font-weight: 600 !important;
+    }
+    
+    /* Align document list items vertically */
+    .stColumn {
+        display: flex !important;
+        align-items: center !important;
+    }
+    
+    /* Ensure buttons and links have consistent height */
+    .stButton button, .stLinkButton a {
+        height: 38px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0.25rem 0.75rem !important;
+    }
+    
+    /* Popover button alignment */
+    button[data-testid="baseButton-header"] {
+        height: 38px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    /* Checkbox alignment */
+    .stCheckbox {
+        display: flex !important;
+        align-items: center !important;
+        height: 38px !important;
     }
 </style>
 """, unsafe_allow_html=True)
