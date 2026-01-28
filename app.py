@@ -2266,6 +2266,18 @@ elif menu == "도면/스펙 비교":
                 with c2:
                     rag_search_mode_opt = st.radio("검색 모드", ["all (AND)", "any (OR)"], index=1, horizontal=True, key="rag_search_mode", help="any: 키워드 중 하나라도 포함되면 검색 (추천)")
                     rag_search_mode = "all" if "all" in rag_search_mode_opt else "any"
+                
+                # Output Format Toggle
+                st.write("")
+                st.markdown("**답변 형식 (Output Format)**")
+                output_format = st.radio(
+                    "답변 형식을 선택하세요", 
+                    ["Table (표)", "Text (텍스트)"], 
+                    index=1, 
+                    horizontal=True, 
+                    label_visibility="collapsed",
+                    key="rag_output_format"
+                )
         
             # Chat Interface (Similar to main chat but focused)
             if "rag_chat_messages" not in st.session_state:
@@ -2329,8 +2341,15 @@ elif menu == "도면/스펙 비교":
                             # Note: We used to filter by path here, but OData encoding issues caused 0 results.
                             # Now we pass user_folder to chat_manager for Python-side filtering.
 
+                            # Append Output Format Instruction
+                            final_prompt = prompt
+                            if "Table" in output_format:
+                                final_prompt += "\n\n[OUTPUT INSTRUCTION]: Please summarize the comparison in a **Markdown Table**."
+                            else:
+                                final_prompt += "\n\n[OUTPUT INSTRUCTION]: Please summarize the comparison in **Structured Markdown Text**. Do NOT use a table."
+
                             response_text, citations, context, final_filter, search_results = chat_manager.get_chat_response(
-                                prompt, 
+                                final_prompt, 
                                 conversation_history,
                                 search_mode=rag_search_mode,
                                 use_semantic_ranker=rag_use_semantic,
@@ -2430,22 +2449,34 @@ elif menu == "도면/스펙 비교":
                                         # Escape parentheses in URL to avoid breaking Markdown link
                                         safe_url = target_url.replace('(', '%28').replace(')', '%29')
                                         
-                                        # Generate Reference ID
-                                        ref_id = f"ref{len(link_references) + 1}"
-                                        link_references[ref_id] = safe_url
+                                        # Use Inline Link with Icon and Hover Title for compact display
+                                        # Escape parentheses in URL
+                                        safe_url = target_url.replace('(', '%28').replace(')', '%29')
                                         
-                                        # CRITICAL FIX: Replace original text (e.g. "Same Document") with actual filename
-                                        # Reconstruct text: Filename (p.N) - No outer parens, No .pdf
+                                        hover_text = original_text
                                         if matched_filename:
                                             # Remove .pdf extension for cleaner display
                                             display_filename = re.sub(r'\.pdf$', '', matched_filename, flags=re.IGNORECASE)
                                             # Use hyphen instead of parentheses to avoid Markdown link issues
-                                            new_text = f"{display_filename} - p.{p_num}"
-                                            # Return Reference Link
-                                            return f"[{new_text}][{ref_id}]"
+                                            hover_text = f"{display_filename} - p.{p_num}"
                                         
-                                        return f"[{original_text}][{ref_id}]"
+                                        # Return Icon Link
+                                        return f"[🔗]({safe_url} \"{hover_text}\")"
                                     
+                                    # Fallback: Check if original_text contains a URL (e.g. from LLM output)
+                                    # Match (http...) or (blob...)
+                                    url_match = re.search(r'\((https?://[^)]+|blob:[^)]+)\)', original_text)
+                                    if url_match:
+                                        fallback_url = url_match.group(1)
+                                        safe_url = fallback_url.replace('(', '%28').replace(')', '%29')
+                                        
+                                        # Construct hover text from captured groups
+                                        # fname is from group(1), p_num from group(2) of the main regex
+                                        display_filename = re.sub(r'\.pdf$', '', fname.strip(), flags=re.IGNORECASE)
+                                        hover_text = f"{display_filename} - p.{p_num}"
+                                        
+                                        return f"[🔗]({safe_url} \"{hover_text}\")"
+
                                     return original_text
 
                                 # DEBUG: Show raw response before linkification
