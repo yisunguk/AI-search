@@ -1893,7 +1893,9 @@ elif menu == "도면/스펙 비교":
                     # Display as expandable list
                     with st.expander("📄 문서 목록 및 선택", expanded=True):
                         for idx, blob_info in enumerate(blob_list, 1):
-                            col0, col1, col2, col3 = st.columns([0.5, 4, 1.2, 1])
+                            # Main container with better alignment
+                            col0, col1, col2, col3 = st.columns([0.5, 3.8, 1.5, 1])
+                            
                             with col0:
                                 # Checkbox for selection
                                 # Initialize state if missing
@@ -1908,13 +1910,14 @@ elif menu == "도면/스펙 비교":
                             with col1:
                                 size_mb = blob_info['size'] / (1024 * 1024)
                                 modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
+                                # Add spacing to align with icons
                                 st.markdown(f"**{blob_info['name']}** ({size_mb:.2f} MB)")
                         
                             with col2:
-                                # Use sub-columns to align icons horizontally
-                                sub_c1, sub_c2, sub_c3 = st.columns([1, 1, 1])
+                                # Icons in one row with equal spacing
+                                icon_c1, icon_c2, icon_c3 = st.columns(3)
                             
-                                with sub_c1:
+                                with icon_c1:
                                     # 1. Download Button
                                     try:
                                         sas_url = generate_sas_url(
@@ -1923,15 +1926,12 @@ elif menu == "도면/스펙 비교":
                                             blob_info['full_name'], 
                                             content_disposition="attachment"
                                         )
-                                        # Use st.link_button for consistent UI (Box style)
                                         st.link_button("📥", sas_url, help="다운로드", use_container_width=True)
                                     except Exception as e:
                                         st.error(f"Err: {e}")
 
-                                with sub_c2:
+                                with icon_c2:
                                     # 2. Rename Button (Popover)
-                                    # Popover button is wide by default, try to make it compact?
-                                    # Streamlit buttons expand to column width.
                                     with st.popover("✏️", use_container_width=True):
                                         new_name_input = st.text_input("새 파일명", value=blob_info['name'], key=f"ren_{blob_info['name']}")
                                         if st.button("이름 변경", key=f"btn_ren_{blob_info['name']}"):
@@ -2020,9 +2020,9 @@ elif menu == "도면/스펙 비교":
                                                 except Exception as e:
                                                     st.error(f"변경 실패: {e}")
 
-                                with sub_c3:
+                                with icon_c3:
                                     # 3. Re-analyze Button
-                                    if st.button("🔄", key=f"reanalyze_{blob_info['name']}", help="재분석 (인덱스 복구)"):
+                                    if st.button("🔄", key=f"reanalyze_{blob_info['name']}", help="재분석 (인덱스 복구)", use_container_width=True):
                                         try:
                                             with st.spinner("재분석 시작... (파일 다운로드 중)"):
                                                 # A. Download Blob to memory
