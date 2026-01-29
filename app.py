@@ -44,21 +44,22 @@ st.markdown("""
         font-weight: 600 !important;
     }
     
-    /* Document list alignment - ensure all items in row are vertically centered */
+    /* Document list - row alignment */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         align-items: center !important;
-        gap: 8px !important;
+        gap: 0.5rem !important;
+        min-height: 42px !important;
     }
     
-    /* Force all columns to center their content vertically */
+    /* Column layout - vertical centering */
     [data-testid="column"] {
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
     }
     
-    /* Ensure all buttons have the same height */
+    /* All buttons - consistent height and sizing */
     .stButton button, .stLinkButton a {
         min-height: 38px !important;
         max-height: 38px !important;
@@ -66,8 +67,9 @@ st.markdown("""
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        padding: 0.25rem 0.5rem !important;
+        padding: 0.25rem 0.75rem !important;
         white-space: nowrap !important;
+        font-size: 1.1rem !important;
     }
     
     /* Popover button - same height */
@@ -78,21 +80,28 @@ st.markdown("""
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        padding: 0.25rem 0.5rem !important;
+        padding: 0.25rem 0.75rem !important;
+        font-size: 1.1rem !important;
     }
     
-    /* Checkbox vertical centering */
+    /* Checkbox alignment */
     .stCheckbox {
         display: flex !important;
         align-items: center !important;
+        justify-content: center !important;
         min-height: 38px !important;
     }
     
-    /* Markdown in document list - vertical centering */
+    /* Markdown text alignment */
     .stMarkdown {
         display: flex !important;
         align-items: center !important;
         min-height: 38px !important;
+    }
+    
+    /* Prevent wrapping in icon columns */
+    [data-testid="column"] > div {
+        white-space: nowrap !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -2023,15 +2032,15 @@ elif menu == "도면/스펙 비교":
                     # Display as expandable list
                     with st.expander("📄 문서 목록 및 선택", expanded=True):
                         for idx, blob_info in enumerate(blob_list, 1):
-                            # Adjusted column widths for better alignment at all zoom levels
-                            col0, col1, col2, col3 = st.columns([0.4, 4, 1.4, 0.8])
+                            # Improved column layout for better zoom stability
+                            # col0: checkbox (3%), col1: filename (59%), col2: 3 icons (27%), col3: delete+JSON (11%)
+                            col0, col1, col2, col3 = st.columns([0.3, 5.9, 2.7, 1.1])
                             
                             with col0:
                                 # Checkbox for selection
-                                # Initialize state if missing
                                 chk_key = f"chk_{blob_info['name']}"
                                 if chk_key not in st.session_state:
-                                    st.session_state[chk_key] = False # Default to False
+                                    st.session_state[chk_key] = False
                                 
                                 is_selected = st.checkbox(f"select_{idx}", key=chk_key, label_visibility="collapsed")
                                 if is_selected:
@@ -2039,16 +2048,14 @@ elif menu == "도면/스펙 비교":
                         
                             with col1:
                                 size_mb = blob_info['size'] / (1024 * 1024)
-                                modified_str = blob_info['modified'].strftime('%Y-%m-%d %H:%M')
-                                # Add spacing to align with icons
                                 st.markdown(f"**{blob_info['name']}** ({size_mb:.2f} MB)")
                         
                             with col2:
-                                # Icons in one row with equal spacing
+                                # 3 action icons in a row
                                 icon_c1, icon_c2, icon_c3 = st.columns(3)
                             
                                 with icon_c1:
-                                    # 1. Download Button
+                                    # Download Button
                                     try:
                                         sas_url = generate_sas_url(
                                             blob_service_client, 
