@@ -10,6 +10,8 @@ import urllib.parse
 import requests
 import fitz # PyMuPDF for page count
 import pandas as pd
+import zipfile
+import io
 
 # Search Manager Import
 from search_manager import AzureSearchManager
@@ -42,34 +44,55 @@ st.markdown("""
         font-weight: 600 !important;
     }
     
-    /* Align document list items vertically */
-    .stColumn {
+    /* Document list alignment - ensure all items in row are vertically centered */
+    [data-testid="stHorizontalBlock"] {
         display: flex !important;
         align-items: center !important;
+        gap: 8px !important;
     }
     
-    /* Ensure buttons and links have consistent height */
+    /* Force all columns to center their content vertically */
+    [data-testid="column"] {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+    }
+    
+    /* Ensure all buttons have the same height */
     .stButton button, .stLinkButton a {
+        min-height: 38px !important;
+        max-height: 38px !important;
         height: 38px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        padding: 0.25rem 0.75rem !important;
+        padding: 0.25rem 0.5rem !important;
+        white-space: nowrap !important;
     }
     
-    /* Popover button alignment */
+    /* Popover button - same height */
     button[data-testid="baseButton-header"] {
+        min-height: 38px !important;
+        max-height: 38px !important;
         height: 38px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+        padding: 0.25rem 0.5rem !important;
     }
     
-    /* Checkbox alignment */
+    /* Checkbox vertical centering */
     .stCheckbox {
         display: flex !important;
         align-items: center !important;
-        height: 38px !important;
+        min-height: 38px !important;
+    }
+    
+    /* Markdown in document list - vertical centering */
+    .stMarkdown {
+        display: flex !important;
+        align-items: center !important;
+        min-height: 38px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -333,6 +356,52 @@ class LocalFile:
     def close(self):
         self._file.close()
 
+def is_drm_protected(uploaded_file):
+    """
+    Check if the uploaded file is DRM protected or encrypted.
+    Returns True if protected, False otherwise.
+    """
+    try:
+        file_type = uploaded_file.name.split('.')[-1].lower()
+        
+        # 1. PDF Check
+        if file_type == 'pdf':
+            try:
+                # Read file stream
+                bytes_data = uploaded_file.getvalue()
+                with fitz.open(stream=bytes_data, filetype="pdf") as doc:
+                    if doc.is_encrypted:
+                        return True
+            except Exception as e:
+                print(f"PDF DRM Check Error: {e}")
+                # If we can't open it with fitz, it might be corrupted or heavily encrypted
+                return False 
+
+        # 2. Office Files (docx, pptx, xlsx) Check
+        # Modern Office files are Zip archives. If they are encrypted/DRM'd, 
+        # they often become OLE CF (Compound File) binaries or non-zip streams.
+        elif file_type in ['docx', 'pptx', 'xlsx']:
+            try:
+                bytes_data = uploaded_file.getvalue()
+                # Check if it is a valid zip file
+                if not zipfile.is_zipfile(io.BytesIO(bytes_data)):
+                    # Not a zip -> Likely Encrypted/DRM (OLE format)
+                    return True
+                
+                # Optional: Try to open it to be sure
+                with zipfile.ZipFile(io.BytesIO(bytes_data)) as zf:
+                    # Check for standard OOXML structure (e.g., [Content_Types].xml)
+                    if '[Content_Types].xml' not in zf.namelist():
+                        return True
+            except Exception as e:
+                print(f"Office DRM Check Error: {e}")
+                return True # Assume protected if we can't parse structure
+                
+        return False
+    except Exception as e:
+        print(f"General DRM Check Error: {e}")
+        return False
+
 
 
 # -----------------------------
@@ -559,6 +628,8 @@ if menu == "번역하기":
         if st.button("번역 시작", type="primary", disabled=not uploaded_file):
             if not uploaded_file:
                 st.error("파일을 업로드해주세요.")
+            elif is_drm_protected(uploaded_file):
+                st.error("⛔ DRM으로 보호된 파일(암호화된 파일)은 번역할 수 없습니다.")
             else:
                 with st.spinner("Azure Blob에 파일 업로드 중..."):
                     try:
@@ -960,17 +1031,21 @@ elif menu == "물어보면 답하는 문서 AI":
             doc_upload = st.file_uploader("문서를 등록하면 검색과 질의응답이 가능합니다.", type=['pdf', 'docx', 'txt', 'pptx'], key="doc_search_upload")
             
             if doc_upload and st.button("업로드", key="btn_doc_upload"):
-                try:
-                    blob_service_client = get_blob_service_client()
-                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-                    
-                    # Upload to {user_folder}/documents/ (Flat structure)
-                    blob_name = f"{user_folder}/documents/{doc_upload.name}"
-                    blob_client = container_client.get_blob_client(blob_name)
-                    blob_client.upload_blob(doc_upload, overwrite=True)
-                    st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
-                except Exception as e:
-                    st.error(f"업로드 실패: {e}")
+                # DRM Check
+                if is_drm_protected(doc_upload):
+                    st.error("⛔ DRM으로 보호된 파일(암호화된 파일)은 업로드할 수 없습니다. 보안을 해제한 후 다시 시도해주세요.")
+                else:
+                    try:
+                        blob_service_client = get_blob_service_client()
+                        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                        
+                        # Upload to {user_folder}/documents/ (Flat structure)
+                        blob_name = f"{user_folder}/documents/{doc_upload.name}"
+                        blob_client = container_client.get_blob_client(blob_name)
+                        blob_client.upload_blob(doc_upload, overwrite=True)
+                        st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
+                    except Exception as e:
+                        st.error(f"업로드 실패: {e}")
             
             st.divider()
             
@@ -1623,8 +1698,13 @@ elif menu == "도면/스펙 비교":
                     target_files = files_to_process
                 elif uploaded_files:
                     if st.button("업로드 및 분석 시작"):
-                        start_analysis = True
-                        target_files = uploaded_files
+                        # DRM Check
+                        drm_files = [f.name for f in uploaded_files if is_drm_protected(f)]
+                        if drm_files:
+                            st.error(f"⛔ 다음 파일들은 DRM으로 보호되어 있어 업로드할 수 없습니다: {', '.join(drm_files)}")
+                        else:
+                            start_analysis = True
+                            target_files = uploaded_files
                 
                 if start_analysis:
                     blob_service_client = get_blob_service_client()
@@ -1923,8 +2003,8 @@ elif menu == "도면/스펙 비교":
                     # Display as expandable list
                     with st.expander("📄 문서 목록 및 선택", expanded=True):
                         for idx, blob_info in enumerate(blob_list, 1):
-                            # Main container with better alignment
-                            col0, col1, col2, col3 = st.columns([0.5, 3.8, 1.5, 1])
+                            # Adjusted column widths for better alignment at all zoom levels
+                            col0, col1, col2, col3 = st.columns([0.4, 4, 1.4, 0.8])
                             
                             with col0:
                                 # Checkbox for selection
