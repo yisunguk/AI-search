@@ -278,30 +278,30 @@ def render_excel_tool():
                 st.warning("기본 템플릿을 찾을 수 없습니다. 파일을 업로드해주세요.")
 
         if input_file and template_file:
+            # Immediate DRM Check
+            if is_drm_protected(input_file):
+                st.session_state.excel_drm_error = f"⛔ 입력 파일({input_file.name})이 DRM으로 보호되어 있습니다. 파일 목록에서 제거되었습니다."
+                st.session_state.excel_input_key += 1
+                st.rerun()
+            elif is_drm_protected(template_file) and not isinstance(template_file, str):
+                st.session_state.excel_drm_error = f"⛔ 템플릿 파일({template_file.name})이 DRM으로 보호되어 있습니다. 파일 목록에서 제거되었습니다."
+                if "excel_template_key" in st.session_state:
+                    st.session_state.excel_template_key += 1
+                st.rerun()
+
             if st.button("엑셀 파일 처리 시작 (Process)", type="primary"):
-                # DRM Check
-                if is_drm_protected(input_file):
-                    st.session_state.excel_drm_error = f"⛔ 입력 파일({input_file.name})이 DRM으로 보호되어 있습니다. 파일 목록에서 제거되었습니다."
-                    st.session_state.excel_input_key += 1
-                    st.rerun()
-                elif is_drm_protected(template_file) and not isinstance(template_file, str): # template_file could be path string
-                    st.session_state.excel_drm_error = f"⛔ 템플릿 파일({template_file.name})이 DRM으로 보호되어 있습니다. 파일 목록에서 제거되었습니다."
-                    if "excel_template_key" in st.session_state:
-                        st.session_state.excel_template_key += 1
-                    st.rerun()
-                else:
-                    try:
-                        with st.spinner("처리 중..."):
-                            result_file = process_excel(input_file, template_file, st.session_state.mapping_rules)
-                        st.success("처리 완료!")
-                        st.download_button(
-                            label="결과 엑셀 다운로드",
-                            data=result_file,
-                            file_name="processed_output.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    except Exception as e:
-                        st.error(f"오류 발생: {e}")
+                try:
+                    with st.spinner("처리 중..."):
+                        result_file = process_excel(input_file, template_file, st.session_state.mapping_rules)
+                    st.success("처리 완료!")
+                    st.download_button(
+                        label="결과 엑셀 다운로드",
+                        data=result_file,
+                        file_name="processed_output.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                except Exception as e:
+                    st.error(f"오류 발생: {e}")
 
     # --- Tab 2: Settings ---
     with tab2:

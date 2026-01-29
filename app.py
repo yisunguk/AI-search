@@ -631,13 +631,15 @@ if menu == "번역하기":
                 del st.session_state.last_translation_result
                 st.rerun()
 
-        if st.button("번역 시작", type="primary", disabled=not uploaded_file):
-            if not uploaded_file:
-                st.error("파일을 업로드해주세요.")
-            elif is_drm_protected(uploaded_file):
+        if uploaded_file:
+            if is_drm_protected(uploaded_file):
                 st.session_state.drm_error_message = "⛔ DRM으로 보호된 파일(암호화된 파일)은 번역할 수 없습니다. 파일 목록에서 제거되었습니다."
                 st.session_state.translate_uploader_key += 1
                 st.rerun()
+
+        if st.button("번역 시작", type="primary", disabled=not uploaded_file):
+            if not uploaded_file:
+                st.error("파일을 업로드해주세요.")
             else:
                 with st.spinner("Azure Blob에 파일 업로드 중..."):
                     try:
@@ -1041,24 +1043,24 @@ elif menu == "물어보면 답하는 문서 AI":
                 
             doc_upload = st.file_uploader("문서를 등록하면 검색과 질의응답이 가능합니다.", type=['pdf', 'docx', 'txt', 'pptx'], key=f"doc_search_upload_{st.session_state.doc_search_uploader_key}")
             
-            if doc_upload and st.button("업로드", key="btn_doc_upload"):
-                # DRM Check
+            if doc_upload:
                 if is_drm_protected(doc_upload):
                     st.session_state.drm_error_message = "⛔ DRM으로 보호된 파일(암호화된 파일)은 업로드할 수 없습니다. 보안을 해제한 후 다시 시도해주세요."
                     st.session_state.doc_search_uploader_key += 1
                     st.rerun()
-                else:
-                    try:
-                        blob_service_client = get_blob_service_client()
-                        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-                        
-                        # Upload to {user_folder}/documents/ (Flat structure)
-                        blob_name = f"{user_folder}/documents/{doc_upload.name}"
-                        blob_client = container_client.get_blob_client(blob_name)
-                        blob_client.upload_blob(doc_upload, overwrite=True)
-                        st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
-                    except Exception as e:
-                        st.error(f"업로드 실패: {e}")
+
+            if doc_upload and st.button("업로드", key="btn_doc_upload"):
+                try:
+                    blob_service_client = get_blob_service_client()
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    
+                    # Upload to {user_folder}/documents/ (Flat structure)
+                    blob_name = f"{user_folder}/documents/{doc_upload.name}"
+                    blob_client = container_client.get_blob_client(blob_name)
+                    blob_client.upload_blob(doc_upload, overwrite=True)
+                    st.success(f"'{doc_upload.name}' 업로드 완료! (인덱싱에 시간이 걸릴 수 있습니다)")
+                except Exception as e:
+                    st.error(f"업로드 실패: {e}")
             
             st.divider()
             
@@ -1710,16 +1712,16 @@ elif menu == "도면/스펙 비교":
                     start_analysis = True
                     target_files = files_to_process
                 elif uploaded_files:
+                    # Immediate DRM Check
+                    drm_files = [f.name for f in uploaded_files if is_drm_protected(f)]
+                    if drm_files:
+                        st.session_state.drm_error_message = f"⛔ 다음 파일들은 DRM으로 보호되어 있어 업로드할 수 없습니다: {', '.join(drm_files)}. 파일 목록이 초기화되었습니다."
+                        st.session_state.drawing_uploader_key += 1
+                        st.rerun()
+
                     if st.button("업로드 및 분석 시작"):
-                        # DRM Check
-                        drm_files = [f.name for f in uploaded_files if is_drm_protected(f)]
-                        if drm_files:
-                            st.session_state.drm_error_message = f"⛔ 다음 파일들은 DRM으로 보호되어 있어 업로드할 수 없습니다: {', '.join(drm_files)}. 파일 목록이 초기화되었습니다."
-                            st.session_state.drawing_uploader_key += 1
-                            st.rerun()
-                        else:
-                            start_analysis = True
-                            target_files = uploaded_files
+                        start_analysis = True
+                        target_files = uploaded_files
                 
                 if start_analysis:
                     blob_service_client = get_blob_service_client()
