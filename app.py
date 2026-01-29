@@ -375,7 +375,7 @@ def is_drm_protected(uploaded_file):
             except Exception as e:
                 print(f"PDF DRM Check Error: {e}")
                 # If we can't open it with fitz, it might be corrupted or heavily encrypted
-                return False 
+                return True 
 
         # 2. Office Files (docx, pptx, xlsx) Check
         # Modern Office files are Zip archives. If they are encrypted/DRM'd, 
