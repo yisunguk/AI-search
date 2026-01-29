@@ -533,6 +533,9 @@ else:
     # Use assigned permissions, ensuring mandatory menus are present
     available_menus = user_perms if user_perms else GUEST_MENUS
     
+    # Filter out button permissions (btn:download, btn:edit, etc.) from menu list
+    available_menus = [menu for menu in available_menus if not menu.startswith('btn:')]
+    
     # Map old menu names to new names (Migration fix)
     available_menus = [
         "도면/스펙 비교" if menu == "도면/스펙 분석" else 
