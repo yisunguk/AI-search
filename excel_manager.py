@@ -5,7 +5,10 @@ from io import BytesIO
 import base64
 import glob
 import os
+import os
 import json
+import fitz # PyMuPDF for DRM check
+import zipfile # For Office DRM check
 
 # --- Default Configuration ---
 DEFAULT_MAPPING_RULES = {
@@ -57,6 +60,51 @@ DEFAULT_MAPPING_RULES = {
     "Inlet": ["BG49"],
     "TEMA Class": ["BA57"]
 }
+
+# --- DRM Check Function (Duplicated from app.py to avoid circular imports or refactoring complexity) ---
+def is_drm_protected(uploaded_file):
+    """
+    Check if the uploaded file is DRM protected or encrypted.
+    Returns True if protected, False otherwise.
+    """
+    try:
+        file_type = uploaded_file.name.split('.')[-1].lower()
+        
+        # 1. PDF Check
+        if file_type == 'pdf':
+            try:
+                # Read file stream
+                bytes_data = uploaded_file.getvalue()
+                with fitz.open(stream=bytes_data, filetype="pdf") as doc:
+                    if doc.is_encrypted:
+                        return True
+            except Exception as e:
+                print(f"PDF DRM Check Error: {e}")
+                # If we can't open it with fitz, it might be corrupted or heavily encrypted
+                return False 
+
+        # 2. Office Files (docx, pptx, xlsx) Check
+        elif file_type in ['docx', 'pptx', 'xlsx']:
+            try:
+                bytes_data = uploaded_file.getvalue()
+                # Check if it is a valid zip file
+                if not zipfile.is_zipfile(BytesIO(bytes_data)):
+                    # Not a zip -> Likely Encrypted/DRM (OLE format)
+                    return True
+                
+                # Optional: Try to open it to be sure
+                with zipfile.ZipFile(BytesIO(bytes_data)) as zf:
+                    # Check for standard OOXML structure (e.g., [Content_Types].xml)
+                    if '[Content_Types].xml' not in zf.namelist():
+                        return True
+            except Exception as e:
+                print(f"Office DRM Check Error: {e}")
+                return True # Assume protected if we can't parse structure
+                
+        return False
+    except Exception as e:
+        print(f"General DRM Check Error: {e}")
+        return False
 
 # --- Helper Functions ---
 
@@ -199,6 +247,11 @@ def render_excel_tool():
     # Initialize Session State
     if "mapping_rules" not in st.session_state:
         st.session_state.mapping_rules = DEFAULT_MAPPING_RULES
+        
+    # --- Persistent Error Display ---
+    if "excel_drm_error" in st.session_state and st.session_state.excel_drm_error:
+        st.error(st.session_state.excel_drm_error)
+        del st.session_state.excel_drm_error
 
     # Tabs
     tab1, tab2 = st.tabs(["📂 데이터 처리 (Data Processing)", "⚙️ 매핑 설정 (Mapping Settings)"])
@@ -209,7 +262,9 @@ def render_excel_tool():
         
         col1, col2 = st.columns(2)
         with col1:
-            input_file = st.file_uploader("1. 입력 파일 업로드 (Data)", type=['xlsx'])
+            if "excel_input_key" not in st.session_state:
+                st.session_state.excel_input_key = 0
+            input_file = st.file_uploader("1. 입력 파일 업로드 (Data)", type=['xlsx'], key=f"excel_input_{st.session_state.excel_input_key}")
         with col2:
             # Look for template in Excel folder
             found_template = find_template_file()
@@ -217,23 +272,36 @@ def render_excel_tool():
                 template_file = found_template
                 st.info(f"기본 템플릿 사용 중: '{os.path.basename(found_template)}'")
             else:
-                template_file = st.file_uploader("2. 템플릿 파일 업로드 (Form)", type=['xlsx'])
+                if "excel_template_key" not in st.session_state:
+                    st.session_state.excel_template_key = 0
+                template_file = st.file_uploader("2. 템플릿 파일 업로드 (Form)", type=['xlsx'], key=f"excel_template_{st.session_state.excel_template_key}")
                 st.warning("기본 템플릿을 찾을 수 없습니다. 파일을 업로드해주세요.")
 
         if input_file and template_file:
             if st.button("엑셀 파일 처리 시작 (Process)", type="primary"):
-                try:
-                    with st.spinner("처리 중..."):
-                        result_file = process_excel(input_file, template_file, st.session_state.mapping_rules)
-                    st.success("처리 완료!")
-                    st.download_button(
-                        label="결과 엑셀 다운로드",
-                        data=result_file,
-                        file_name="processed_output.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                except Exception as e:
-                    st.error(f"오류 발생: {e}")
+                # DRM Check
+                if is_drm_protected(input_file):
+                    st.session_state.excel_drm_error = f"⛔ 입력 파일({input_file.name})이 DRM으로 보호되어 있습니다. 파일 목록에서 제거되었습니다."
+                    st.session_state.excel_input_key += 1
+                    st.rerun()
+                elif is_drm_protected(template_file) and not isinstance(template_file, str): # template_file could be path string
+                    st.session_state.excel_drm_error = f"⛔ 템플릿 파일({template_file.name})이 DRM으로 보호되어 있습니다. 파일 목록에서 제거되었습니다."
+                    if "excel_template_key" in st.session_state:
+                        st.session_state.excel_template_key += 1
+                    st.rerun()
+                else:
+                    try:
+                        with st.spinner("처리 중..."):
+                            result_file = process_excel(input_file, template_file, st.session_state.mapping_rules)
+                        st.success("처리 완료!")
+                        st.download_button(
+                            label="결과 엑셀 다운로드",
+                            data=result_file,
+                            file_name="processed_output.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    except Exception as e:
+                        st.error(f"오류 발생: {e}")
 
     # --- Tab 2: Settings ---
     with tab2:

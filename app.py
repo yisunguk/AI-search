@@ -559,6 +559,12 @@ with st.sidebar:
     # st.caption(f"Perms: {user_perms}")
     # st.caption(f"Menus: {available_menus}")
     
+    # --- Persistent Error Display ---
+    if "drm_error_message" in st.session_state and st.session_state.drm_error_message:
+        st.error(st.session_state.drm_error_message)
+        # Clear it after showing
+        del st.session_state.drm_error_message
+    
     if st.button("🚪 로그아웃", key="logout_btn", use_container_width=True):
         st.session_state.is_logged_in = False
         st.session_state.user_info = None
@@ -629,7 +635,9 @@ if menu == "번역하기":
             if not uploaded_file:
                 st.error("파일을 업로드해주세요.")
             elif is_drm_protected(uploaded_file):
-                st.error("⛔ DRM으로 보호된 파일(암호화된 파일)은 번역할 수 없습니다.")
+                st.session_state.drm_error_message = "⛔ DRM으로 보호된 파일(암호화된 파일)은 번역할 수 없습니다. 파일 목록에서 제거되었습니다."
+                st.session_state.translate_uploader_key += 1
+                st.rerun()
             else:
                 with st.spinner("Azure Blob에 파일 업로드 중..."):
                     try:
@@ -1028,12 +1036,17 @@ elif menu == "물어보면 답하는 문서 AI":
         
         with tab1:
             # File Uploader (Simplified)
-            doc_upload = st.file_uploader("문서를 등록하면 검색과 질의응답이 가능합니다.", type=['pdf', 'docx', 'txt', 'pptx'], key="doc_search_upload")
+            if "doc_search_uploader_key" not in st.session_state:
+                st.session_state.doc_search_uploader_key = 0
+                
+            doc_upload = st.file_uploader("문서를 등록하면 검색과 질의응답이 가능합니다.", type=['pdf', 'docx', 'txt', 'pptx'], key=f"doc_search_upload_{st.session_state.doc_search_uploader_key}")
             
             if doc_upload and st.button("업로드", key="btn_doc_upload"):
                 # DRM Check
                 if is_drm_protected(doc_upload):
-                    st.error("⛔ DRM으로 보호된 파일(암호화된 파일)은 업로드할 수 없습니다. 보안을 해제한 후 다시 시도해주세요.")
+                    st.session_state.drm_error_message = "⛔ DRM으로 보호된 파일(암호화된 파일)은 업로드할 수 없습니다. 보안을 해제한 후 다시 시도해주세요."
+                    st.session_state.doc_search_uploader_key += 1
+                    st.rerun()
                 else:
                     try:
                         blob_service_client = get_blob_service_client()
@@ -1701,7 +1714,9 @@ elif menu == "도면/스펙 비교":
                         # DRM Check
                         drm_files = [f.name for f in uploaded_files if is_drm_protected(f)]
                         if drm_files:
-                            st.error(f"⛔ 다음 파일들은 DRM으로 보호되어 있어 업로드할 수 없습니다: {', '.join(drm_files)}")
+                            st.session_state.drm_error_message = f"⛔ 다음 파일들은 DRM으로 보호되어 있어 업로드할 수 없습니다: {', '.join(drm_files)}. 파일 목록이 초기화되었습니다."
+                            st.session_state.drawing_uploader_key += 1
+                            st.rerun()
                         else:
                             start_analysis = True
                             target_files = uploaded_files
