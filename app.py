@@ -499,9 +499,26 @@ if 'is_logged_in' not in st.session_state:
     st.session_state.is_logged_in = False
 
 # Check for existing session cookie (Auto-login)
+# Check for existing session cookie (Auto-login)
 if not st.session_state.is_logged_in and not st.session_state.get('just_logged_out', False):
     try:
-        auth_email = cookie_manager.get(cookie="auth_email")
+        # Improved robust cookie retrieval (Retry mechanism)
+        auth_email = None
+        
+        # Method 1: Direct get with retries (wait for component to sync)
+        # extra_streamlit_components sometimes needs a moment to load cookies from frontend
+        for i in range(5):
+            auth_email = cookie_manager.get(cookie="auth_email")
+            if auth_email:
+                break
+            time.sleep(0.1) 
+            
+        # Method 2: Fallback to get_all() if direct get failed
+        if not auth_email:
+            cookies = cookie_manager.get_all()
+            if cookies and isinstance(cookies, dict):
+                auth_email = cookies.get("auth_email")
+        
         if auth_email:
             # Validate email exists in auth_manager
             user = auth_manager.get_user_by_email(auth_email)
