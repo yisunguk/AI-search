@@ -76,12 +76,12 @@ def render_login_page(auth_manager: AuthManager, cookie_manager):
     with col_center:
         with st.form("login_form", clear_on_submit=False):
             # Attempt to get saved credentials for pre-filling
-            saved_email = cookie_manager.get("remember_email")
-            saved_password = cookie_manager.get("remember_password")
+            # saved_email = cookie_manager.get("remember_email")
+            # saved_password = cookie_manager.get("remember_password")
             
             # Use saved values if available, otherwise default to empty
-            default_email = saved_email if saved_email else ""
-            default_password = saved_password if saved_password else ""
+            default_email = "" # saved_email if saved_email else ""
+            default_password = "" # saved_password if saved_password else ""
             
             email = st.text_input("이메일", value=default_email, placeholder="example@email.com")
             password = st.text_input("비밀번호", value=default_password, type="password", placeholder="비밀번호를 입력하세요")
