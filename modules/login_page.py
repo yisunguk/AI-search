@@ -102,13 +102,13 @@ def render_login_page(auth_manager: AuthManager, cookie_manager):
                             
                             # Set auto-login cookie (expires in 7 days)
                             expires = datetime.now() + timedelta(days=7)
-                            cookie_manager.set("auth_email", email, expires_at=expires)
+                            cookie_manager.set("auth_email", email, expires_at=expires, key="set_auth_email")
                             
                             # Set persistent remember-me cookies (expires in 30 days)
                             # These allow the form to be pre-filled even if auto-login fails or user logged out
                             remember_expires = datetime.now() + timedelta(days=30)
-                            cookie_manager.set("remember_email", email, expires_at=remember_expires)
-                            cookie_manager.set("remember_password", password, expires_at=remember_expires)
+                            cookie_manager.set("remember_email", email, expires_at=remember_expires, key="set_rem_email")
+                            cookie_manager.set("remember_password", password, expires_at=remember_expires, key="set_rem_pass")
                             
                             st.success(message)
                             time.sleep(0.5)
