@@ -75,8 +75,16 @@ def render_login_page(auth_manager: AuthManager, cookie_manager):
     
     with col_center:
         with st.form("login_form", clear_on_submit=False):
-            email = st.text_input("이메일", placeholder="example@email.com")
-            password = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+            # Attempt to get saved credentials for pre-filling
+            saved_email = cookie_manager.get("remember_email")
+            saved_password = cookie_manager.get("remember_password")
+            
+            # Use saved values if available, otherwise default to empty
+            default_email = saved_email if saved_email else ""
+            default_password = saved_password if saved_password else ""
+            
+            email = st.text_input("이메일", value=default_email, placeholder="example@email.com")
+            password = st.text_input("비밀번호", value=default_password, type="password", placeholder="비밀번호를 입력하세요")
             
             st.markdown("<br>", unsafe_allow_html=True)
             submitted = st.form_submit_button("로그인", use_container_width=True, type="primary")
@@ -92,9 +100,15 @@ def render_login_page(auth_manager: AuthManager, cookie_manager):
                             st.session_state.is_logged_in = True
                             st.session_state.user_info = user_info
                             
-                            # Set cookie (expires in 7 days)
+                            # Set auto-login cookie (expires in 7 days)
                             expires = datetime.now() + timedelta(days=7)
                             cookie_manager.set("auth_email", email, expires_at=expires)
+                            
+                            # Set persistent remember-me cookies (expires in 30 days)
+                            # These allow the form to be pre-filled even if auto-login fails or user logged out
+                            remember_expires = datetime.now() + timedelta(days=30)
+                            cookie_manager.set("remember_email", email, expires_at=remember_expires)
+                            cookie_manager.set("remember_password", password, expires_at=remember_expires)
                             
                             st.success(message)
                             time.sleep(0.5)
