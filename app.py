@@ -178,7 +178,7 @@ def get_doc_intel_manager():
         st.stop()
     return DocumentIntelligenceManager(AZURE_DOC_INTEL_ENDPOINT, AZURE_DOC_INTEL_KEY)
 
-def generate_sas_url(blob_service_client, container_name, blob_name=None, page=None, permission="r", expiry_hours=1, content_disposition=None):
+def generate_sas_url(blob_service_client, container_name, blob_name=None, page=None, permission="r", expiry_hours=1, content_disposition=None, no_viewer=False):
     """
     Generates a SAS URL for a blob and wraps it in a web viewer (Google Docs/Office) if applicable.
     If blob_name is None, generates a Container SAS.
@@ -226,6 +226,9 @@ def generate_sas_url(blob_service_client, container_name, blob_name=None, page=N
                 content_type=content_type
             )
             sas_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{urllib.parse.quote(clean_name, safe='/')}?{sas_token}"
+            
+            if no_viewer:
+                return sas_url
             
             lower_name = clean_name.lower()
             if lower_name.endswith(('.pptx', '.ppt', '.docx', '.doc', '.xlsx', '.xls')):
@@ -698,7 +701,7 @@ if menu == "번역하기":
                         st.success("업로드 완료! 번역 요청 중...")
                         
                         # SAS 생성
-                        source_url = generate_sas_url(blob_service_client, CONTAINER_NAME, input_blob_name)
+                        source_url = generate_sas_url(blob_service_client, CONTAINER_NAME, input_blob_name, no_viewer=True)
                         
                         # Target URL 설정
                         target_base_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}"
