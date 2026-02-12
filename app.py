@@ -783,7 +783,7 @@ if menu == "번역하기":
                                         source_blob = container_client.get_blob_client(blob_name)
                                         dest_blob = container_client.get_blob_client(new_blob_name)
                                         
-                                        source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
+                                        source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name, no_viewer=True)
                                         dest_blob.start_copy_from_url(source_sas)
                                         
                                         # Wait for copy
@@ -932,7 +932,7 @@ elif menu == "파일 보관함":
                                         dest_blob = container_client.get_blob_client(new_blob_name)
                                         
                                         # SAS URL for Copy Source
-                                        source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob.name)
+                                        source_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob.name, no_viewer=True)
                                         
                                         dest_blob.start_copy_from_url(source_sas)
                                         
