@@ -852,7 +852,7 @@ if menu == "번역하기":
                                     except Exception as e:
                                         st.warning(f"PPTX 폰트 변경 실패: {e}")
 
-                                download_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name)
+                                download_sas = generate_sas_url(blob_service_client, CONTAINER_NAME, blob_name, no_viewer=True, content_disposition="attachment")
                                 st.markdown(f"[{file_name} 다운로드]({download_sas})", unsafe_allow_html=True)
                                 
                                 # 결과 세션에 저장
